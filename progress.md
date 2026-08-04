@@ -22,6 +22,13 @@ We are building **Canvas** (a native, offline-first, multiplayer desktop widget 
 - [x] Initialize automerge CRDT text document (`canvas-doc`).
 - [x] Bind Slint TextEdit to save on keystrokes.
 
+### 2026-08-04: Multi-Widget Desktop Baseline
+
+- **Database Schema (SQLite):** Added widget storage with `pos_x` and `pos_y`.
+- **Desktop App Management:** The application now queries the database on startup and restores all sticky notes to their previous positions.
+- **Sticky Note UI:** Fixed input overlap, implemented an interactive `+` button to spawn new notes dynamically, and a `×` button that deletes the note permanently from SQLite.rsist positions in SQLite.
+- [x] Added `+` overlay button to `GlassPanel` drag area to spawn new widgets seamlessly.
+
 ### Milestone 2: Multi-Widget Desktop (Completed)
 - [x] Added `pos_x` and `pos_y` tracking to SQLite `widgets` table.
 - [x] Refactored `canvas-app` entrypoint to query existing widgets and spawn multiple Slint windows dynamically.
@@ -34,6 +41,14 @@ We are building **Canvas** (a native, offline-first, multiplayer desktop widget 
 - [x] Implemented dual-signal focus: widget-level Aura Edge glow + control-level inner focus ring (2px offset).
 - [x] Configured CPU software rendering fallback (<20MB RAM) with opt-in GPU rendering (`--gpu` flag) via `winit-femtovg`.
 - [x] Removed standard window borders (frameless window) and added top draggable invisible area.
+
+### Milestone 4: Phase 1 - Multiplayer Sync (Completed)
+- [x] Created `canvas-sync` crate for websocket host/client.
+- [x] Implemented Automerge state extraction & `apply_update` in `canvas-doc`.
+- [x] Set up `tokio` event loop background thread.
+- [x] Bridged `tokio` networking stream with Slint `invoke_from_event_loop` UI.
+- [x] Synced widget typing in real-time between host and clients.
+
 
 ## How to Resume
 Whenever you want to resume, you can check this file to see where we left off. You can ask me to run the latest checks, test the UI with `cargo run -p canvas-app`, or proceed to the next milestone if the current one's DoD is fully satisfied.

@@ -7,5 +7,7 @@ edition = "2021"
 canvas-ui = { path = "../canvas-ui" }
 canvas-storage = { path = "../canvas-storage" }
 canvas-doc = { path = "../canvas-doc" }
+canvas-sync = { path = "../canvas-sync" }
 slint = { version = "1.7.0", default-features = false, features = ["renderer-winit-software", "renderer-winit-femtovg", "std", "backend-winit"] }
 mimalloc = "0.1"
+tokio = { version = "1.53.1", features = ["full"] }

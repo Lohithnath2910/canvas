@@ -36,13 +36,21 @@ impl StickyNoteDoc {
         self.text_ref.get_string(&txn)
     }
 
-    pub fn update_text(&self, new_text: &str) {
+    pub fn update_text(&self, new_text: &str) -> Vec<u8> {
         let mut txn = self.doc.transact_mut();
         let current_len = self.text_ref.len(&txn);
         if current_len > 0 {
             self.text_ref.remove_range(&mut txn, 0, current_len);
         }
         self.text_ref.insert(&mut txn, 0, new_text);
+        txn.encode_update_v1()
+    }
+
+    pub fn apply_update(&self, payload: &[u8]) {
+        let mut txn = self.doc.transact_mut();
+        if let Ok(update) = Update::decode_v1(payload) {
+            txn.apply_update(update);
+        }
     }
 
     pub fn snapshot(&self) -> Vec<u8> {
