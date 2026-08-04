@@ -87,5 +87,12 @@ fn spawn_widget(storage: Rc<canvas_storage::Storage>, workspace_id: String, widg
         }
     });
 
+    let window_weak3 = window.as_weak();
+    window.on_close_widget_requested(move || {
+        if let Some(app) = window_weak3.upgrade() {
+            app.hide().unwrap();
+        }
+    });
+
     window.show().unwrap();
 }
