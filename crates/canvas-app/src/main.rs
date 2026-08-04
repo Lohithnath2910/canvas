@@ -88,8 +88,11 @@ fn spawn_widget(storage: Rc<canvas_storage::Storage>, workspace_id: String, widg
     });
 
     let window_weak3 = window.as_weak();
+    let storage_clone4 = storage.clone();
+    let widget_id_clone3 = widget.id.clone();
     window.on_close_widget_requested(move || {
         if let Some(app) = window_weak3.upgrade() {
+            let _ = storage_clone4.delete_widget(&widget_id_clone3);
             app.hide().unwrap();
         }
     });

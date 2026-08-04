@@ -102,8 +102,10 @@ export component MainWindow inherits Window {
                         padding: Spacing.base; // Give the text breathing room inside the control
                         
                         Flickable {
-                            viewport-height: text-input.preferred-height;
+                            viewport-height: max(text-input.preferred-height, self.height);
                             text-input := TextInput {
+                                width: 100%;
+                                height: max(self.preferred-height, parent.height);
                                 text: root.note-text;
                                 font-size: Typography.body-size;
                                 font-family: Typography.system-sans;

@@ -123,6 +123,13 @@ impl Storage {
         Ok(())
     }
 
+    pub fn delete_widget(&self, widget_id: &str) -> Result<()> {
+        // First delete associated document (foreign key constraint)
+        self.conn.execute("DELETE FROM documents WHERE widget_id = ?1", params![widget_id])?;
+        self.conn.execute("DELETE FROM widgets WHERE id = ?1", params![widget_id])?;
+        Ok(())
+    }
+
     pub fn load_document(&self, widget_id: &str) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
         let mut stmt = self.conn.prepare("SELECT yrs_snapshot, yrs_state_vector FROM documents WHERE widget_id = ?1")?;
         let mut rows = stmt.query(params![widget_id])?;
