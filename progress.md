@@ -17,10 +17,16 @@ We are building **Canvas** (a native, offline-first, multiplayer desktop widget 
 - [x] Running `cargo check` / `cargo build` to verify the build on Windows.
 - [x] Perform idle RSS and cold launch measurement.
 
-### Milestone 1 & 2: Architecture & Storage Core (Completed)
+### Milestone 1: Local Sync & Persistence (Completed)
 - [x] Initialize SQLite database (`canvas-storage`) for persisting and loading documents.
 - [x] Initialize automerge CRDT text document (`canvas-doc`).
 - [x] Bind Slint TextEdit to save on keystrokes.
+
+### Milestone 2: Multi-Widget Desktop (Completed)
+- [x] Added `pos_x` and `pos_y` tracking to SQLite `widgets` table.
+- [x] Refactored `canvas-app` entrypoint to query existing widgets and spawn multiple Slint windows dynamically.
+- [x] Bound window drag event (`window-moved`) to persist positions in SQLite.
+- [x] Added `+` overlay button to `GlassPanel` drag area to spawn new widgets seamlessly.
 
 ### Milestone 3: 'Instrument Glass' UI/UX Baseline (Completed)
 - [x] Implemented `GlassPanel` with `Radius.sticky-note` (16px) and `1.5px` outer `AuraEdge` border.

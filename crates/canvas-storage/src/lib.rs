@@ -4,6 +4,16 @@ pub struct Storage {
     conn: Connection,
 }
 
+#[derive(Debug, Clone)]
+pub struct WidgetRecord {
+    pub id: String,
+    pub workspace_id: String,
+    pub widget_type: String,
+    pub title: String,
+    pub pos_x: i32,
+    pub pos_y: i32,
+}
+
 impl Storage {
     pub fn new(db_path: &str) -> Result<Self> {
         let conn = Connection::open(db_path)?;
@@ -29,10 +39,11 @@ impl Storage {
                 workspace_id TEXT NOT NULL REFERENCES workspaces(id),
                 widget_type TEXT NOT NULL,
                 title TEXT,
+                pos_x INTEGER NOT NULL DEFAULT 100,
+                pos_y INTEGER NOT NULL DEFAULT 100,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
-            );",
-            [],
+            );",            [],
         )?;
         tx.execute(
             "CREATE TABLE IF NOT EXISTS documents (
@@ -65,22 +76,51 @@ impl Storage {
         }
     }
 
-    pub fn ensure_widget(&self, workspace_id: &str, widget_type: &str) -> Result<String> {
-        let mut stmt = self.conn.prepare("SELECT id FROM widgets WHERE workspace_id = ?1 AND widget_type = ?2 LIMIT 1")?;
-        let mut rows = stmt.query(params![workspace_id, widget_type])?;
+    pub fn get_all_widgets(&self, workspace_id: &str) -> Result<Vec<WidgetRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, workspace_id, widget_type, title, pos_x, pos_y FROM widgets WHERE workspace_id = ?1 ORDER BY created_at ASC"
+        )?;
+        let rows = stmt.query_map(params![workspace_id], |row| {
+            Ok(WidgetRecord {
+                id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                widget_type: row.get(2)?,
+                title: row.get(3)?,
+                pos_x: row.get(4)?,
+                pos_y: row.get(5)?,
+            })
+        })?;
         
-        if let Some(row) = rows.next()? {
-            let id: String = row.get(0)?;
-            Ok(id)
-        } else {
-            let id = uuid::Uuid::new_v4().to_string();
-            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-            self.conn.execute(
-                "INSERT INTO widgets (id, workspace_id, widget_type, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
-                params![id, workspace_id, widget_type, "Sticky Note", now as i64],
-            )?;
-            Ok(id)
+        let mut widgets = Vec::new();
+        for w in rows {
+            widgets.push(w?);
         }
+        Ok(widgets)
+    }
+
+    pub fn create_widget(&self, workspace_id: &str, widget_type: &str, pos_x: i32, pos_y: i32) -> Result<WidgetRecord> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        self.conn.execute(
+            "INSERT INTO widgets (id, workspace_id, widget_type, title, pos_x, pos_y, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+            params![id, workspace_id, widget_type, "Sticky Note", pos_x, pos_y, now as i64],
+        )?;
+        Ok(WidgetRecord {
+            id,
+            workspace_id: workspace_id.to_string(),
+            widget_type: widget_type.to_string(),
+            title: "Sticky Note".to_string(),
+            pos_x,
+            pos_y,
+        })
+    }
+
+    pub fn update_widget_position(&self, widget_id: &str, pos_x: i32, pos_y: i32) -> Result<()> {
+        self.conn.execute(
+            "UPDATE widgets SET pos_x = ?1, pos_y = ?2, updated_at = ?3 WHERE id = ?4",
+            params![pos_x, pos_y, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64, widget_id],
+        )?;
+        Ok(())
     }
 
     pub fn load_document(&self, widget_id: &str) -> Result<Option<(Vec<u8>, Vec<u8>)>> {

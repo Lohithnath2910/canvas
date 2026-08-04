@@ -19,19 +19,44 @@ export component MainWindow inherits Window {
     in property <WidgetState> sync-state: WidgetState.idle;
     callback text-changed(string);
     callback window-moved(length, length);
+    callback new-widget-requested();
 
     GlassPanel {
         corner-radius: Radius.sticky-note;
         state: root.sync-state != WidgetState.idle ? root.sync-state : 
                text-input.has-focus ? WidgetState.focused : WidgetState.idle;
 
-        // Invisible drag area at the top 24px
-        TouchArea {
+        // Top bar for dragging and actions
+        HorizontalLayout {
             y: 0;
             width: 100%;
             height: 24px;
-            moved => {
-                root.window-moved(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+            
+            // Drag area
+            TouchArea {
+                moved => {
+                    root.window-moved(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+                }
+            }
+            
+            // New widget button
+            Rectangle {
+                width: 24px;
+                background: btn-touch.pressed ? Palette.canvas-verdigris.with-alpha(0.5) : 
+                           (btn-touch.has-hover ? Palette.canvas-verdigris.with-alpha(0.2) : transparent);
+                border-top-right-radius: Radius.sticky-note;
+                Text {
+                    text: "+";
+                    color: Palette.canvas-ink;
+                    font-size: Typography.title-size;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                btn-touch := TouchArea {
+                    clicked => {
+                        root.new-widget-requested();
+                    }
+                }
             }
         }
 
