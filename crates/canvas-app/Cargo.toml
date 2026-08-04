@@ -1,0 +1,11 @@
+[package]
+name = "canvas-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+canvas-ui = { path = "../canvas-ui" }
+canvas-storage = { path = "../canvas-storage" }
+canvas-doc = { path = "../canvas-doc" }
+slint = { version = "1.7.0", default-features = false, features = ["renderer-winit-software", "renderer-winit-femtovg", "std", "backend-winit"] }
+mimalloc = "0.1"

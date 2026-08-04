@@ -1,0 +1,14 @@
+export global Palette {
+    out property <color> canvas-paper: #F4F5F3;
+    out property <color> canvas-graphite: #14171A;
+    out property <color> canvas-ink-light: #1B1F1E;
+    out property <color> canvas-ink-dark: #EDEFEC;
+    
+    // Global theme toggle
+    in-out property <bool> is-dark: true;
+    out property <color> canvas-ink: is-dark ? canvas-ink-dark : canvas-ink-light;
+
+    out property <color> canvas-verdigris: #3E7C74;
+    out property <color> canvas-brass: #C9A16B;
+    out property <color> canvas-brick: #B5544A;
+}

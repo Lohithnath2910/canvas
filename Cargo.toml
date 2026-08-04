@@ -1,0 +1,19 @@
+[workspace]
+members = [
+    "crates/canvas-app",
+    "crates/canvas-ui",
+    "crates/canvas-doc",
+    "crates/canvas-storage",
+    "crates/canvas-sync",
+    "crates/canvas-protocol",
+    "crates/canvas-server",
+    "crates/canvas-auth",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = "z"      # Optimize for size
+lto = true           # Link Time Optimization
+codegen-units = 1    # Maximize size optimization
+panic = "abort"      # Remove panic unwinding overhead
+strip = true         # Strip symbols from binary

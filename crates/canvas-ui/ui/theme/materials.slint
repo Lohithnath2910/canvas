@@ -1,0 +1,56 @@
+import { Palette } from "palette.slint";
+import { Motion } from "motion.slint";
+import { Radius } from "radius.slint";
+
+export enum WidgetState {
+    idle,
+    focused,
+    syncing,
+    offline,
+    error
+}
+
+export component AuraEdge inherits Rectangle {
+    in property <WidgetState> state: WidgetState.idle;
+    in property <length> corner-radius: Radius.widget;
+    in property <bool> is-dark: Palette.is-dark;
+
+    border-radius: self.corner-radius;
+    border-width: 1.5px;
+    background: transparent;
+
+    border-color: self.state == WidgetState.focused ? Palette.canvas-verdigris :
+                  self.state == WidgetState.error ? Palette.canvas-brick :
+                  self.state == WidgetState.syncing ? Palette.canvas-brass :
+                  (self.is-dark ? rgba(255, 255, 255, 0.14) : rgba(20, 23, 26, 0.10));
+
+    opacity: self.state == WidgetState.offline ? 0.4 : 1.0;
+
+    animate border-color { duration: Motion.micro; }
+    animate opacity { duration: Motion.open; }
+}
+
+export component GlassPanel inherits Rectangle {
+    in property <length> corner-radius: Radius.widget;
+    in property <bool> is-dark: Palette.is-dark;
+    in property <WidgetState> state: WidgetState.idle;
+
+    background: self.is-dark ? Palette.canvas-graphite.with-alpha(0.75) : Palette.canvas-paper.with-alpha(0.75);
+    border-radius: self.corner-radius;
+
+    // Combined layered shadow approximation for Slint
+    drop-shadow-offset-y: 6px;
+    drop-shadow-blur: 20px;
+    drop-shadow-color: rgba(20, 23, 26, 0.25);
+
+    // The Aura Edge
+    AuraEdge {
+        width: 100%;
+        height: 100%;
+        corner-radius: parent.corner-radius;
+        state: parent.state;
+        is-dark: parent.is-dark;
+    }
+
+    @children
+}
