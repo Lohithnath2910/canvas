@@ -1,0 +1,86 @@
+// Every colour in Canvas. CLAUDE.md §5.1.
+//
+// No colour literal may appear anywhere else in the codebase. If a value you
+// need is not here, stop and ask rather than inlining a guess (§5).
+//
+// The five rules this file exists to enforce (§1):
+//   1. Monochrome plus one red.
+//   2. `signal` appears exactly twice in the product: the error/conflict state
+//      and the destructive button. Never a focus ring, never an accent.
+//   4. Dot cells are binary — text, dim, signal, or off. Nothing between.
+
+export global Palette {
+    // Dark is primary — true black, not near-black. Light mode is a token flip.
+    in-out property <bool> is-dark: true;
+
+    // --- Ground and surface -------------------------------------------------
+    out property <color> base: root.is-dark ? #000000 : #FFFFFF;
+    // The plate is drawn at 0.96 alpha by the Panel component (§6.1), not here.
+    out property <color> plate: root.is-dark ? #121212 : #F2F2F2;
+
+    // --- Type ---------------------------------------------------------------
+    out property <color> text: root.is-dark ? #FFFFFF : #0A0A0A;
+    // Light-mode correction (§5.1): 55% black fails WCAG AA at 4.27:1, so the
+    // light value is raised to 58%. The dark value is the spec's 52%.
+    out property <color> dim: root.is-dark
+        ? rgba(255, 255, 255, 0.52)
+        : rgba(10, 10, 10, 0.58);
+
+    // --- Structure ----------------------------------------------------------
+    out property <color> edge: root.is-dark
+        ? rgba(255, 255, 255, 0.14)
+        : rgba(10, 10, 10, 0.12);
+
+    // --- The one red --------------------------------------------------------
+    // Identical in both modes. Destructive and error only.
+    out property <color> signal: #D71921;
+
+    // --- Elevation ----------------------------------------------------------
+    out property <color> elev-raised: root.is-dark ? #1C1C1C : #FFFFFF;
+    out property <color> elev-base: root.is-dark ? #121212 : #F2F2F2;
+    out property <color> elev-recessed: root.is-dark ? #0C0C0C : #E8E8E8;
+
+    // --- Dot cells (glyph strip, bullet markers) ----------------------------
+    out property <color> dot-lit: root.text;
+    out property <color> dot-half: root.dim;
+    out property <color> dot-signal: root.signal;
+    // Light-mode correction (§5.1): `edge` at 12% black is nearly invisible on
+    // #F2F2F2, so unlit cells use 22% in light mode only.
+    out property <color> dot-unlit: root.is-dark
+        ? rgba(255, 255, 255, 0.14)
+        : rgba(10, 10, 10, 0.22);
+
+    // --- Presence greys -----------------------------------------------------
+    // Peers are distinguished by grey level plus initials, NEVER by colour.
+    out property <color> peer-1: root.is-dark ? #3A3A3A : #C8C8C8;
+    out property <color> peer-2: root.is-dark ? #2E2E2E : #D4D4D4;
+    out property <color> peer-3: root.is-dark ? #242424 : #E0E0E0;
+    out property <color> peer-4: root.is-dark ? #1C1C1C : #EAEAEA;
+
+    // --- Interaction fills --------------------------------------------------
+    // §5.1 gives dark values only for these five rows. The light values are
+    // derived as the mirror of the dark relationship (one step toward the
+    // opposite ground) and are marked as such — see Open question 4 in TASKS.md.
+    out property <color> hover-default: root.is-dark ? #242424 : #E8E8E8;   // light derived
+    out property <color> hover-primary: root.is-dark ? #E6E6E6 : #242424;   // light derived
+    out property <color> active-primary: root.is-dark ? #CCCCCC : #3A3A3A;  // light derived
+    out property <color> active-destructive: #B01319;
+
+    // The one deliberate exception to "no translucency beyond the plate's 96%".
+    // Command palette backdrop only, and only while it is open.
+    out property <color> scrim: rgba(0, 0, 0, 0.72);
+
+    // --- Shadow -------------------------------------------------------------
+    // Single layer. Deepens on drag, returns over 100ms (§5.5). No glow.
+    out property <color> shadow-color: root.is-dark
+        ? rgba(0, 0, 0, 0.40)
+        : rgba(0, 0, 0, 0.10);
+    out property <color> shadow-color-drag: root.is-dark
+        ? rgba(0, 0, 0, 0.40)
+        : rgba(0, 0, 0, 0.20);
+
+    out property <length> shadow-offset-y: root.is-dark ? 2px : 1px;
+    out property <length> shadow-blur: root.is-dark ? 16px : 3px;
+    out property <length> shadow-offset-y-drag: root.is-dark ? 8px : 6px;
+    out property <length> shadow-blur-drag: root.is-dark ? 28px : 20px;
+}

@@ -1,0 +1,8 @@
+[package]
+name = "canvas-storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rusqlite.workspace = true
+uuid.workspace = true

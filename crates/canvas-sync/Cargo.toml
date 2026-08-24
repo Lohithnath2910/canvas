@@ -1,0 +1,8 @@
+[package]
+name = "canvas-sync"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio.workspace = true
+uuid.workspace = true

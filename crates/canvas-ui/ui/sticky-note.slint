@@ -1,0 +1,300 @@
+// Sticky note. CLAUDE.md §7.
+//
+// A widget is not a window — it is a readout: a flat monochrome plate that
+// shows one thing and reports its own state. The Glyph Strip is the only status
+// indicator it has (rule 3).
+//
+// Vertical anatomy, which reproduces §7.3's stated body boxes exactly at all
+// three sizes (240x180 -> 206x115, 320x280 -> 286x215, 520x600 -> 486x535):
+//
+//     16   top padding
+//     32   header (fixed on every widget type at every size)
+//      1   hairline, full bleed
+//      *   body, inset 16 left and right
+//     16   bottom padding
+
+import { Palette } from "theme/palette.slint";
+import { Typography } from "theme/typography.slint";
+import { Motion } from "theme/motion.slint";
+import { Layout } from "theme/layout.slint";
+import { Panel } from "theme/surface.slint";
+import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
+import { IconPalette, IconPin, IconTrash } from "theme/icons.slint";
+
+export { WidgetState }
+
+export component StickyNoteWindow inherits Window {
+    // --- In ------------------------------------------------------------------
+    in property <string> note-title: "UNTITLED";
+    in-out property <string> note-text: "";
+    in property <WidgetState> strip-state: WidgetState.idle;
+    in property <int> peer-count: 0;
+    in property <bool> pinned: false;
+
+    // --- Out -----------------------------------------------------------------
+    callback window-moved(length, length);
+    callback drag-started();
+    callback drag-ended();
+    callback text-edited(string);
+    callback colour-clicked();
+    callback pin-clicked();
+    callback delete-clicked();
+
+    // --- Window --------------------------------------------------------------
+    // `width`/`height` and `min-width`/`min-height` cannot both be set on one
+    // element — the compiler rejects it outright (§13.5). Use preferred-* here.
+    // There is deliberately no max: "no maximum" means omitting the property,
+    // not setting a huge sentinel value.
+    preferred-width: Layout.note-w + 2 * Layout.plate-margin;
+    preferred-height: Layout.note-h + 2 * Layout.plate-margin;
+    min-width: Layout.note-min-w + 2 * Layout.plate-margin;
+    min-height: Layout.note-min-h + 2 * Layout.plate-margin;
+    no-frame: true;
+    // Native OS-level frameless resize from any edge or corner, aspect never
+    // locked. Confirmed present in 1.17.1; no manual pointer-tracking needed.
+    resize-border-width: 6px;
+    // Transparent so the plate's shadow and focus ring have room to draw.
+    background: transparent;
+    title: "Canvas";
+
+    // --- State ---------------------------------------------------------------
+    property <bool> dragging: false;
+    property <bool> body-empty: root.note-text == "";
+
+    // §7.4: revealed by the pointer entering the note, or keyboard focus
+    // entering it. Tracked as the OR of every disjoint region's own has-hover
+    // rather than one overlapping tracking layer — two TouchAreas must never
+    // occupy the same screen region (§13.3).
+    property <bool> controls-visible:
+        drag-area.has-hover
+        || colour-area.has-hover
+        || pin-area.has-hover
+        || trash-area.has-hover
+        || body-input.has-focus;
+
+    plate := Panel {
+        x: Layout.plate-margin;
+        y: Layout.plate-margin;
+        width: parent.width - 2 * Layout.plate-margin;
+        height: parent.height - 2 * Layout.plate-margin;
+        corner-radius: Layout.radius-plate;
+        dragging: root.dragging;
+
+        // --- Focus ring (§6.9, state 11) ---------------------------------
+        // 2px `text` ring at 2px offset, OUTSIDE the border. Radius follows the
+        // element's own radius + 2. Never `signal` — a red focus ring reads as a
+        // warning, which is a bug.
+        if body-input.has-focus: Rectangle {
+            x: -(Layout.focus-offset + Layout.focus-width);
+            y: -(Layout.focus-offset + Layout.focus-width);
+            width: parent.width + 2 * (Layout.focus-offset + Layout.focus-width);
+            height: parent.height + 2 * (Layout.focus-offset + Layout.focus-width);
+            background: transparent;
+            border-width: Layout.focus-width;
+            border-color: Palette.text;
+            border-radius: Layout.radius-plate + Layout.focus-offset + Layout.focus-width;
+        }
+
+        // =================================================================
+        // Header — exactly 32px, partitioned into DISJOINT touch regions.
+        // =================================================================
+        // Region map, left to right, with no two TouchAreas ever overlapping:
+        //   [ drag ....................... ][ colour ][ pin ][ trash ]
+        // The glyph strip and title render on top of the drag region and carry
+        // no TouchArea of their own, so there is no event ambiguity — only
+        // visual layering, which resolves by declaration order.
+
+        // Colour / pin / trash tile the cluster with no gaps and no overlap:
+        // 24 + 24 + 16 = 64, so hovering a gap goes to the icon on its left.
+        trash-area := TouchArea {
+            width: Layout.icon-size;
+            height: Layout.header-h;
+            x: parent.width - Layout.pad - self.width;
+            y: 0;
+            clicked => { root.delete-clicked(); }
+            IconTrash {
+                x: 0;
+                y: (parent.height - self.height) / 2;
+                stroke-color: parent.has-hover ? Palette.text : Palette.dim;
+                opacity: root.controls-visible ? 1.0 : 0.0;
+                animate opacity { duration: Motion.hover; easing: Motion.standard; }
+            }
+        }
+
+        pin-area := TouchArea {
+            width: Layout.icon-size + Layout.icon-gap;
+            height: Layout.header-h;
+            x: trash-area.x - self.width;
+            y: 0;
+            clicked => { root.pin-clicked(); }
+            IconPin {
+                x: 0;
+                y: (parent.height - self.height) / 2;
+                stroke-color: (parent.has-hover || root.pinned) ? Palette.text : Palette.dim;
+                opacity: root.controls-visible ? 1.0 : 0.0;
+                animate opacity { duration: Motion.hover; easing: Motion.standard; }
+            }
+        }
+
+        colour-area := TouchArea {
+            width: Layout.icon-size + Layout.icon-gap;
+            height: Layout.header-h;
+            x: pin-area.x - self.width;
+            y: 0;
+            // TODO(open-question-1): §7.1 puts a colour control in the header
+            // and §7.5 puts it third in the tab order, but rules 1 and 2 leave
+            // no colour for it to set. Behaviour is deliberately unwired until
+            // that is answered; the control exists so the layout and tab order
+            // match the spec exactly.
+            clicked => { root.colour-clicked(); }
+            IconPalette {
+                x: 0;
+                y: (parent.height - self.height) / 2;
+                stroke-color: parent.has-hover ? Palette.text : Palette.dim;
+                opacity: root.controls-visible ? 1.0 : 0.0;
+                animate opacity { duration: Motion.hover; easing: Motion.standard; }
+            }
+        }
+
+        // Drag region — everything to the LEFT of the cluster, ending exactly
+        // where the icons begin. 1:1 pointer follow, no inertia (§5.5).
+        drag-area := TouchArea {
+            x: 0;
+            y: 0;
+            width: colour-area.x;
+            height: Layout.header-h;
+            moved => {
+                if (!root.dragging) {
+                    root.dragging = true;
+                    root.drag-started();
+                }
+                root.window-moved(
+                    self.mouse-x - self.pressed-x,
+                    self.mouse-y - self.pressed-y
+                );
+            }
+            pointer-event(e) => {
+                if (e.kind == PointerEventKind.up && root.dragging) {
+                    root.dragging = false;
+                    root.drag-ended();
+                }
+            }
+        }
+
+        // Glyph strip — first element in every header, vertically centred.
+        // Wrapped in a plain Rectangle because GlyphStrip is itself a
+        // HorizontalLayout: placed directly in another layout it gets stretched
+        // and an explicit height/y on it is silently ignored (§6.2, §13.4).
+        Rectangle {
+            x: Layout.pad;
+            y: 0;
+            width: Layout.strip-w;
+            height: Layout.header-h;
+            GlyphStrip {
+                x: 0;
+                y: (parent.height - self.height) / 2;
+                state: root.strip-state;
+                peer-count: root.peer-count;
+            }
+        }
+
+        // Title — interface face 22, UPPERCASE, ellipsis, never wraps.
+        Text {
+            x: Layout.title-x;
+            y: 0;
+            width: colour-area.x - self.x;
+            height: Layout.header-h;
+            text: root.note-title;
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+            letter-spacing: Typography.title-tracking;
+            vertical-alignment: center;
+            horizontal-alignment: left;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        // --- Hairline, full bleed, no inset ------------------------------
+        Rectangle {
+            x: 0;
+            y: Layout.pad + Layout.header-h;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        // =================================================================
+        // Body
+        // =================================================================
+        Rectangle {
+            x: Layout.pad;
+            y: Layout.pad + Layout.header-h + 1px;
+            width: parent.width - 2 * Layout.pad;
+            height: parent.height - self.y - Layout.pad;
+            clip: true;
+
+            // Empty state (§7.6 state 1). Sits behind the input so the caret
+            // still shows in front of it.
+            if root.body-empty: VerticalLayout {
+                alignment: start;
+                spacing: 8px;
+                Text {
+                    text: "NOTHING HERE YET";
+                    color: Palette.text;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.title-size;
+                    letter-spacing: Typography.title-tracking;
+                }
+                Text {
+                    text: "Start typing.";
+                    color: Palette.dim;
+                    font-family: Typography.system-sans;
+                    font-size: Typography.body-size;
+                }
+            }
+
+            // Overflow clips and scrolls at the body edge, with no visible
+            // scrollbar track — hence a bare Flickable, not a ScrollView.
+            Flickable {
+                width: 100%;
+                height: 100%;
+                viewport-height: max(body-input.preferred-height, self.height);
+
+                // The bare TextInput primitive, NEVER std-widgets' TextEdit:
+                // the Slint compiler defaults to the `fluent` style whenever
+                // none is configured, and Fluent's TextEdit draws a 2px blue
+                // accent bar on focus that is not exposed as an overridable
+                // property (§13.2). Nothing in this product is blue.
+                body-input := TextInput {
+                    width: 100%;
+                    wrap: word-wrap;
+                    single-line: false;
+                    text <=> root.note-text;
+                    color: Palette.text;
+                    selection-background-color: Palette.edge;
+                    selection-foreground-color: Palette.text;
+                    text-cursor-width: 2px;
+                    font-family: Typography.system-sans;
+                    font-size: Typography.body-size;
+                    edited => { root.text-edited(self.text); }
+                }
+            }
+        }
+    }
+
+    // A newly created note starts ready to type into (§7.6 state 1, §13.2).
+    init => { body-input.focus(); }
+
+    // §7.5: Esc from the body drops focus and hides the cluster.
+    forward-focus: body-input;
+    FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                body-input.clear-focus();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}

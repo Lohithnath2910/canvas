@@ -1,0 +1,16 @@
+[package]
+name = "canvas-app"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+canvas-ui.workspace = true
+canvas-doc.workspace = true
+canvas-storage.workspace = true
+canvas-sync.workspace = true
+slint.workspace = true
+mimalloc.workspace = true
+
+[features]
+# `cargo run -p canvas-app --features gpu -- --gpu`
+gpu = ["canvas-ui/gpu"]

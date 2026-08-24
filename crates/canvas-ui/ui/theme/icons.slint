@@ -1,0 +1,73 @@
+// Icons. CLAUDE.md §5.6.
+//
+// Monoline, 1.5px stroke, square caps and square joins, drawn on a 16-unit
+// grid. Rendered at 16px inline and in every header — NOT 20px, which does not
+// fit a fixed 32px header beside a 22px title — and at 24px in the command
+// palette only. 24px icons exist nowhere else in the product.
+//
+// One component per glyph rather than a generic data-driven system: less code
+// at this count, and no ambiguity about which glyph is which.
+//
+// These are pure visuals and deliberately carry NO TouchArea of their own.
+// Overlapping TouchAreas are a documented open Slint limitation (§13.3), so hit
+// regions are owned by the parent, which tiles them without overlap.
+
+import { Palette } from "palette.slint";
+import { Motion } from "motion.slint";
+
+component IconGlyph inherits Rectangle {
+    in property <color> stroke-color: Palette.dim;
+    width: 16px;
+    height: 16px;
+    @children
+}
+
+// Square outline plus a filled triangle — two Path children, one stroke-only,
+// one fill-only.
+export component IconPalette inherits IconGlyph {
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        commands: "M2.75 13.25 L13.25 2.75 L13.25 13.25 Z";
+        fill: root.stroke-color;
+        stroke-width: 0px;
+    }
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        commands: "M2.75 2.75 H13.25 V13.25 H2.75 Z";
+        fill: transparent;
+        stroke: root.stroke-color;
+        stroke-width: 1.5px;
+    }
+}
+
+export component IconPin inherits IconGlyph {
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        commands: "M5 2.75 H11 V6 H13 V8 H3 V6 H5 Z M8 8 V13.25";
+        fill: transparent;
+        stroke: root.stroke-color;
+        stroke-width: 1.5px;
+    }
+}
+
+export component IconTrash inherits IconGlyph {
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        commands: "M2.75 4.5 H13.25 M6 4.5 V2.75 H10 V4.5 M4.25 4.5 V13.25 H11.75 V4.5";
+        fill: transparent;
+        stroke: root.stroke-color;
+        stroke-width: 1.5px;
+    }
+}

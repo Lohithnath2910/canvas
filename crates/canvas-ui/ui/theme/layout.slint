@@ -1,0 +1,51 @@
+// Geometry constants. CLAUDE.md §5.3, §7.1, §7.3.
+//
+// Base unit 8px. Scale: 4, 8, 12, 16, 24, 32, 48. 4px is used only for
+// icon-to-label gaps.
+
+export global Layout {
+    // Widget padding: 16 standard, 24 for the Shared Document widget.
+    out property <length> pad: 16px;
+    out property <length> pad-doc: 24px;
+
+    // The header strip is exactly 32px on every widget type at every size.
+    out property <length> header-h: 32px;
+
+    // The glyph strip's own width, and the title's left edge:
+    // pad + strip + 12 = 16 + 23 + 12 = 51.
+    out property <length> strip-w: 23px;
+    out property <length> title-x: 51px;
+
+    // Icon cluster: three 16px icons at gap 8 = 64px, right edge at width - pad.
+    out property <length> icon-size: 16px;
+    out property <length> icon-gap: 8px;
+    out property <length> cluster-w: 64px;
+
+    // The plate is inset from the window edge so the drop shadow and the 2px
+    // focus ring at 2px offset have somewhere to draw — nothing renders outside
+    // a window's own bounds. Drag shadow needs offset 8 + blur 28 (~14 spread),
+    // so 24px covers every direction.
+    //
+    // If per-pixel window transparency turns out not to be available on this
+    // platform, set this to 0px: the shadow and the outside focus ring are lost
+    // but every other measurement in the product stays exact, because all of
+    // them are expressed relative to this one constant.
+    out property <length> plate-margin: 24px;
+
+    // Sticky note plate sizes (§7.1). Default 320x280, min 240x180.
+    out property <length> note-w: 320px;
+    out property <length> note-h: 280px;
+    out property <length> note-min-w: 240px;
+    out property <length> note-min-h: 180px;
+
+    // Radii (§5.4).
+    out property <length> radius-plate: 20px;
+    out property <length> radius-control: 8px;
+    out property <length> radius-overlay: 28px;
+    out property <length> radius-checkbox: 2px;
+    out property <length> radius-pill: 999px;
+
+    // Focus ring: 2px ring at 2px offset, outside the border (§6.9).
+    out property <length> focus-width: 2px;
+    out property <length> focus-offset: 2px;
+}

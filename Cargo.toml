@@ -1,0 +1,48 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/canvas-app",
+    "crates/canvas-ui",
+    "crates/canvas-doc",
+    "crates/canvas-storage",
+    "crates/canvas-sync",
+]
+
+# Every third-party version is pinned here and nowhere else (CLAUDE.md §3).
+# The stack is closed: adding anything to this list requires asking first.
+[workspace.dependencies]
+# UI. default-features = false deliberately drops renderer-femtovg, system-tray
+# and accessibility; the software renderer is the only one compiled in by
+# default, because the memory budget (§2.5) depends on it. GPU is the optional
+# `gpu` feature on canvas-app, never the default.
+slint = { version = "1.17.1", default-features = false, features = [
+    "compat-1-2",
+    "std",
+    "backend-winit",
+    "renderer-software",
+] }
+slint-build = "1.17.1"
+
+yrs = "0.19.2"
+rusqlite = { version = "0.32.1", features = ["bundled"] }
+tokio = { version = "1", default-features = false, features = ["rt", "sync", "time", "macros"] }
+uuid = { version = "1", features = ["v4"] }
+mimalloc = { version = "0.1", default-features = false }
+
+canvas-ui = { path = "crates/canvas-ui" }
+canvas-doc = { path = "crates/canvas-doc" }
+canvas-storage = { path = "crates/canvas-storage" }
+canvas-sync = { path = "crates/canvas-sync" }
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+# Lightest possible release binary (§2.5): fat LTO, one codegen unit, no
+# unwinding tables, symbols stripped.
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

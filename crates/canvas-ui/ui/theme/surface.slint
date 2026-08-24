@@ -1,0 +1,37 @@
+// Panel — the widget plate every widget composes into. CLAUDE.md §6.1.
+//
+// Flat and opaque (rule 5): no blur, no gradient, no glass, no glow, no tilt,
+// no scale, no bounce. Depth in this product comes from a single-layer shadow
+// and overlap, nothing else.
+
+import { Palette } from "palette.slint";
+import { Motion } from "motion.slint";
+
+export component Panel inherits Rectangle {
+    in property <length> corner-radius: 20px;
+    in property <bool> dragging: false;
+
+    background: Palette.plate.with-alpha(0.96);
+    border-radius: root.corner-radius;
+    border-width: 1px;
+    border-color: Palette.edge;
+
+    // Dark: 0 2px 16px rgba(0,0,0,0.40) idle → 0 8px 28px dragging.
+    // Light: 0 1px 3px rgba(0,0,0,0.10) idle → 0 6px 20px rgba(0,0,0,0.20).
+    drop-shadow-offset-y: root.dragging
+        ? Palette.shadow-offset-y-drag
+        : Palette.shadow-offset-y;
+    drop-shadow-blur: root.dragging
+        ? Palette.shadow-blur-drag
+        : Palette.shadow-blur;
+    drop-shadow-color: root.dragging
+        ? Palette.shadow-color-drag
+        : Palette.shadow-color;
+
+    animate drop-shadow-offset-y, drop-shadow-blur, drop-shadow-color {
+        duration: Motion.drag-shadow;
+        easing: Motion.standard;
+    }
+
+    @children
+}

@@ -1,0 +1,14 @@
+[package]
+name = "canvas-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+slint.workspace = true
+
+[build-dependencies]
+slint-build.workspace = true
+
+[features]
+# Compiles the femtovg GPU renderer in. Never enabled by default (§3).
+gpu = ["slint/renderer-femtovg"]

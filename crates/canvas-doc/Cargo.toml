@@ -1,0 +1,8 @@
+[package]
+name = "canvas-doc"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+yrs.workspace = true
+uuid.workspace = true

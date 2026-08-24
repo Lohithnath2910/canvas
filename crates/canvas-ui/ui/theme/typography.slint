@@ -1,0 +1,40 @@
+// Type scale and font embedding. CLAUDE.md §5.2, §13.1.
+//
+// The mechanism that works in Slint 1.17 is a compile-time `import` of the .ttf
+// directly in a .slint file. `slint::register_font_from_memory` DOES NOT EXIST
+// in 1.17's public API — a web search will suggest it from older versions.
+// These two imports make the fonts' internal family names ("Silkscreen",
+// "Inter") available to any font-family property in the compiled module. No
+// build.rs change, no runtime Rust call.
+import "../../assets/fonts/Silkscreen-Regular.ttf";
+import "../../assets/fonts/Inter-Variable.ttf";
+
+export global Typography {
+    // The interface/display face. Only the Regular weight is used anywhere.
+    // It renders at ONLY 11px and 22px — never any other size, never smaller.
+    out property <string> interface-face: "Silkscreen";
+
+    // The body face is the OS's own system sans, set from Rust per platform
+    // (§13.1). Inter is bundled as the guaranteed-present Linux fallback.
+    in-out property <string> system-sans: "Inter";
+
+    // --- Widget title: 22 / 28, UPPERCASE, +0.06em ---------------------------
+    out property <length> title-size: 22px;
+    out property <length> title-line: 28px;
+    out property <length> title-tracking: 1.32px; // 0.06em at 22px
+
+    // --- Label / status word / metadata: 11 / 16, UPPERCASE, +0.08em ---------
+    out property <length> label-size: 11px;
+    out property <length> label-line: 16px;
+    out property <length> label-tracking: 0.88px; // 0.08em at 11px
+
+    // --- Body: 14 / 22, sentence case ---------------------------------------
+    out property <length> body-size: 14px;
+    out property <length> body-line: 22px;
+    out property <int> body-weight: 400;
+    out property <int> body-weight-emphasis: 600;
+
+    // --- Caption: 12 / 18, dim ----------------------------------------------
+    out property <length> caption-size: 12px;
+    out property <length> caption-line: 18px;
+}
