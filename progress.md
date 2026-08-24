@@ -227,3 +227,45 @@ user in the same exchange that chose the behaviours requiring them:
   focus-changed callback.
 - 🟡 Not yet watched work — needs a browser opened over a pinned note to confirm.
 - ❌ Pin state is not persisted yet; that lands with S1-21.
+
+### 2026-08-24 — S1-15, S1-16, S1-19: CRDT and storage
+
+**S1-15 — `StickyNoteDoc` (12 tests, all passing)**
+- ✅ Convergence proven: two docs and three docs editing concurrently converge after
+  exchanging updates. Updates are idempotent (applying one three times is safe).
+  Garbage bytes are rejected without panicking. No last-write-wins anywhere.
+- ✅ **Went past §11.1's sample, deliberately.** The spec's `update_text` replaces the
+  whole string on every keystroke and its own comment says to diff instead once you
+  build past plain text. It diffs now: common prefix/suffix are skipped and only the
+  changed span is sent. An append to a 43-char note produces a <40 byte update rather
+  than re-encoding the document.
+- ✅ `diff_since(state_vector)` sends only what a peer is missing — needed for S1-36.
+
+**⚠️ Real bug found, worth remembering: yrs indices are UTF-8 BYTE offsets, not
+character offsets.** `yrs 0.19.2` defaults to `OffsetKind::Bytes` (confirmed by reading
+`doc.rs:795`). The first diff implementation used character indices, which is correct
+for ASCII and silently corrupts the moment a multi-byte character appears — the emoji
+test produced `"héllo wörld🎉 🎉"` from an append. Prefix/suffix are now computed in
+bytes and walked back to a `char_boundary` on both strings. §11.1's whole-string-replace
+sample never hits this, so the spec gives no warning about it. **Any future code that
+indexes a `yrs::Text` must use byte offsets.**
+
+**S1-16 — `canvas-storage` (16 tests, all passing)**
+- ✅ All seven §12 tables, `user_version` migration, idempotent.
+- ✅ `documents` is widget-type-agnostic — one table proven to hold a note and a todo
+  side by side, never one table per type.
+- ✅ New widgets get `UNTITLED` and their own type's default size (note 320×280,
+  todo 340×360, kanban 640×400, calendar 480×360, document 520×420).
+- ✅ WAL journal mode, `synchronous=NORMAL` — keeps writes off the UI thread's critical
+  path for Hard Constraint 2.
+- ✅ Database lives in `%APPDATA%/Canvas/canvas_local.db`, not the working directory.
+- ✅ **`window_positions` gained `pinned`, `tone` and `open` columns** beyond §12's
+  schema. `open` is what makes close-≠-delete possible (S1-21): closing clears the flag,
+  the widget row and its document stay. Proven by test.
+
+**S1-19 — revision history bounded**
+- ✅ Trims to the most recent 200 once a widget passes 500, so the row count oscillates
+  between 200 and 500 rather than growing without limit. Verified at 600 and at 5000
+  updates. Trimming one widget provably leaves other widgets' history alone.
+- Note: the first version of this test asserted `count <= 200`, which the spec's own
+  design does not hold — it bounces. The test now asserts the real contract.

@@ -5,7 +5,7 @@ mid-build, the next session reads this file, finds the first unchecked box, and
 starts there. Nothing needs re-deriving.
 
 **Last updated:** 2026-08-24
-**Current task:** `S1-15` — CRDT document, then `S1-16` SQLite, then `S1-20` multi-window, then the home page.
+**Current task:** `S1-17` — wire doc/UI/storage together so typing survives a restart.
 **Stage:** 1 — Sticky note + app shell (replanned 2026-08-24)
 
 ---
@@ -226,7 +226,7 @@ first. These three come before it.
 
 ### 1g — Data, persistence, and the no-save-button rule
 
-- [ ] **S1-15 · `StickyNoteDoc` in `canvas-doc`** — `M`
+- [x] **S1-15 · `StickyNoteDoc` in `canvas-doc`** — `M`
   Needs: S0-2. Implement §11.1 against the version S0-1 actually resolved.
   Note the spec's own caveat: `update_text` replaces the whole string on every keystroke —
   still a valid CRDT (no LWW), but it bloats update size and will defeat cursor preservation
@@ -237,7 +237,7 @@ first. These three come before it.
   temporary shortcut (Hard Constraint 3).
   *Refs:* §11.1, §2.3
 
-- [ ] **S1-16 · SQLite schema in `canvas-storage`** — `M`
+- [x] **S1-16 · SQLite schema in `canvas-storage`** — `M`
   Needs: S0-2. All seven tables from §12 verbatim, in `canvas_local.db`. Open / create /
   migrate with a `schema_version`. `documents` is widget-type-agnostic — **one table for
   every widget type**, never one per type. Default size by `widget_type` at creation
@@ -261,7 +261,7 @@ first. These three come before it.
   *DoD:* move and resize a note, restart → it reopens exactly where and how it was.
   *Refs:* §12, §8
 
-- [ ] **S1-19 · Bound `revision_history` growth** — `S`
+- [x] **S1-19 · Bound `revision_history` growth** — `S`
   Needs: S1-17. Trim to the most recent ~200 rows once a widget passes ~500, or growth is
   unbounded and the budget fails.
   *DoD:* a test that writes 600 updates leaves ≤ 200 rows, and the db stops growing.
