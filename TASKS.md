@@ -5,7 +5,7 @@ mid-build, the next session reads this file, finds the first unchecked box, and
 starts there. Nothing needs re-deriving.
 
 **Last updated:** 2026-08-24
-**Current task:** `S1-04` — verification pass on the sticky note, then S1-15 (CRDT doc)
+**Current task:** v1 of the sticky note accepted. Re-planning Stage 1 around a home page, pin semantics, and note lifecycle — see Open questions.
 **Stage:** 1 — Sticky note
 
 ---
@@ -172,7 +172,7 @@ first. These three come before it.
 
 ### 1d — Body and text
 
-- [ ] **S1-09 · Note body: bare `TextInput` in a `Flickable`** — `M`
+- [x] **S1-09 · Note body: bare `TextInput` in a `Flickable`** — `M`
   Needs: S1-02, S1-07. **Never `std-widgets`' `TextEdit`.** Slint's compiler defaults to
   the `fluent` style whenever none is configured, and Fluent's `TextEdit` draws a 2px blue
   accent bar under the field on focus that is not exposed as an overridable property — that

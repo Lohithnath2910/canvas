@@ -154,3 +154,42 @@ bold, no italic. §7.2 requires body bold at weight 600 and italic for rich text
 Silkscreen as the body face, two of the five inline formats have no way to render.
 Options when that lands: switch body back to the system sans, represent bold/italic
 some other way, or drop them. Do not start S1-32 without deciding.
+
+---
+
+## v1 milestone — sticky note accepted (2026-08-24)
+
+User signed off: *"it's a good first version of first step of whole project."*
+
+**What works and has been seen working**
+- ✅ A frameless, transparent, rounded sticky note renders on the desktop with the plate,
+  header, hairline and body all at the agreed measurements.
+- ✅ Silkscreen renders throughout — title at 22px, body and placeholder at 14px.
+- ✅ Typing works; the placeholder becomes the text with no jump (S1-09, S1-10).
+- ✅ Glyph strip reads clearly at 8×8 and reports idle vs focused correctly.
+- ✅ All seven strip states reachable and legible via Ctrl+G (S1-04).
+- ✅ Three header icons render as real vector paths and reveal on hover/focus.
+- ✅ Release build inside every budget: 20.6 MB RSS, 7.0 MB private, 8.3 MB binary.
+
+**Still 🟡 — compiles, not yet watched work**
+- 🟡 Header drag, edge/corner resize, tab order, delete confirm, Button variants,
+  plate tone cycling. None of these have been confirmed by use.
+
+**Still ❌ — not started**
+- ❌ No persistence of any kind. Close the app and the text is gone.
+- ❌ `canvas-doc`, `canvas-storage`, `canvas-sync` are empty stubs. No CRDT, no SQLite.
+- ❌ No way to create a second note. One window, hardcoded, that is the whole app.
+
+**Direction change requested at this milestone**
+The user wants the product reshaped before persistence work starts:
+1. Pin must stop meaning "always float above every app" — the current
+   `always-on-top: true` is intrusive.
+2. There must be a way to create new notes.
+3. There should be a **home page** that notes are created and launched from, which can
+   be closed without taking the notes with it.
+4. Closing a note must not mean deleting it. Today delete is the only way to make a note
+   go away, which is wrong.
+
+These reshape §8 and §9 of the spec (which assume a bare desktop of widgets plus a
+command palette, with no home surface at all). Scoping questions are open — do not write
+code for any of it until they are answered.
