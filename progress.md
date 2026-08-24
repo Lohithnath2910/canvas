@@ -130,3 +130,27 @@ They override the corresponding spec values from here on:
   the git history. Anyone editing the .slint files should read those first — the code
   no longer warns you at the point of the mistake.
 - ✅ `cargo clippy --workspace --all-targets` still clean after the strip.
+
+### 2026-08-24 — Body face becomes the dot-matrix face
+
+- ✅ **Body prose now renders in Silkscreen, not the system sans.** User's call: the
+  system sans read as "too generic" next to the dot-matrix header. Placeholder and body
+  text now share one face and one size (14px), so the placeholder no longer jumps when
+  you type — it simply becomes your text. Body size stays 14/22 per §5.2.
+  This contradicts §5.2 ("body prose is always the body face"). `Typography.body-face`
+  is the single switch to revert it.
+- ✅ **Body gained 16px top padding**, so text no longer touches the header hairline.
+  Padding is now even on all four sides of the body box. Costs 16px of body height
+  against §7.3's numbers.
+- ✅ **S1-04 done — a dev control cycles all seven strip states.** Ctrl+G with the body
+  focused steps through idle / focused / syncing / offline / peers / peers-idle / error
+  and back to live behaviour; the title displays which state is showing. This is the
+  §14 Stage 1 DoD for the glyph strip.
+- ✅ `docs/glyph-strip.md` written — what each of the seven states means, the four cell
+  values, and why only idle and focused are currently reachable.
+
+**Consequence to resolve before S1-32 (rich text):** Silkscreen ships Regular only — no
+bold, no italic. §7.2 requires body bold at weight 600 and italic for rich text. With
+Silkscreen as the body face, two of the five inline formats have no way to render.
+Options when that lands: switch body back to the system sans, represent bold/italic
+some other way, or drop them. Do not start S1-32 without deciding.

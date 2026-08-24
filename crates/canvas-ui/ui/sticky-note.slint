@@ -40,10 +40,32 @@ export component StickyNoteWindow inherits Window {
     property <bool> confirming-delete: false;
     property <bool> body-empty: root.note-text == "";
 
+    property <int> dev-state: -1;
+
     property <WidgetState> effective-state:
-        (root.strip-state == WidgetState.idle && body-input.has-focus)
+        root.dev-state == 0 ? WidgetState.idle
+        : root.dev-state == 1 ? WidgetState.focused
+        : root.dev-state == 2 ? WidgetState.syncing
+        : root.dev-state == 3 ? WidgetState.offline
+        : root.dev-state == 4 ? WidgetState.peers
+        : root.dev-state == 5 ? WidgetState.peers-idle
+        : root.dev-state == 6 ? WidgetState.error
+        : (root.strip-state == WidgetState.idle && body-input.has-focus)
             ? WidgetState.focused
             : root.strip-state;
+
+    property <string> dev-label:
+        root.dev-state == 0 ? "IDLE"
+        : root.dev-state == 1 ? "FOCUSED"
+        : root.dev-state == 2 ? "SYNCING"
+        : root.dev-state == 3 ? "OFFLINE"
+        : root.dev-state == 4 ? "PEERS 3"
+        : root.dev-state == 5 ? "PEERS IDLE"
+        : root.dev-state == 6 ? "ERROR"
+        : root.note-title;
+
+    property <int> effective-peers:
+        (root.dev-state == 4 || root.dev-state == 5) ? 3 : root.peer-count;
 
     property <bool> controls-visible:
         drag-area.has-hover
@@ -76,7 +98,7 @@ export component StickyNoteWindow inherits Window {
 
         Rectangle {
             x: Layout.pad;
-            y: Layout.header-band + 1px;
+            y: Layout.header-band + 1px + Layout.pad;
             width: parent.width - 2 * Layout.pad;
             height: parent.height - self.y - Layout.pad
                 - (root.confirming-delete ? root.confirm-h : 0px);
@@ -86,14 +108,11 @@ export component StickyNoteWindow inherits Window {
                 x: 0;
                 y: 0;
                 width: parent.width;
-                height: Typography.body-line;
                 text: "NOTHING HERE YET";
                 color: Palette.text;
                 opacity: Layout.placeholder-opacity;
-                font-family: Typography.interface-face;
-                font-size: Typography.title-size;
-                letter-spacing: Typography.title-tracking;
-                vertical-alignment: center;
+                font-family: Typography.body-face;
+                font-size: Typography.body-size;
                 overflow: elide;
                 wrap: no-wrap;
             }
@@ -114,13 +133,17 @@ export component StickyNoteWindow inherits Window {
                     selection-background-color: Palette.edge;
                     selection-foreground-color: Palette.text;
                     text-cursor-width: 2px;
-                    font-family: Typography.system-sans;
+                    font-family: Typography.body-face;
                     font-size: Typography.body-size;
                     read-only: root.confirming-delete;
                     edited => { root.text-edited(self.text); }
                     key-pressed(event) => {
                         if (event.text == Key.Escape) {
                             body-input.clear-focus();
+                            return accept;
+                        }
+                        if (event.modifiers.control && event.text == "g") {
+                            root.dev-state = root.dev-state >= 6 ? -1 : root.dev-state + 1;
                             return accept;
                         }
                         return reject;
@@ -198,7 +221,7 @@ export component StickyNoteWindow inherits Window {
                 width: Layout.strip-w;
                 height: Layout.strip-h;
                 state: root.effective-state;
-                peer-count: root.peer-count;
+                peer-count: root.effective-peers;
             }
         }
 
@@ -207,7 +230,7 @@ export component StickyNoteWindow inherits Window {
             y: Layout.header-y;
             width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
             height: Layout.header-h;
-            text: root.note-title;
+            text: root.dev-label;
             color: Palette.text;
             font-family: Typography.interface-face;
             font-size: Typography.title-size;

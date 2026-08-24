@@ -115,7 +115,7 @@ first. These three come before it.
 
 ### 1b — The signature elements
 
-- [ ] **S1-04 · `GlyphStrip`, all 7 states** — `M`
+- [x] **S1-04 · `GlyphStrip`, all 7 states** — `M`
   Needs: S1-01. Five cells, 3×3 each, 2px gap, 23×3 total. Enum: idle / focused / syncing /
   offline / peers / peers-idle / error. Stepped 120ms, **never interpolated** (rule 4 — the
   first opacity tween on a dot cell destroys the product's identity).
