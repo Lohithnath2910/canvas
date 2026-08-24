@@ -57,6 +57,24 @@ export global Palette {
     out property <color> peer-3: root.is-dark ? #242424 : #E0E0E0;
     out property <color> peer-4: root.is-dark ? #1C1C1C : #EAEAEA;
 
+    // --- Plate tones (what the header colour control does) ------------------
+    // Tone 0 is the standard plate; 1-4 step through the presence greys so
+    // notes can be visually grouped WITHOUT introducing a second hue. Rule 1
+    // leaves no colour for a colour control to set, so it sets grey level —
+    // the same distinction mechanism peers already use (§5.1 peer-1..4).
+    out property <color> plate-tone-1: root.peer-4;
+    out property <color> plate-tone-2: root.peer-3;
+    out property <color> plate-tone-3: root.peer-2;
+    out property <color> plate-tone-4: root.peer-1;
+
+    public pure function plate-tone(tone: int) -> color {
+        return tone == 1 ? root.plate-tone-1
+            : tone == 2 ? root.plate-tone-2
+            : tone == 3 ? root.plate-tone-3
+            : tone == 4 ? root.plate-tone-4
+            : root.plate;
+    }
+
     // --- Interaction fills --------------------------------------------------
     // §5.1 gives dark values only for these five rows. The light values are
     // derived as the mirror of the dark relationship (one step toward the

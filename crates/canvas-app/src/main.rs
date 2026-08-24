@@ -28,8 +28,29 @@ fn main() -> Result<(), slint::PlatformError> {
         .set_system_sans(platform_system_sans().into());
 
     wire_drag(&window);
+    wire_controls(&window);
 
     window.run()
+}
+
+/// The three header controls. Persistence for tone and pin lands with S1-17;
+/// for now they change what you can see and report what they did.
+fn wire_controls(window: &StickyNoteWindow) {
+    window.on_tone_changed(|tone| {
+        eprintln!("canvas: plate tone -> {tone}");
+    });
+
+    window.on_pin_toggled(|pinned| {
+        eprintln!("canvas: pinned -> {pinned}");
+    });
+
+    let handle = window.as_weak();
+    window.on_delete_confirmed(move || {
+        if let Some(window) = handle.upgrade() {
+            let _ = window.hide();
+        }
+        let _ = slint::quit_event_loop();
+    });
 }
 
 /// 1:1 pointer follow, no inertia (§5.5). The header hands us a delta in

@@ -10,8 +10,11 @@ import { Motion } from "motion.slint";
 export component Panel inherits Rectangle {
     in property <length> corner-radius: 20px;
     in property <bool> dragging: false;
+    // Tone 0 = the standard plate. 1-4 are the grey steps the header colour
+    // control cycles through (§5.1 plate-tone).
+    in property <int> tone: 0;
 
-    background: Palette.plate.with-alpha(0.96);
+    background: Palette.plate-tone(root.tone).with-alpha(0.96);
     border-radius: root.corner-radius;
     border-width: 1px;
     border-color: Palette.edge;

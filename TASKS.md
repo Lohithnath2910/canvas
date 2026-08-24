@@ -5,8 +5,8 @@ mid-build, the next session reads this file, finds the first unchecked box, and
 starts there. Nothing needs re-deriving.
 
 **Last updated:** 2026-08-24
-**Current task:** `S0-1`
-**Stage:** 0 — Workspace bootstrap
+**Current task:** `S1-04` — verification pass on the sticky note, then S1-15 (CRDT doc)
+**Stage:** 1 — Sticky note
 
 ---
 
@@ -31,7 +31,7 @@ Size legend: `S` ≈ under 30 min · `M` ≈ 30–90 min · `L` ≈ half a sessi
 Stage DoD (CLAUDE.md §14): `cargo run -p canvas-app` opens a window · idle RSS measured
 and under budget · cold launch measured.
 
-- [ ] **S0-1 · Verify the pinned stack actually resolves** — `S`
+- [x] **S0-1 · Verify the pinned stack actually resolves** — `S`
   Confirm `slint`/`slint-build` 1.17.x, `yrs` 0.19.x, `rusqlite` (bundled), `tokio`,
   `uuid` 1.x, `mimalloc` all resolve on this toolchain (rustc 1.94.0 is installed).
   Use a throwaway probe crate in the scratchpad — do not pollute the real workspace.
@@ -39,7 +39,7 @@ and under budget · cold launch measured.
   pinned version, **stop and report** before writing code against the §11/§13 API details.
   *Refs:* §0.2, §3
 
-- [ ] **S0-2 · Cargo workspace + five crate skeletons** — `M`
+- [x] **S0-2 · Cargo workspace + five crate skeletons** — `M`
   Needs: S0-1. Root `Cargo.toml` with `[workspace]` + `[workspace.dependencies]` pinning
   every version from §3 in one place. Crates: `canvas-app` (bin), `canvas-ui`,
   `canvas-doc`, `canvas-storage`, `canvas-sync` (stub).
@@ -47,7 +47,7 @@ and under budget · cold launch measured.
   dependency (Hard Constraint 1).
   *Refs:* §14 Stage 0, §2.1, §3
 
-- [ ] **S0-3 · Fonts into the UI crate + blank window** — `M`
+- [x] **S0-3 · Fonts into the UI crate + blank window** — `M`
   Needs: S0-2. Copy `handoff/fonts/*` (both `.ttf` files **and** both `-OFL.txt` licences)
   into `crates/canvas-ui/assets/fonts/`. `build.rs` calling
   `slint_build::compile("ui/main.slint")`. Minimal `main.slint` window.
@@ -55,7 +55,7 @@ and under budget · cold launch measured.
   screenshot pipeline (§13.7).
   *Refs:* §14 Stage 0, §15.2
 
-- [ ] **S0-4 · Software renderer default + `--gpu` opt-in + mimalloc** — `S`
+- [x] **S0-4 · Software renderer default + `--gpu` opt-in + mimalloc** — `S`
   Needs: S0-3. Force `winit-software` as the default backend; `--gpu` switches to
   `winit-femtovg`. `mimalloc` as `#[global_allocator]`. **Never default to GPU** — the
   memory budget depends on software rendering.
@@ -63,14 +63,14 @@ and under budget · cold launch measured.
   startup to confirm the default path is software.
   *Refs:* §3 (UI row), §2.5
 
-- [ ] **S0-5 · Measure the budget baseline** — `S`
+- [x] **S0-5 · Measure the budget baseline** — `S`
   Needs: S0-4. Measure idle RSS and cold-launch time on Windows (`Get-Process`, Task
   Manager). Budgets: app idle 20–40 MB, cold launch < 300 ms.
   *DoD:* both numbers recorded in `progress.md` as the baseline every later stage is
   compared against. Over budget at a blank window ⇒ **stop and report**.
   *Refs:* §2.5, §14 Stage 0 DoD
 
-- [ ] **S0-6 · Lint/format baseline** — `S`
+- [x] **S0-6 · Lint/format baseline** — `S`
   Needs: S0-2. `cargo fmt --all`, then `cargo clippy --all-targets -- -D warnings`.
   *DoD:* both exit 0 on a clean tree.
   *Refs:* §4.2
@@ -89,7 +89,7 @@ widget RSS still 5–15 MB.
 The spec's own Stage 1 list starts at the header, but the header needs tokens to exist
 first. These three come before it.
 
-- [ ] **S1-01 · `Palette` global — every colour token** — `M`
+- [x] **S1-01 · `Palette` global — every colour token** — `M`
   Needs: S0-3. `theme/palette.slint`. All §5.1 tokens, both modes, plus `is-dark`.
   Apply the three documented light-mode corrections: `dot-unlit` at ~22% (not 12%), `dim`
   at ~57–58% black (55% fails WCAG AA at 4.27:1), light shadows `0 1px 3px rgba(0,0,0,0.10)`
@@ -98,7 +98,7 @@ first. These three come before it.
   no colour literal appears anywhere else in the codebase.
   *Refs:* §5.1
 
-- [ ] **S1-02 · `Typography` global + font embedding** — `M`
+- [x] **S1-02 · `Typography` global + font embedding** — `M`
   Needs: S1-01. Embed via **compile-time `import "…/Silkscreen-Regular.ttf";`** in the
   `.slint` file. `slint::register_font_from_memory` **does not exist** in 1.17 — a web
   search will suggest it anyway; do not reach for it. `system-sans` is `in-out`, set from
@@ -107,7 +107,7 @@ first. These three come before it.
   by eye. Interface face is used at **only** 11px and 22px, nowhere else, ever.
   *Refs:* §13.1, §5.2
 
-- [ ] **S1-03 · `Panel` component** — `S`
+- [x] **S1-03 · `Panel` component** — `S`
   Needs: S1-01. Opaque `plate` @ 0.96, radius 20, 1px `edge` border, single-layer shadow
   that deepens on `dragging` over 100ms. No blur, no gradient, no glass (rule 5).
   *DoD:* panel renders; toggling a test `dragging` property visibly deepens the shadow.
@@ -127,7 +127,7 @@ first. These three come before it.
   about the network.
   *Refs:* §6.2, §13.4, rule 4
 
-- [ ] **S1-05 · The three header icons as real vector `Path`s** — `M`
+- [x] **S1-05 · The three header icons as real vector `Path`s** — `M`
   Needs: S1-01. `palette`, `pin`, `trash-2` — one component per icon, geometry copied
   exactly from the §5.6 table. 1.5px stroke, square caps and joins, 16-unit grid, rendered
   at 16px (not 20px — a 20px icon does not fit a 32px header beside a 22px title).
@@ -184,7 +184,7 @@ first. These three come before it.
   scrollbar track**, and **there is no blue anywhere on screen** — check it focused.
   *Refs:* §13.2, §7.1, §7.3
 
-- [ ] **S1-10 · Empty state (state 1)** — `S`
+- [x] **S1-10 · Empty state (state 1)** — `S`
   Needs: S1-09. `NOTHING HERE YET` (interface face 22) + "Start typing." (body face,
   `dim`), gap 8, caret after. Strip `focused`. Controls hidden.
   *DoD:* a freshly created note shows it, and it disappears on the first keystroke.

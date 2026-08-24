@@ -1,0 +1,167 @@
+// Interactive controls. CLAUDE.md §6.3, §6.9, §7.5.
+
+import { Palette } from "palette.slint";
+import { Typography } from "typography.slint";
+import { Motion } from "motion.slint";
+import { Layout } from "layout.slint";
+
+// A focusable 16px header icon.
+//
+// The hit region is wider than the glyph so the cluster tiles with no gaps and
+// no overlap — two TouchAreas must never occupy the same screen region (§13.3).
+// FocusScope is not a TouchArea, so pairing them here does not reintroduce that
+// problem; it is what makes the control reachable by Tab (§7.5).
+export component IconButton inherits Rectangle {
+    in property <bool> revealed: true;
+    callback activated();
+
+    out property <bool> hovered: touch.has-hover;
+    out property <bool> focused: focus.has-focus;
+    // Rest colour `dim`, active/hover colour `text` (§5.6).
+    out property <color> glyph-color: (touch.has-hover || focus.has-focus)
+        ? Palette.text
+        : Palette.dim;
+
+    height: Layout.header-h;
+
+    public function take-focus() { focus.focus(); }
+
+    focus := FocusScope {
+        width: 100%;
+        height: 100%;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.activated();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        mouse-cursor: pointer;
+        clicked => {
+            focus.focus();
+            root.activated();
+        }
+    }
+
+    // Focus ring: 2px `text` at 2px offset, outside the glyph box. Radius
+    // follows the control's own radius + 2. NEVER `signal` (§6.9).
+    if focus.has-focus: Rectangle {
+        x: -Layout.focus-offset - Layout.focus-width;
+        y: (parent.height - Layout.icon-size) / 2 - Layout.focus-offset - Layout.focus-width;
+        width: Layout.icon-size + 2 * (Layout.focus-offset + Layout.focus-width);
+        height: Layout.icon-size + 2 * (Layout.focus-offset + Layout.focus-width);
+        background: transparent;
+        border-width: Layout.focus-width;
+        border-color: Palette.text;
+        border-radius: Layout.radius-control + Layout.focus-offset + Layout.focus-width;
+    }
+
+    // Hover reveal is opacity only — the position never moves (§7.4).
+    Rectangle {
+        x: 0;
+        y: (parent.height - Layout.icon-size) / 2;
+        width: Layout.icon-size;
+        height: Layout.icon-size;
+        opacity: (root.revealed || focus.has-focus) ? 1.0 : 0.0;
+        animate opacity { duration: Motion.hover; easing: Motion.standard; }
+        @children
+    }
+}
+
+export enum ButtonVariant { default, primary, destructive }
+
+// Button — §6.3. Radius 8, padding 8/16, computed height 34px, label in the
+// interface face at 11px UPPERCASE +0.08em, never wraps.
+//
+// `signal` red appears on the destructive variant and nowhere else in this
+// component; it is one of the only two places it appears in the product.
+export component Button inherits Rectangle {
+    in property <string> label;
+    in property <ButtonVariant> variant: ButtonVariant.default;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    out property <bool> focused: focus.has-focus;
+
+    property <bool> is-primary: root.variant == ButtonVariant.primary;
+    property <bool> is-destructive: root.variant == ButtonVariant.destructive;
+    property <bool> pressed: touch.pressed && root.enabled;
+    property <bool> hovered: touch.has-hover && root.enabled;
+
+    height: 34px;
+    width: text-label.width + 32px;
+    border-radius: Layout.radius-control;
+    border-width: 1px;
+
+    border-color: root.is-destructive ? Palette.signal : Palette.edge;
+
+    background:
+        root.is-destructive
+            ? (root.pressed || root.hovered ? Palette.active-destructive : Palette.elev-raised)
+        : root.is-primary
+            ? (root.pressed ? Palette.active-primary
+                : root.hovered ? Palette.hover-primary
+                : Palette.text)
+        : (root.pressed ? Palette.elev-recessed
+            : root.hovered ? Palette.hover-default
+            : Palette.elev-raised);
+
+    // Disabled = the whole control at 0.40 opacity.
+    opacity: root.enabled ? 1.0 : 0.40;
+
+    animate background { duration: Motion.press; easing: Motion.standard; }
+
+    text-label := Text {
+        x: 16px;
+        y: (parent.height - self.height) / 2;
+        text: root.label;
+        color: root.is-destructive
+            ? (root.pressed || root.hovered ? Palette.text : Palette.signal)
+            : root.is-primary ? Palette.base
+            : Palette.text;
+        font-family: Typography.interface-face;
+        font-size: Typography.label-size;
+        letter-spacing: Typography.label-tracking;
+        wrap: no-wrap;
+    }
+
+    focus := FocusScope {
+        width: 100%;
+        height: 100%;
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            focus.focus();
+            root.clicked();
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: -Layout.focus-offset - Layout.focus-width;
+        y: -Layout.focus-offset - Layout.focus-width;
+        width: parent.width + 2 * (Layout.focus-offset + Layout.focus-width);
+        height: parent.height + 2 * (Layout.focus-offset + Layout.focus-width);
+        background: transparent;
+        border-width: Layout.focus-width;
+        border-color: Palette.text;
+        border-radius: Layout.radius-control + Layout.focus-offset + Layout.focus-width;
+    }
+}

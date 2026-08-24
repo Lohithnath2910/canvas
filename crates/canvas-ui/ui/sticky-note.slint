@@ -2,7 +2,7 @@
 //
 // A widget is not a window — it is a readout: a flat monochrome plate that
 // shows one thing and reports its own state. The Glyph Strip is the only status
-// indicator it has (rule 3).
+// indicator it has (rule 3): no sync icon, no online dot, no banner, no toast.
 //
 // Vertical anatomy, which reproduces §7.3's stated body boxes exactly at all
 // three sizes (240x180 -> 206x115, 320x280 -> 286x215, 520x600 -> 486x535):
@@ -12,6 +12,13 @@
 //      1   hairline, full bleed
 //      *   body, inset 16 left and right
 //     16   bottom padding
+//
+// Horizontal header map. No two TouchAreas ever overlap (§13.3):
+//
+//     [ drag ...................... ][ colour ][ pin ][ trash ]
+//     0                          W-80      W-56    W-32     W-16
+//
+// Declaration order below is TAB ORDER (§7.5): body, colour, pin, delete.
 
 import { Palette } from "theme/palette.slint";
 import { Typography } from "theme/typography.slint";
@@ -20,6 +27,7 @@ import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPalette, IconPin, IconTrash } from "theme/icons.slint";
+import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
 
 export { WidgetState }
 
@@ -29,20 +37,25 @@ export component StickyNoteWindow inherits Window {
     in-out property <string> note-text: "";
     in property <WidgetState> strip-state: WidgetState.idle;
     in property <int> peer-count: 0;
-    in property <bool> pinned: false;
+    in-out property <bool> pinned: false;
+    // 0 = standard plate, 1-4 = grey steps (§5.1 plate-tone).
+    in-out property <int> tone: 0;
+    // State 11. Set by the desktop layer when this widget was reached by
+    // keyboard rather than by click — see the ring's own comment below.
+    in property <bool> keyboard-focused: false;
 
     // --- Out -----------------------------------------------------------------
     callback window-moved(length, length);
     callback drag-started();
     callback drag-ended();
     callback text-edited(string);
-    callback colour-clicked();
-    callback pin-clicked();
-    callback delete-clicked();
+    callback tone-changed(int);
+    callback pin-toggled(bool);
+    callback delete-confirmed();
 
     // --- Window --------------------------------------------------------------
     // `width`/`height` and `min-width`/`min-height` cannot both be set on one
-    // element — the compiler rejects it outright (§13.5). Use preferred-* here.
+    // element — the compiler rejects it outright (§13.5). Hence preferred-*.
     // There is deliberately no max: "no maximum" means omitting the property,
     // not setting a huge sentinel value.
     preferred-width: Layout.note-w + 2 * Layout.plate-margin;
@@ -51,26 +64,45 @@ export component StickyNoteWindow inherits Window {
     min-height: Layout.note-min-h + 2 * Layout.plate-margin;
     no-frame: true;
     // Native OS-level frameless resize from any edge or corner, aspect never
-    // locked. Confirmed present in 1.17.1; no manual pointer-tracking needed.
+    // locked. Confirmed working in 1.17.1 — no manual pointer-tracking needed.
     resize-border-width: 6px;
-    // Transparent so the plate's shadow and focus ring have room to draw.
+    // Transparent so the plate's drop shadow and outside focus ring have room
+    // to draw; nothing renders beyond a window's own bounds.
     background: transparent;
     title: "Canvas";
+    // §8: widgets are free-floating and always-on-top. Slint 1.17 exposes this
+    // directly on Window, so no dependency outside the closed stack is needed.
+    always-on-top: true;
 
     // --- State ---------------------------------------------------------------
     property <bool> dragging: false;
+    property <bool> confirming-delete: false;
     property <bool> body-empty: root.note-text == "";
+
+    // States 2 and 3: a note with focus shows `focused`, one without shows
+    // `idle`. Any real state the app reports (syncing/offline/peers/error)
+    // outranks both — the strip must never lie about the network.
+    property <WidgetState> effective-state:
+        (root.strip-state == WidgetState.idle && body-input.has-focus)
+            ? WidgetState.focused
+            : root.strip-state;
 
     // §7.4: revealed by the pointer entering the note, or keyboard focus
     // entering it. Tracked as the OR of every disjoint region's own has-hover
-    // rather than one overlapping tracking layer — two TouchAreas must never
-    // occupy the same screen region (§13.3).
+    // rather than one overlapping tracking layer (§13.3).
+    //
+    // Accepted scope reduction, called out in §13.3: hover over the BODY does
+    // not reveal the cluster, because a tracking layer there would sit on top
+    // of the TextInput and break caret placement. Body focus does reveal it.
     property <bool> controls-visible:
         drag-area.has-hover
-        || colour-area.has-hover
-        || pin-area.has-hover
-        || trash-area.has-hover
+        || colour-btn.hovered || colour-btn.focused
+        || pin-btn.hovered || pin-btn.focused
+        || trash-btn.hovered || trash-btn.focused
         || body-input.has-focus;
+
+    // Confirm block: hairline + 12 + label 16 + 12 + button 34.
+    property <length> confirm-h: 75px;
 
     plate := Panel {
         x: Layout.plate-margin;
@@ -79,12 +111,18 @@ export component StickyNoteWindow inherits Window {
         height: parent.height - 2 * Layout.plate-margin;
         corner-radius: Layout.radius-plate;
         dragging: root.dragging;
+        tone: root.tone;
 
-        // --- Focus ring (§6.9, state 11) ---------------------------------
-        // 2px `text` ring at 2px offset, OUTSIDE the border. Radius follows the
-        // element's own radius + 2. Never `signal` — a red focus ring reads as a
-        // warning, which is a bug.
-        if body-input.has-focus: Rectangle {
+        // --- Focus ring on the plate (§6.9, state 11) --------------------
+        // 2px `text` at 2px offset, OUTSIDE the border, radius 20+2+2.
+        // Never `signal` — a red focus ring reads as a warning, which is a bug.
+        //
+        // Deliberately NOT driven by body focus. State 3 (filled, focused /
+        // editing) says "no border/fill/shadow change from state 2", and the
+        // body auto-focuses on open, so a ring keyed to it would be permanent
+        // and would report nothing. It is driven by the desktop layer instead,
+        // which knows whether the widget was reached by keyboard or by click.
+        if root.keyboard-focused: Rectangle {
             x: -(Layout.focus-offset + Layout.focus-width);
             y: -(Layout.focus-offset + Layout.focus-width);
             width: parent.width + 2 * (Layout.focus-offset + Layout.focus-width);
@@ -96,147 +134,25 @@ export component StickyNoteWindow inherits Window {
         }
 
         // =================================================================
-        // Header — exactly 32px, partitioned into DISJOINT touch regions.
-        // =================================================================
-        // Region map, left to right, with no two TouchAreas ever overlapping:
-        //   [ drag ....................... ][ colour ][ pin ][ trash ]
-        // The glyph strip and title render on top of the drag region and carry
-        // no TouchArea of their own, so there is no event ambiguity — only
-        // visual layering, which resolves by declaration order.
-
-        // Colour / pin / trash tile the cluster with no gaps and no overlap:
-        // 24 + 24 + 16 = 64, so hovering a gap goes to the icon on its left.
-        trash-area := TouchArea {
-            width: Layout.icon-size;
-            height: Layout.header-h;
-            x: parent.width - Layout.pad - self.width;
-            y: 0;
-            clicked => { root.delete-clicked(); }
-            IconTrash {
-                x: 0;
-                y: (parent.height - self.height) / 2;
-                stroke-color: parent.has-hover ? Palette.text : Palette.dim;
-                opacity: root.controls-visible ? 1.0 : 0.0;
-                animate opacity { duration: Motion.hover; easing: Motion.standard; }
-            }
-        }
-
-        pin-area := TouchArea {
-            width: Layout.icon-size + Layout.icon-gap;
-            height: Layout.header-h;
-            x: trash-area.x - self.width;
-            y: 0;
-            clicked => { root.pin-clicked(); }
-            IconPin {
-                x: 0;
-                y: (parent.height - self.height) / 2;
-                stroke-color: (parent.has-hover || root.pinned) ? Palette.text : Palette.dim;
-                opacity: root.controls-visible ? 1.0 : 0.0;
-                animate opacity { duration: Motion.hover; easing: Motion.standard; }
-            }
-        }
-
-        colour-area := TouchArea {
-            width: Layout.icon-size + Layout.icon-gap;
-            height: Layout.header-h;
-            x: pin-area.x - self.width;
-            y: 0;
-            // TODO(open-question-1): §7.1 puts a colour control in the header
-            // and §7.5 puts it third in the tab order, but rules 1 and 2 leave
-            // no colour for it to set. Behaviour is deliberately unwired until
-            // that is answered; the control exists so the layout and tab order
-            // match the spec exactly.
-            clicked => { root.colour-clicked(); }
-            IconPalette {
-                x: 0;
-                y: (parent.height - self.height) / 2;
-                stroke-color: parent.has-hover ? Palette.text : Palette.dim;
-                opacity: root.controls-visible ? 1.0 : 0.0;
-                animate opacity { duration: Motion.hover; easing: Motion.standard; }
-            }
-        }
-
-        // Drag region — everything to the LEFT of the cluster, ending exactly
-        // where the icons begin. 1:1 pointer follow, no inertia (§5.5).
-        drag-area := TouchArea {
-            x: 0;
-            y: 0;
-            width: colour-area.x;
-            height: Layout.header-h;
-            moved => {
-                if (!root.dragging) {
-                    root.dragging = true;
-                    root.drag-started();
-                }
-                root.window-moved(
-                    self.mouse-x - self.pressed-x,
-                    self.mouse-y - self.pressed-y
-                );
-            }
-            pointer-event(e) => {
-                if (e.kind == PointerEventKind.up && root.dragging) {
-                    root.dragging = false;
-                    root.drag-ended();
-                }
-            }
-        }
-
-        // Glyph strip — first element in every header, vertically centred.
-        // Wrapped in a plain Rectangle because GlyphStrip is itself a
-        // HorizontalLayout: placed directly in another layout it gets stretched
-        // and an explicit height/y on it is silently ignored (§6.2, §13.4).
-        Rectangle {
-            x: Layout.pad;
-            y: 0;
-            width: Layout.strip-w;
-            height: Layout.header-h;
-            GlyphStrip {
-                x: 0;
-                y: (parent.height - self.height) / 2;
-                state: root.strip-state;
-                peer-count: root.peer-count;
-            }
-        }
-
-        // Title — interface face 22, UPPERCASE, ellipsis, never wraps.
-        Text {
-            x: Layout.title-x;
-            y: 0;
-            width: colour-area.x - self.x;
-            height: Layout.header-h;
-            text: root.note-title;
-            color: Palette.text;
-            font-family: Typography.interface-face;
-            font-size: Typography.title-size;
-            letter-spacing: Typography.title-tracking;
-            vertical-alignment: center;
-            horizontal-alignment: left;
-            overflow: elide;
-            wrap: no-wrap;
-        }
-
-        // --- Hairline, full bleed, no inset ------------------------------
-        Rectangle {
-            x: 0;
-            y: Layout.pad + Layout.header-h;
-            width: parent.width;
-            height: 1px;
-            background: Palette.edge;
-        }
-
-        // =================================================================
-        // Body
+        // Body — declared FIRST so it is first in the tab order (§7.5).
         // =================================================================
         Rectangle {
             x: Layout.pad;
             y: Layout.pad + Layout.header-h + 1px;
             width: parent.width - 2 * Layout.pad;
-            height: parent.height - self.y - Layout.pad;
+            height: parent.height - self.y - Layout.pad
+                - (root.confirming-delete ? root.confirm-h : 0px);
             clip: true;
 
-            // Empty state (§7.6 state 1). Sits behind the input so the caret
-            // still shows in front of it.
-            if root.body-empty: VerticalLayout {
+            // Empty state (§7.6 state 1): the two lines, gap 8, CARET AFTER.
+            // Always present rather than behind an `if` so its height can be
+            // measured — the input is offset below it so the caret lands after
+            // the block instead of on top of the first line.
+            placeholder := VerticalLayout {
+                x: 0;
+                y: 0;
+                height: self.preferred-height;
+                opacity: (root.body-empty && !root.confirming-delete) ? 1.0 : 0.0;
                 alignment: start;
                 spacing: 8px;
                 Text {
@@ -254,11 +170,15 @@ export component StickyNoteWindow inherits Window {
                 }
             }
 
-            // Overflow clips and scrolls at the body edge, with no visible
+            // Overflow clips and scrolls at the body edge with NO visible
             // scrollbar track — hence a bare Flickable, not a ScrollView.
             Flickable {
+                x: 0;
+                y: (root.body-empty && !root.confirming-delete)
+                    ? placeholder.height + 8px
+                    : 0px;
                 width: 100%;
-                height: 100%;
+                height: parent.height - self.y;
                 viewport-height: max(body-input.preferred-height, self.height);
 
                 // The bare TextInput primitive, NEVER std-widgets' TextEdit:
@@ -271,13 +191,209 @@ export component StickyNoteWindow inherits Window {
                     wrap: word-wrap;
                     single-line: false;
                     text <=> root.note-text;
-                    color: Palette.text;
+                    // State 10: body text steps to `dim` while confirming.
+                    color: root.confirming-delete ? Palette.dim : Palette.text;
                     selection-background-color: Palette.edge;
                     selection-foreground-color: Palette.text;
                     text-cursor-width: 2px;
                     font-family: Typography.system-sans;
                     font-size: Typography.body-size;
+                    read-only: root.confirming-delete;
                     edited => { root.text-edited(self.text); }
+                    key-pressed(event) => {
+                        // Esc drops focus and hides the cluster (§7.5).
+                        if (event.text == Key.Escape) {
+                            body-input.clear-focus();
+                            return accept;
+                        }
+                        return reject;
+                    }
+                }
+            }
+        }
+
+        // =================================================================
+        // Header controls — tab order continues: colour, pin, delete.
+        // =================================================================
+        colour-btn := IconButton {
+            x: parent.width - Layout.pad - Layout.cluster-w;
+            y: Layout.pad;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            // Cycles the plate through the grey steps. Rule 1 leaves no colour
+            // for a colour control to set, so it sets grey level instead — the
+            // same mechanism peers are distinguished by (§5.1).
+            activated => {
+                root.tone = root.tone >= 4 ? 0 : root.tone + 1;
+                root.tone-changed(root.tone);
+            }
+            IconPalette { stroke-color: colour-btn.glyph-color; }
+        }
+
+        pin-btn := IconButton {
+            x: parent.width - Layout.pad - 40px;
+            y: Layout.pad;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            activated => {
+                root.pinned = !root.pinned;
+                root.pin-toggled(root.pinned);
+            }
+            IconPin {
+                stroke-color: root.pinned ? Palette.text : pin-btn.glyph-color;
+            }
+        }
+
+        trash-btn := IconButton {
+            x: parent.width - Layout.pad - Layout.icon-size;
+            y: Layout.pad;
+            width: Layout.icon-size;
+            revealed: root.controls-visible;
+            // Enter on delete opens delete-confirm; Esc cancels it (§7.5).
+            activated => { root.confirming-delete = true; }
+            IconTrash { stroke-color: trash-btn.glyph-color; }
+        }
+
+        // Drag region — everything to the LEFT of the cluster, ending exactly
+        // where the icons begin. 1:1 pointer follow, no inertia (§5.5).
+        drag-area := TouchArea {
+            x: 0;
+            y: Layout.pad;
+            width: parent.width - Layout.pad - Layout.cluster-w;
+            height: Layout.header-h;
+            moved => {
+                if (!root.dragging) {
+                    root.dragging = true;
+                    root.drag-started();
+                }
+                root.window-moved(
+                    self.mouse-x - self.pressed-x,
+                    self.mouse-y - self.pressed-y
+                );
+            }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up && root.dragging) {
+                    root.dragging = false;
+                    root.drag-ended();
+                }
+            }
+        }
+
+        // Glyph strip — first element in every header, vertically centred.
+        // Wrapped in a plain Rectangle because GlyphStrip is itself a
+        // HorizontalLayout: placed directly inside another layout it gets
+        // stretched and an explicit height/y on it is silently ignored
+        // (§6.2, §13.4). It carries no TouchArea, so rendering it on top of
+        // the drag region creates no event ambiguity — only visual layering.
+        Rectangle {
+            x: Layout.pad;
+            y: Layout.pad;
+            width: Layout.strip-w;
+            height: Layout.header-h;
+            GlyphStrip {
+                // The explicit 23x3 is load-bearing. A layout element inside a
+                // plain Rectangle still expands to fill it, so without these
+                // two lines the strip becomes 23x32, its cells stretch, and
+                // `(parent.height - self.height) / 2` evaluates to 0 — which
+                // parks it against the plate's top rounded corner.
+                x: 0;
+                y: (Layout.header-h - Layout.strip-h) / 2;
+                width: Layout.strip-w;
+                height: Layout.strip-h;
+                state: root.effective-state;
+                peer-count: root.peer-count;
+            }
+        }
+
+        // Title — interface face 22, UPPERCASE, ellipsis, never wraps.
+        Text {
+            x: Layout.title-x;
+            y: Layout.pad;
+            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            height: Layout.header-h;
+            text: root.note-title;
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+            letter-spacing: Typography.title-tracking;
+            vertical-alignment: center;
+            horizontal-alignment: left;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        // --- Header hairline, full bleed, no inset -----------------------
+        Rectangle {
+            x: 0;
+            y: Layout.pad + Layout.header-h;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        // =================================================================
+        // Delete confirm — §7.6 state 10. IN-WIDGET: no modal, no desktop
+        // dimming. The hairline is `edge`, not `signal`; the only red here is
+        // the destructive button's own.
+        // =================================================================
+        if root.confirming-delete: Rectangle {
+            x: 0;
+            y: parent.height - Layout.pad - root.confirm-h;
+            width: parent.width;
+            height: root.confirm-h;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.edge;
+            }
+
+            Text {
+                x: Layout.pad;
+                y: 13px;
+                text: "DELETE — CANNOT BE UNDONE";
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                wrap: no-wrap;
+            }
+
+            HorizontalLayout {
+                x: Layout.pad;
+                y: 41px;
+                height: 34px;
+                spacing: 8px;
+                alignment: start;
+
+                delete-btn := Button {
+                    label: "DELETE NOTE";
+                    variant: ButtonVariant.destructive;
+                    clicked => { root.delete-confirmed(); }
+                }
+                Button {
+                    label: "CANCEL";
+                    variant: ButtonVariant.default;
+                    clicked => {
+                        root.confirming-delete = false;
+                        body-input.focus();
+                    }
+                }
+            }
+
+            // Esc cancels the confirm (§7.5).
+            FocusScope {
+                width: 0px;
+                height: 0px;
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.confirming-delete = false;
+                        body-input.focus();
+                        return accept;
+                    }
+                    return reject;
                 }
             }
         }
@@ -285,16 +401,4 @@ export component StickyNoteWindow inherits Window {
 
     // A newly created note starts ready to type into (§7.6 state 1, §13.2).
     init => { body-input.focus(); }
-
-    // §7.5: Esc from the body drops focus and hides the cluster.
-    forward-focus: body-input;
-    FocusScope {
-        key-pressed(event) => {
-            if (event.text == Key.Escape) {
-                body-input.clear-focus();
-                return accept;
-            }
-            return reject;
-        }
-    }
 }
