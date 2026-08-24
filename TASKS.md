@@ -1,12 +1,13 @@
 # Canvas — Task Backlog
 
-**Purpose:** a resumable, ordered list of small units of work. If a session ends
-mid-build, the next session reads this file, finds the first unchecked box, and
-starts there. Nothing needs re-deriving.
+**Purpose:** a resumable, ordered list of small units of work. A new session reads
+[progress.md](progress.md) first for the state of the project, then starts here at the
+first unticked box.
 
 **Last updated:** 2026-08-24
-**Current task:** `S1-27` — tray icon and app lifetime. S1-24/25/26/28 are built but need a click-through to tick.
-**Stage:** 1 — Sticky note + app shell (replanned 2026-08-24)
+**Current task:** `S1-27` — tray icon and app lifetime
+**Stage:** 1 — Sticky note + app shell
+**Done:** 18 of 55
 
 ---
 
@@ -14,17 +15,59 @@ starts there. Nothing needs re-deriving.
 
 1. Work tasks **in numeric order**. A task's `Needs:` line lists its hard prerequisites.
 2. One task = one coherent, compiling, manually-verified unit. Do not chain two.
-3. When a task is done: tick its box here, update **Current task** above, append a dated
-   entry to `progress.md` (§4.3 of CLAUDE.md), and `git commit` with the task ID in the
-   subject (e.g. `S1-04: glyph strip, 7 states`).
-4. `cargo clippy --all-targets -- -D warnings` must be clean before ticking anything.
+3. When a task is done: tick its box, update **Current task** above, append a dated entry
+   to `progress.md`, and `git commit` with the task ID in the subject.
+4. `cargo clippy --workspace --all-targets` must be clean before ticking anything.
 5. **Only tick a box for behaviour you actually saw work.** Code that merely compiles is
-   `🟡` in `progress.md` and the box stays unticked.
-6. Hit a spec ambiguity? Add it to **Open questions** at the bottom and ask — do not guess.
+   `🟡` in `progress.md` and the box stays unticked. This rule has been broken twice
+   already — S1-06 was ticked because `resize-border-width` was set, not because resizing
+   worked, and it did not work.
+6. **Write no code comments.** User instruction. Reasoning goes here, in `progress.md`,
+   and in commit messages.
+7. Hit a spec ambiguity? Add it to **Open questions** at the bottom and ask — do not guess.
 
 Size legend: `S` ≈ under 30 min · `M` ≈ 30–90 min · `L` ≈ half a session or more.
 
 ---
+
+## ⚠ VERIFICATION QUEUE — do this first
+
+Everything below is **written, compiling and clippy-clean, but has never been watched
+working.** It was all built in one session without a click-through. Run `cargo run -p
+canvas-app` and go through this list; tick the task where it passes, open a new numbered
+task where it does not.
+
+Doing this before S1-27 matters because later tasks build directly on top of it.
+
+**Note window**
+- [ ] Drag the header — window follows 1:1, no drift, no inertia → **S1-07**
+- [ ] Hover anywhere in the header — four controls fade in over 100ms, nothing shifts → **S1-08**
+- [ ] Drag each of the 4 edges and 4 corners — resizes like a normal window, clamps at
+      240×180, corners do both axes → **S1-06**
+- [ ] Tab through: body → colour → pin → delete → close, each showing a focus ring;
+      Shift+Tab reverses; Esc from the body drops focus → **S1-11**, **S1-12**
+- [ ] Click the colour icon repeatedly — plate steps through 5 grey tones → part of **S1-05**
+- [ ] Click the trash icon — in-widget confirm appears, `CANCEL` restores, `DELETE NOTE`
+      removes it. No modal, no desktop dimming → **S1-13**, **S1-14**
+- [ ] Double-click the header — title becomes editable, pre-selected, Enter commits
+- [ ] Click `x` — note closes but stays in the home list → **S1-21**
+- [ ] Pin a note, open a browser over it — note stays behind. Click it, type, click away;
+      it settles back to the desktop layer → **S1-22**
+- [ ] Ctrl+G in the body — cycles all 7 strip states, title names each one → **S1-04**
+- [ ] Move and resize a note, restart the app — it reopens exactly where it was → **S1-18**
+
+**Home window**
+- [ ] `NEW NOTE` — creates a note, opens its window, adds a row → **S1-25**
+- [ ] Click a row — toggles that note open/closed; the row's dots reflect it → **S1-24**
+- [ ] Row delete icon — confirm overlay, then gone from list and from disk → **S1-26**
+- [ ] Empty state shows on a fresh database (delete `%APPDATA%/Canvas`) → **S1-28**
+- [ ] Open three notes at once — all independently draggable and editable → confirms **S1-20**
+- [ ] Home `x` closes home and leaves notes running
+
+**Check state on disk at any point:** `cargo run -p canvas-app -- --dump`
+
+---
+
 
 ## Stage 0 — Workspace bootstrap
 
@@ -115,7 +158,7 @@ first. These three come before it.
 
 ### 1b — The signature elements
 
-- [x] **S1-04 · `GlyphStrip`, all 7 states** — `M`
+- [ ] **S1-04 · `GlyphStrip`, all 7 states** — `M`
   Needs: S1-01. Five cells, 3×3 each, 2px gap, 23×3 total. Enum: idle / focused / syncing /
   offline / peers / peers-idle / error. Stepped 120ms, **never interpolated** (rule 4 — the
   first opacity tween on a dot cell destroys the product's identity).
@@ -138,7 +181,7 @@ first. These three come before it.
 
 ### 1c — Window shell, header, drag
 
-- [x] **S1-06 · Frameless window + native resize** — `M`
+- [ ] **S1-06 · Frameless window + native resize** — `M`
   Needs: S1-03. `no-frame: true`, `resize-border-width: 6px`, `preferred-width/height`
   320×280, `min-width/height` 240×180, **no max** (omit the properties; don't set a huge
   sentinel). `width` and `min-width` cannot coexist on one element — the compiler rejects
@@ -256,7 +299,7 @@ first. These three come before it.
   Constraint 2).
   *Refs:* §2.2, §2.4, §12
 
-- [x] **S1-18 · Window position + size + z-order persistence** — `M`
+- [ ] **S1-18 · Window position + size + z-order persistence** — `M`
   Needs: S1-17, S1-06. Persist to `window_positions` at the end of a move or resize.
   *DoD:* move and resize a note, restart → it reopens exactly where and how it was.
   *Refs:* §12, §8
@@ -296,7 +339,7 @@ and `raw-window-handle-06` features (inside it — build flags only).
   *DoD:* close a note, restart the app, reopen it from home — text and position are
   exactly as they were. Deleting genuinely removes it from the database.
 
-- [x] **S1-22 · Pin = glued to the desktop layer** — `M`
+- [ ] **S1-22 · Pin = glued to the desktop layer** — `M`
   Needs: S1-20. Pinned notes sit at the bottom of the z-order so they are visible on the
   desktop but never over other apps; unpinned notes are ordinary windows.
   `always-on-top` is off in both states. Implemented with `SetWindowPos(HWND_BOTTOM)`
@@ -527,25 +570,38 @@ down now would only mean rewriting them, since the earlier stages will change wh
 
 ## Open questions — ask before the named task starts
 
-Per §4.1: ask rather than guess on anything touching the CRDT data shape, the wire protocol,
-the storage schema, or a design token not already specified.
+Per §4.1: ask rather than guess on anything touching the CRDT data shape, the wire
+protocol, the storage schema, or a design token not already specified.
 
-1. **What does the sticky note's "colour" control actually do?** §7.1 lists a colour icon in
-   the header cluster and §7.5 puts it in the tab order, but rule 1 is monochrome plus one
-   red, and rule 2 spends that red on destructive and error only. Candidates: grey-step plate
-   variants, a per-note light/dark override, or a vestigial control that should be dropped.
-   *Blocks:* S1-05, S1-07, S1-12.
-2. **Always-on-top window support.** If Slint 1.17 doesn't expose it, adding a crate or
-   calling Win32 directly is outside the closed stack (Hard Constraint 6). *Blocks:* S1-20.
-3. **A true global hotkey** — the same closed-stack question. The stopgap is explicitly
-   permitted by §14; confirm it's acceptable for now. *Blocks:* S1-28.
-4. **Is light mode in scope for Stage 1, or dark only?** §5.1 says dark is primary and gives
-   the light corrections, but no stage lists light mode as a deliverable and no control for
-   switching is specified. Build both token sets regardless — the question is only whether a
-   switcher ships. *Blocks:* S1-01 (scope only).
-5. **`handoff/screenshots/light-mode.png` reportedly contains "the written verdict on what
-   breaks"** (§15). Read it before S1-01 in case it contradicts or extends §5.1's three
-   listed gaps.
+**Answered — kept for the record**
+
+- ~~What does the colour control do?~~ **Cycles the plate through 5 grey tones**
+  (`Palette.plate-tone`). Rule 1 leaves no colour for it, so it sets grey level.
+- ~~Always-on-top support?~~ **Moot.** Slint 1.17 exposes `always-on-top` on `Window`,
+  but the user rejected the behaviour outright. Pin now means glued to the desktop layer.
+- ~~Is a stopgap global hotkey acceptable?~~ **No longer needed as a stopgap.**
+  `windows-sys` is already a dependency, so `RegisterHotKey` gives a real OS-global
+  hotkey at S1-35.
+
+**Still open**
+
+1. **What should pin do beyond the desktop layer?** Every note is now non-floating, so
+   pin's only current effect is the bottom z-order. Should a pinned note also be exempt
+   from close, or always reopen at launch? *Blocks:* nothing yet; decide by S1-27.
+2. **Rich text vs the dot-matrix body face.** Silkscreen ships Regular only — no bold, no
+   italic — but §7.2 requires both. Either revert `Typography.body-face` to the system
+   sans, express emphasis some other way, or drop those two formats. **Must be answered
+   before S1-39.**
+3. **Is light mode in scope, or dark only?** Both token sets are built and the three
+   documented light corrections are applied. The open part is only whether a switcher
+   ships, and where its control lives now that a home window exists.
+4. **`handoff/screenshots/light-mode.png` contains "the written verdict on what breaks"**
+   (§15) and has still not been read. Read it before shipping light mode.
+5. **Which widget type comes after the sticky note?** §14 Stage 4 says Todo first, and
+   §11.2 already carries verified array-of-maps code for it. The home window's rows
+   already render per-type glyphs, so a second type needs no home work. Confirm Todo is
+   the right next type before Stage 4 starts.
+
 
 ---
 

@@ -1,19 +1,122 @@
 # Canvas — Progress Log
 
 **Last updated:** 2026-08-24
-**Current position:** Stage 0 done. Sticky note shell built and compiling; awaiting a verification pass before S1-15 (CRDT doc).
+**Current task:** `S1-27` — tray icon and app lifetime.
+**Before starting it:** run the verification pass at the top of [TASKS.md](TASKS.md).
+
+---
+
+## START HERE — state of the project
+
+Canvas is a native offline-first desktop widget platform in Rust. The full spec is
+[CLAUDE.md](CLAUDE.md); the numbered backlog is [TASKS.md](TASKS.md); this file records
+what is actually true. Read all three before writing code.
+
+### What exists and runs
+
+`cargo run -p canvas-app` opens a **home window** listing every note, plus a window for
+each note flagged open. Notes are frameless, transparent-margined, rounded plates with a
+dot-matrix glyph strip, an editable title, and four header controls. Text persists to
+SQLite and survives a restart. 28 tests pass.
+
+```
+Canvas/
+  CLAUDE.md          the spec (working copy; handoff/ is the pristine original)
+  TASKS.md           numbered backlog — START AT THE FIRST UNTICKED BOX
+  progress.md        this file
+  docs/glyph-strip.md   what the seven strip states mean
+  Cargo.toml         workspace; every dependency version pinned here only
+  crates/
+    canvas-app/      runtime: App owns the Store + live windows. app.rs is the core.
+    canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
+    canvas-doc/      CRDT documents (yrs). 12 tests.
+    canvas-storage/  SQLite. 16 tests.
+    canvas-sync/     empty stub. Nothing here yet.
+  handoff/           pristine spec + fonts + design screenshots. Do not edit.
+```
+
+### Commands
+
+```bash
+cargo run -p canvas-app              # run it
+cargo run -p canvas-app -- --dump    # print every note's text/position/state from disk
+cargo test --workspace               # 28 tests
+cargo clippy --workspace --all-targets   # must be clean before ticking any task
+cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
+```
+
+Database lives at `%APPDATA%/Canvas/canvas_local.db`. Delete that folder for a clean slate.
+
+### Ground rules that are NOT in the spec — carried over from this session
+
+1. **Do not write code comments.** The user asked for none, anywhere. All reasoning goes
+   in this file, TASKS.md, and git commit messages instead.
+2. **Only tick a TASKS.md box for behaviour you actually watched work.** Code that
+   compiles is `🟡` here and the box stays open. This has already been got wrong twice —
+   S1-06 was ticked because a property was set, not because resizing worked.
+3. **Ask before adding a dependency** (Hard Constraint 6). Current additions beyond the
+   spec's closed stack, all signed off: `windows-sys`, `raw-window-handle`.
+4. Verify against the pinned versions rather than memory. `slint 1.17.1` and `yrs 0.19.2`
+   are exactly what §11/§13 were written against, so those code samples apply verbatim.
+
+### Decisions that OVERRIDE the spec
+
+The user made these after seeing the app run. They win over CLAUDE.md.
+
+| Spec says | Actually built | Why |
+|---|---|---|
+| §6.2 glyph strip 3×3 cells, 23×3 total | **8×8 cells, 4px gaps, 56×8** | Unreadable at spec size on a real screen |
+| §7.1 header 16px above content, 0 below | **8px above, 8px below** (band still 48px) | Spec version looked top-heavy; body box unchanged |
+| §7.6 state 1 two-line empty state | **One 25%-opacity placeholder line, caret on it** | Second line pushed the caret down a row |
+| §5.2 body prose in the system sans | **Body prose in Silkscreen** | User found the sans "too generic"; `Typography.body-face` reverts it |
+| §7.1 three header controls | **Four: colour · pin · delete · close** | No way to put a note away without deleting it |
+| §8 widgets always-on-top | **Never always-on-top.** Pin = glued to desktop layer | Floating over every app was intrusive |
+| §8/§9 bare desktop + ⌘K palette only | **A home window too**, plus the palette | Notes need a place to be created and managed from |
+| §12 `window_positions` columns | **Plus `pinned`, `tone`, `open`** | `open` is what makes closing ≠ deleting |
+| §11.1 whole-string replace per keystroke | **Real prefix/suffix diffing** | Spec's own comment says to do this |
+
+### Traps already hit — do not repeat these
+
+1. **yrs indexes text by UTF-8 BYTE offset, not character offset.** `OffsetKind::Bytes`
+   is the 0.19 default (`doc.rs:795`). Character indices work perfectly for ASCII and
+   silently corrupt on the first multi-byte character. Any code indexing a `yrs::Text`
+   must use byte offsets walked to a `char_boundary`.
+2. **A layout element fills a plain `Rectangle` parent too.** §13.4 says to wrap a
+   `HorizontalLayout` in a `Rectangle` to stop a *layout* parent stretching it — that is
+   not sufficient. The glyph strip rendered 23×32 instead of 23×3 and parked itself in
+   the plate's corner. Give it an explicit width AND height.
+3. **`resize-border-width` cannot work here.** It puts the grab zone at the *window*
+   edge, which is 24px out in the transparent `plate-margin`. Resize is done with eight
+   grips on the plate perimeter that hand the drag to Windows via `WM_NCLBUTTONDOWN`.
+4. **Never `std-widgets` `TextEdit`.** The compiler defaults to the `fluent` style and
+   Fluent's `TextEdit` bakes in a blue focus bar with no way to override it. Bare
+   `TextInput` in a `Flickable` everywhere.
+5. **Two `TouchArea`s must never share a screen region** (§13.3, an open Slint bug).
+   The header is partitioned by absolute position. The title is editable via
+   `double-clicked` on the *existing* drag area for exactly this reason.
+6. **Disk writes must not happen on the keystroke path.** Updates buffer in
+   `Note::pending_updates` and are flushed by a 500ms timer, and on close/delete/quit.
+
+### Known gaps
+
+- **Closing home while notes are open leaves Canvas running with no way back to it.**
+  This is what S1-27 (tray icon) fixes, and it is why that task is next.
+- `canvas-sync` is an empty stub. No networking exists, so the strip's syncing / offline
+  / peers / error states are only reachable through the Ctrl+G dev cycler.
+- No rich text. The body is plain text in one face.
+- **Silkscreen ships Regular only — no bold, no italic.** §7.2 needs both for rich text
+  (S1-39). Decide before starting it: revert the body face, express emphasis another way,
+  or drop those two formats.
+- Only sticky notes exist. Todo, kanban, calendar and document are types in the storage
+  layer with correct default sizes and row glyphs, but no widget implementations.
+
+---
 
 ## Standing update rule
 
-After implementing and testing anything, append a dated entry below with the
-correct status marker, and downgrade or remove anything it contradicts. Do
-not batch updates — a stale log is worse than no log.
-
-Template:
-
-### YYYY-MM-DD — <short title>
-- ✅ <what now works> — verified by <manual step or test name>
-- 🟡 <what landed but is untested>
+After implementing and testing anything, append a dated entry below with the correct
+status marker, and downgrade or remove anything it contradicts. Do not batch updates —
+a stale log is worse than no log.
 
 Markers: ✅ implemented and confirmed working (name the check) · 🟡 code exists and
 compiles, behaviour unconfirmed · ❌ not started.
