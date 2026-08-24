@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn maybe_quit(app: &SharedApp) {
-    if App::open_count(app) == 0 {
+    if App::open_count(app) == 0 && !App::home_visible(app) {
         App::flush_all(app);
         let _ = slint::quit_event_loop();
     }

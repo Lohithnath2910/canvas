@@ -7,7 +7,7 @@ use slint::ComponentHandle;
 
 use canvas_doc::StickyNoteDoc;
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
-use canvas_ui::{platform_system_sans, StickyNoteWindow, Typography};
+use canvas_ui::{platform_system_sans, HomeWindow, NoteRow, StickyNoteWindow, Typography};
 
 const PLATE_MARGIN: f32 = 24.0;
 const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
@@ -24,6 +24,7 @@ struct Note {
 pub struct App {
     store: Store,
     notes: HashMap<String, Note>,
+    home: Option<HomeWindow>,
 }
 
 pub type SharedApp = Rc<RefCell<App>>;
@@ -37,6 +38,7 @@ impl App {
         let app: SharedApp = Rc::new(RefCell::new(App {
             store,
             notes: HashMap::new(),
+            home: None,
         }));
 
         let to_open: Vec<String> = {
@@ -57,17 +59,142 @@ impl App {
                 .collect()
         };
 
-        if to_open.is_empty() && app.borrow().store.list_widgets()?.is_empty() {
-            let id = App::create_note(&app)?;
-            eprintln!("canvas: created first note {id}");
-        } else {
-            for id in to_open {
-                App::open_note(&app, &id)?;
-            }
+        for id in to_open {
+            App::open_note(&app, &id)?;
         }
 
+        App::open_home(&app)?;
         App::start_flush_timer(&app);
         Ok(app)
+    }
+
+    pub fn open_home(app: &SharedApp) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(home) = &app.borrow().home {
+            home.show()?;
+            return Ok(());
+        }
+
+        let home = HomeWindow::new()?;
+        home.global::<Typography>()
+            .set_system_sans(platform_system_sans().into());
+
+        {
+            let weak = Rc::downgrade(app);
+            home.on_create_note(move || {
+                if let Some(app) = weak.upgrade() {
+                    if let Err(e) = App::create_note(&app) {
+                        eprintln!("canvas: create failed: {e}");
+                    }
+                    App::refresh_home(&app);
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(app);
+            home.on_open_row(move |id| {
+                let Some(app) = weak.upgrade() else {
+                    return;
+                };
+                let id = id.to_string();
+                let is_open = app.borrow().notes.contains_key(&id);
+                if is_open {
+                    App::close_note(&app, &id);
+                } else {
+                    let _ = app.borrow().store.set_open(&id, true);
+                    if let Err(e) = App::open_note(&app, &id) {
+                        eprintln!("canvas: open failed: {e}");
+                    }
+                }
+                App::refresh_home(&app);
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(app);
+            home.on_delete_row(move |id| {
+                if let Some(app) = weak.upgrade() {
+                    App::delete_note(&app, &id.to_string());
+                    App::refresh_home(&app);
+                }
+            });
+        }
+
+        {
+            let handle = home.as_weak();
+            home.on_window_moved(move |dx, dy| {
+                let Some(home) = handle.upgrade() else {
+                    return;
+                };
+                let win = home.window();
+                let scale = win.scale_factor();
+                let pos = win.position();
+                win.set_position(slint::PhysicalPosition::new(
+                    pos.x + (dx * scale).round() as i32,
+                    pos.y + (dy * scale).round() as i32,
+                ));
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(app);
+            home.window().on_close_requested(move || {
+                if let Some(app) = weak.upgrade() {
+                    App::flush_all(&app);
+                    crate::maybe_quit(&app);
+                }
+                slint::CloseRequestResponse::HideWindow
+            });
+        }
+
+        app.borrow_mut().home = Some(home.clone_strong());
+        App::refresh_home(app);
+        home.show()?;
+        Ok(())
+    }
+
+    pub fn refresh_home(app: &SharedApp) {
+        let Ok(a) = app.try_borrow() else {
+            return;
+        };
+        let Some(home) = a.home.as_ref().map(|h| h.clone_strong()) else {
+            return;
+        };
+        let Ok(widgets) = a.store.list_widgets() else {
+            return;
+        };
+
+        let rows: Vec<NoteRow> = widgets
+            .iter()
+            .map(|w| {
+                let open = a.notes.contains_key(&w.id);
+                let preview = if let Some(note) = a.notes.get(&w.id) {
+                    note.doc.get_text()
+                } else {
+                    a.store
+                        .get_document(&w.id)
+                        .ok()
+                        .flatten()
+                        .filter(|b| !b.is_empty())
+                        .map(|b| StickyNoteDoc::load(&b).get_text())
+                        .unwrap_or_default()
+                };
+                NoteRow {
+                    id: w.id.clone().into(),
+                    title: w.title.clone().into(),
+                    preview: first_line(&preview).into(),
+                    kind: w.widget_type.clone().into(),
+                    open,
+                }
+            })
+            .collect();
+
+        let open_count = a.notes.len() as i32;
+        drop(a);
+
+        let model: slint::VecModel<NoteRow> = slint::VecModel::from(rows);
+        home.set_rows(slint::ModelRc::new(model));
+        home.set_open_count(open_count);
     }
 
     pub fn create_note(app: &SharedApp) -> Result<String, Box<dyn std::error::Error>> {
@@ -173,7 +300,7 @@ impl App {
             let Ok(mut a) = app.try_borrow_mut() else {
                 return;
             };
-            let App { store, notes } = &mut *a;
+            let App { store, notes, .. } = &mut *a;
             for (id, note) in notes.iter_mut() {
                 if note.text_dirty {
                     let _ =
@@ -191,7 +318,7 @@ impl App {
 
     pub fn flush_all(app: &SharedApp) {
         let mut a = app.borrow_mut();
-        let App { store, notes } = &mut *a;
+        let App { store, notes, .. } = &mut *a;
         for (id, note) in notes.iter_mut() {
             let _ = store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
             let _ = store.save_placement(id, &note.placement);
@@ -212,7 +339,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
                 return;
             };
             let mut a = app.borrow_mut();
-            let App { store, notes } = &mut *a;
+            let App { store, notes, .. } = &mut *a;
             let Some(note) = notes.get_mut(&id) else {
                 return;
             };
@@ -297,6 +424,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
                 return;
             };
             App::delete_note(&app, &id);
+            App::refresh_home(&app);
             crate::maybe_quit(&app);
         });
     }
@@ -307,6 +435,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
         window.window().on_close_requested(move || {
             if let Some(app) = weak.upgrade() {
                 App::close_note(&app, &id);
+                App::refresh_home(&app);
                 crate::maybe_quit(&app);
             }
             slint::CloseRequestResponse::HideWindow
@@ -373,4 +502,24 @@ pub fn dump() -> Result<(), Box<dyn std::error::Error>> {
         println!("    text: {text:?}");
     }
     Ok(())
+}
+
+fn first_line(text: &str) -> String {
+    let line = text.lines().next().unwrap_or("").trim();
+    if line.chars().count() > 60 {
+        let truncated: String = line.chars().take(59).collect();
+        format!("{truncated}…")
+    } else {
+        line.to_string()
+    }
+}
+
+impl App {
+    pub fn home_visible(app: &SharedApp) -> bool {
+        app.borrow()
+            .home
+            .as_ref()
+            .map(|h| h.window().is_visible())
+            .unwrap_or(false)
+    }
 }

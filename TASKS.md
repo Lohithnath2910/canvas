@@ -5,7 +5,7 @@ mid-build, the next session reads this file, finds the first unchecked box, and
 starts there. Nothing needs re-deriving.
 
 **Last updated:** 2026-08-24
-**Current task:** `S1-23` — home window shell, then the note list, create, delete, tray.
+**Current task:** `S1-27` — tray icon and app lifetime. S1-24/25/26/28 are built but need a click-through to tick.
 **Stage:** 1 — Sticky note + app shell (replanned 2026-08-24)
 
 ---
@@ -306,7 +306,7 @@ and `raw-window-handle-06` features (inside it — build flags only).
   type, click away; it returns to the desktop layer on its own. Pin state survives a
   restart.
 
-- [ ] **S1-23 · Home window shell** — `M`
+- [x] **S1-23 · Home window shell** — `M`
   Needs: S1-02, S1-03. A Panel like any widget: 32px header, glyph strip, title `CANVAS`,
   same tokens and measurements. Sized for a list rather than a note.
   *DoD:* opens, is draggable and resizable, matches the note's visual language exactly.

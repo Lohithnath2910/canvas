@@ -1,0 +1,369 @@
+import { Palette } from "theme/palette.slint";
+import { Typography } from "theme/typography.slint";
+import { Motion } from "theme/motion.slint";
+import { Layout } from "theme/layout.slint";
+import { Panel } from "theme/surface.slint";
+import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
+import { IconTrash, IconPlus, IconNote, IconCheck, IconColumns, IconCalendar, IconDoc } from "theme/icons.slint";
+import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
+
+export struct NoteRow {
+    id: string,
+    title: string,
+    preview: string,
+    kind: string,
+    open: bool,
+}
+
+component KindGlyph inherits Rectangle {
+    in property <string> kind;
+    in property <color> stroke-color: Palette.dim;
+    width: Layout.icon-size;
+    height: Layout.icon-size;
+
+    if root.kind == "todo": IconCheck { stroke-color: root.stroke-color; }
+    if root.kind == "kanban": IconColumns { stroke-color: root.stroke-color; }
+    if root.kind == "calendar": IconCalendar { stroke-color: root.stroke-color; }
+    if root.kind == "document": IconDoc { stroke-color: root.stroke-color; }
+    if root.kind == "sticky_note": IconNote { stroke-color: root.stroke-color; }
+}
+
+component Row inherits Rectangle {
+    in property <NoteRow> item;
+    callback activated();
+    callback delete-requested();
+
+    height: 56px;
+
+    out property <bool> hovered: touch.has-hover;
+
+    background: (touch.has-hover || focus.has-focus)
+        ? Palette.elev-raised
+        : Colors.transparent;
+    animate background { duration: Motion.hover; easing: Motion.standard; }
+
+    focus := FocusScope {
+        width: 100%;
+        height: 100%;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.activated();
+                return accept;
+            }
+            if (event.text == Key.Delete) {
+                root.delete-requested();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    touch := TouchArea {
+        width: parent.width - 44px;
+        height: 100%;
+        mouse-cursor: pointer;
+        clicked => {
+            focus.focus();
+            root.activated();
+        }
+    }
+
+    Rectangle {
+        x: Layout.pad;
+        y: (parent.height - Layout.strip-h) / 2;
+        width: 20px;
+        height: Layout.strip-h;
+        HorizontalLayout {
+            spacing: Layout.dot-gap;
+            for i in 2: Rectangle {
+                width: Layout.dot-size;
+                height: Layout.dot-size;
+                background: root.item.open
+                    ? (i == 0 ? Palette.dot-lit : Palette.dot-lit)
+                    : (i == 0 ? Palette.dot-half : Palette.dot-unlit);
+            }
+        }
+    }
+
+    KindGlyph {
+        x: 48px;
+        y: (parent.height - self.height) / 2;
+        kind: root.item.kind;
+        stroke-color: touch.has-hover ? Palette.text : Palette.dim;
+    }
+
+    VerticalLayout {
+        x: 76px;
+        y: 10px;
+        width: parent.width - self.x - 52px;
+        spacing: 2px;
+
+        Text {
+            text: root.item.title;
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+        Text {
+            text: root.item.preview == "" ? "Empty" : root.item.preview;
+            color: Palette.dim;
+            font-family: Typography.body-face;
+            font-size: Typography.body-size;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+    }
+
+    del := IconButton {
+        x: parent.width - Layout.pad - Layout.icon-size;
+        y: (parent.height - Layout.header-h) / 2;
+        width: Layout.icon-size;
+        revealed: touch.has-hover || focus.has-focus || del.hovered;
+        activated => { root.delete-requested(); }
+        IconTrash { stroke-color: del.glyph-color; }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: transparent;
+        border-width: Layout.focus-width;
+        border-color: Palette.text;
+        border-radius: Layout.radius-control;
+    }
+}
+
+export component HomeWindow inherits Window {
+    in property <[NoteRow]> rows: [];
+    in property <int> open-count: 0;
+
+    callback create-note();
+    callback open-row(string);
+    callback delete-row(string);
+    callback window-moved(length, length);
+    callback quit-requested();
+
+    preferred-width: 420px + 2 * Layout.plate-margin;
+    preferred-height: 520px + 2 * Layout.plate-margin;
+    min-width: 340px + 2 * Layout.plate-margin;
+    min-height: 300px + 2 * Layout.plate-margin;
+    no-frame: true;
+    resize-border-width: 6px;
+    background: transparent;
+    title: "Canvas";
+
+    property <bool> dragging: false;
+    property <string> pending-delete: "";
+
+    plate := Panel {
+        x: Layout.plate-margin;
+        y: Layout.plate-margin;
+        width: parent.width - 2 * Layout.plate-margin;
+        height: parent.height - 2 * Layout.plate-margin;
+        corner-radius: Layout.radius-plate;
+        dragging: root.dragging;
+
+        drag-area := TouchArea {
+            x: 0;
+            y: 0;
+            width: parent.width - Layout.pad - 24px;
+            height: Layout.header-band;
+            moved => {
+                if (!root.dragging) { root.dragging = true; }
+                root.window-moved(
+                    self.mouse-x - self.pressed-x,
+                    self.mouse-y - self.pressed-y
+                );
+            }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up) { root.dragging = false; }
+            }
+        }
+
+        Rectangle {
+            x: Layout.pad;
+            y: Layout.header-y;
+            width: Layout.strip-w;
+            height: Layout.header-h;
+            GlyphStrip {
+                x: 0;
+                y: (Layout.header-h - Layout.strip-h) / 2;
+                width: Layout.strip-w;
+                height: Layout.strip-h;
+                state: root.open-count > 0 ? WidgetState.focused : WidgetState.idle;
+            }
+        }
+
+        Text {
+            x: Layout.title-x;
+            y: Layout.header-y;
+            width: parent.width - Layout.title-x - Layout.pad - 24px;
+            height: Layout.header-h;
+            text: "CANVAS";
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+            letter-spacing: Typography.title-tracking;
+            vertical-alignment: center;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        Rectangle {
+            x: 0;
+            y: Layout.header-band;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        if root.rows.length == 0: VerticalLayout {
+            x: Layout.pad;
+            y: Layout.header-band + 1px + 48px;
+            width: parent.width - 2 * Layout.pad;
+            spacing: 12px;
+            alignment: start;
+
+            Text {
+                text: "NOTHING HERE YET";
+                color: Palette.text;
+                horizontal-alignment: center;
+                font-family: Typography.interface-face;
+                font-size: Typography.title-size;
+                letter-spacing: Typography.title-tracking;
+            }
+            Text {
+                text: "Press NEW NOTE to create your first note.";
+                color: Palette.dim;
+                horizontal-alignment: center;
+                font-family: Typography.body-face;
+                font-size: Typography.body-size;
+                wrap: word-wrap;
+            }
+        }
+
+        Flickable {
+            x: 0;
+            y: Layout.header-band + 1px;
+            width: parent.width;
+            height: parent.height - self.y - 64px;
+            viewport-height: rows-layout.preferred-height;
+
+            rows-layout := VerticalLayout {
+                width: 100%;
+                alignment: start;
+                for row in root.rows: Row {
+                    item: row;
+                    activated => { root.open-row(row.id); }
+                    delete-requested => { root.pending-delete = row.id; }
+                }
+            }
+        }
+
+        Rectangle {
+            x: 0;
+            y: parent.height - 64px;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        HorizontalLayout {
+            x: Layout.pad;
+            y: parent.height - 49px;
+            width: parent.width - 2 * Layout.pad;
+            height: 34px;
+            spacing: 8px;
+            alignment: start;
+
+            Button {
+                label: "NEW NOTE";
+                variant: ButtonVariant.primary;
+                clicked => { root.create-note(); }
+            }
+        }
+
+        Text {
+            x: parent.width - Layout.pad - self.width;
+            y: parent.height - 40px;
+            text: root.rows.length + " NOTES · " + root.open-count + " OPEN";
+            color: Palette.dim;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+            wrap: no-wrap;
+        }
+
+        if root.pending-delete != "": Rectangle {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: parent.height;
+            background: Palette.scrim;
+            border-radius: Layout.radius-plate;
+
+            TouchArea { width: 100%; height: 100%; }
+
+            Rectangle {
+                x: Layout.pad;
+                y: (parent.height - 120px) / 2;
+                width: parent.width - 2 * Layout.pad;
+                height: 120px;
+                background: Palette.plate;
+                border-radius: Layout.radius-control;
+                border-width: 1px;
+                border-color: Palette.edge;
+
+                Text {
+                    x: Layout.pad;
+                    y: Layout.pad;
+                    text: "DELETE — CANNOT BE UNDONE";
+                    color: Palette.dim;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.label-size;
+                    letter-spacing: Typography.label-tracking;
+                    wrap: no-wrap;
+                }
+
+                HorizontalLayout {
+                    x: Layout.pad;
+                    y: 60px;
+                    height: 34px;
+                    spacing: 8px;
+                    alignment: start;
+
+                    Button {
+                        label: "DELETE NOTE";
+                        variant: ButtonVariant.destructive;
+                        clicked => {
+                            root.delete-row(root.pending-delete);
+                            root.pending-delete = "";
+                        }
+                    }
+                    Button {
+                        label: "CANCEL";
+                        variant: ButtonVariant.default;
+                        clicked => { root.pending-delete = ""; }
+                    }
+                }
+            }
+        }
+    }
+
+    FocusScope {
+        width: 0px;
+        height: 0px;
+        key-pressed(event) => {
+            if (event.text == Key.Escape && root.pending-delete != "") {
+                root.pending-delete = "";
+                return accept;
+            }
+            return reject;
+        }
+    }
+}

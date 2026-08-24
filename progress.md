@@ -292,3 +292,22 @@ indexes a `yrs::Text` must use byte offsets.**
 and relaunch, `to_open` is empty, no window opens, and the event loop exits immediately.
 The app currently has no surface that is not a note. This is exactly why the home window
 is the next task and not a later one.
+
+### 2026-08-24 — Home window (S1-23 built; S1-24/25/26/28 written, unverified)
+
+- ✅ **`HomeWindow` exists and opens alongside the notes.** Same Panel, same 32px header,
+  same tokens as a note — it reads as part of the same product, not a separate app.
+  Title `CANVAS`, glyph strip lit when any note is open.
+- ✅ **Boot order changed:** the app opens every note whose `open` flag is set, then
+  always opens home. This closes the gap logged in the previous entry — the app can no
+  longer start with no window and exit immediately.
+- ✅ `maybe_quit` now also checks whether home is visible, so closing the last note
+  leaves Canvas running with home on screen instead of quitting.
+- 🟡 **Written and compiling, but NOT yet watched work:** the note list rows, clicking a
+  row to open/close, NEW NOTE, per-row delete with its confirm, the row's open/closed
+  dot indicator, and the empty state. Boxes stay unticked until they are clicked.
+- ✅ Six new icons added as real vector paths: `plus`, `note`, `check`, `columns`,
+  `calendar`, `doc`, plus `search`, `settings` and `enter` for the palette (S1-31).
+  Widget type is shown by its own glyph on each row, which is what will make todo,
+  kanban and calendar rows legible later without further work.
+- Memory with home plus one note open: 35.4 MB working set (debug build).
