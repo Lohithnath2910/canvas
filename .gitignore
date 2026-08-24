@@ -1,0 +1,21 @@
+# Rust
+/target/
+Cargo.lock.orig
+**/*.rs.bk
+
+# Local database
+*.db
+*.db-shm
+*.db-wal
+
+# Slint build artifacts
+/crates/*/target/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
