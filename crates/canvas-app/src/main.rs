@@ -6,6 +6,9 @@ use slint::ComponentHandle;
 
 use canvas_ui::{platform_system_sans, StickyNoteWindow, Typography};
 
+#[cfg(windows)]
+mod desktop_layer;
+
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -29,9 +32,7 @@ fn wire_controls(window: &StickyNoteWindow) {
         eprintln!("canvas: plate tone -> {tone}");
     });
 
-    window.on_pin_toggled(|pinned| {
-        eprintln!("canvas: pinned -> {pinned}");
-    });
+    wire_pin(window);
 
     let handle = window.as_weak();
     window.on_delete_confirmed(move || {
@@ -39,6 +40,55 @@ fn wire_controls(window: &StickyNoteWindow) {
             let _ = window.hide();
         }
         let _ = slint::quit_event_loop();
+    });
+}
+
+#[cfg(windows)]
+fn wire_pin(window: &StickyNoteWindow) {
+    use std::time::Duration;
+
+    let handle = window.as_weak();
+    window.on_pin_toggled(move |pinned| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+        let Some(hwnd) = desktop_layer::hwnd_of(window.window()) else {
+            eprintln!("canvas: no HWND, pin unavailable");
+            return;
+        };
+        if pinned {
+            desktop_layer::send_to_desktop_layer(hwnd);
+        } else {
+            desktop_layer::restore_normal_layer(hwnd);
+        }
+    });
+
+    let handle = window.as_weak();
+    let timer = Box::leak(Box::new(slint::Timer::default()));
+    timer.start(
+        slint::TimerMode::Repeated,
+        Duration::from_millis(700),
+        move || {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            if !window.get_pinned() {
+                return;
+            }
+            let Some(hwnd) = desktop_layer::hwnd_of(window.window()) else {
+                return;
+            };
+            if !desktop_layer::is_foreground(hwnd) {
+                desktop_layer::send_to_desktop_layer(hwnd);
+            }
+        },
+    );
+}
+
+#[cfg(not(windows))]
+fn wire_pin(window: &StickyNoteWindow) {
+    window.on_pin_toggled(|pinned| {
+        eprintln!("canvas: pin -> {pinned} (desktop layer is Windows-only for now)");
     });
 }
 

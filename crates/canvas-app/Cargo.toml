@@ -11,6 +11,10 @@ canvas-sync.workspace = true
 slint.workspace = true
 mimalloc.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+raw-window-handle.workspace = true
+
 [features]
 # `cargo run -p canvas-app --features gpu -- --gpu`
 gpu = ["canvas-ui/gpu"]

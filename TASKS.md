@@ -5,8 +5,8 @@ mid-build, the next session reads this file, finds the first unchecked box, and
 starts there. Nothing needs re-deriving.
 
 **Last updated:** 2026-08-24
-**Current task:** v1 of the sticky note accepted. Re-planning Stage 1 around a home page, pin semantics, and note lifecycle — see Open questions.
-**Stage:** 1 — Sticky note
+**Current task:** `S1-15` — CRDT document, then `S1-16` SQLite, then `S1-20` multi-window, then the home page.
+**Stage:** 1 — Sticky note + app shell (replanned 2026-08-24)
 
 ---
 
@@ -267,85 +267,140 @@ first. These three come before it.
   *DoD:* a test that writes 600 updates leaves ≤ 200 rows, and the db stops growing.
   *Refs:* §12, §2.5
 
-### 1h — Multiple widgets on the desktop
+### 1h — App shell: home page, tray, note lifecycle
 
-- [ ] **S1-20 · Multi-window desktop composition** — `L`
-  Needs: S1-18. Multiple always-on-top frameless windows at absolute desktop coordinates.
-  **No grid, no snapping, no auto-arrange.** Overlap allowed. Z-order = most recently
-  interacted on top; focusing one reorders **no** other. Exactly one widget shows the
-  `focused` strip at a time; all others show their real state. **The app draws no
-  wallpaper** — no gradient, vignette, glow, or scrim in normal use. Depth comes from
-  shadow and overlap only.
-  *DoD:* three notes open at once, each independently draggable, focus moves correctly,
-  exactly one strip is `focused`, z-order behaves.
+**Replanned 2026-08-24 after the v1 review.** This section supersedes the original
+"Multiple widgets on the desktop". §8 and §9 assume a bare desktop of free-floating
+widgets with a ⌘K palette and no home surface; the product now has a home window that
+notes are created and launched from, a tray icon that keeps Canvas alive, and a close
+that is not a delete.
+
+Two dependency changes were signed off at this point, both required by these tasks:
+`windows-sys` (Win32, outside the spec's closed stack) and Slint's own `system-tray`
+and `raw-window-handle-06` features (inside it — build flags only).
+
+- [ ] **S1-20 · Multi-window runtime** — `L`
+  Needs: S1-17. Rust owns a registry of live note windows keyed by widget id: spawn,
+  look up, close, drop. One `StickyNoteWindow` per open note, each with its own
+  position, size, tone and document. Z-order = most recently interacted on top;
+  focusing one reorders **no** other. **No grid, no snapping, no auto-arrange**, overlap
+  allowed, and **the app draws no wallpaper**.
+  *DoD:* three notes open at once, each independently draggable and editable, each
+  persisting its own text and position. Closing one leaves the others untouched.
   *Refs:* §8
-  *Watch:* always-on-top may not be exposed by Slint's own API. If it needs a new dependency
-  or raw winit/Win32 access, that is Hard Constraint 6 — **ask first.**
 
-- [ ] **S1-21 · Open/close animation** — `S`
+- [ ] **S1-21 · Close ≠ delete** — `M`
+  Needs: S1-20. Closing a note window hides it and leaves the row in `widgets`; the note
+  reopens from home with its text and position intact. **Delete is the only thing that
+  removes data**, and it keeps the in-widget confirm from S1-14.
+  *DoD:* close a note, restart the app, reopen it from home — text and position are
+  exactly as they were. Deleting genuinely removes it from the database.
+
+- [x] **S1-22 · Pin = glued to the desktop layer** — `M`
+  Needs: S1-20. Pinned notes sit at the bottom of the z-order so they are visible on the
+  desktop but never over other apps; unpinned notes are ordinary windows.
+  `always-on-top` is off in both states. Implemented with `SetWindowPos(HWND_BOTTOM)`
+  re-applied on a poll while the note is not the foreground window, so clicking a pinned
+  note still lets you type in it and it settles back afterwards.
+  *DoD:* pin a note, open a browser over it — the note stays behind. Click the note,
+  type, click away; it returns to the desktop layer on its own. Pin state survives a
+  restart.
+
+- [ ] **S1-23 · Home window shell** — `M`
+  Needs: S1-02, S1-03. A Panel like any widget: 32px header, glyph strip, title `CANVAS`,
+  same tokens and measurements. Sized for a list rather than a note.
+  *DoD:* opens, is draggable and resizable, matches the note's visual language exactly.
+
+- [ ] **S1-24 · Home: the note list** — `L`
+  Needs: S1-23, S1-16, S1-20. Every note in the database as a row: title plus a preview
+  line of its text. **A row shows whether that note is currently open on screen.** Click
+  a row to open its window; click again to close it.
+  *DoD:* the list matches the database, open/closed state is visibly correct and updates
+  live as notes are opened and closed from anywhere.
+
+- [ ] **S1-25 · Home: create** — `M`
+  Needs: S1-24. A create control per widget type — sticky note now, the other types as
+  they are built. New notes get their type's default size (§7.1, §10.1), the title
+  `UNTITLED`, and open immediately.
+  *DoD:* creating a note adds a row, opens a window, and survives a restart.
+
+- [ ] **S1-26 · Home: delete** — `M`
+  Needs: S1-24. Delete a note from its row, with the same confirm language as §7.6
+  state 10. Removes the widget, its document, its position and its revision history.
+  *DoD:* deleted notes are gone from the list, from disk, and from screen if open.
+
+- [ ] **S1-27 · Tray icon and app lifetime** — `M`
+  Needs: S1-23. Canvas keeps running when home is closed. The tray icon reopens home;
+  quit is explicit and from the tray only. **Closing the home window must not close a
+  single note.** Needs Slint's `system-tray` feature re-enabled — I disabled it for
+  binary size in S0-2.
+  *DoD:* close home with two notes open — both stay on screen and editable. Reopen home
+  from the tray; the list is correct. Quit from the tray closes everything cleanly.
+
+- [ ] **S1-28 · First-launch empty state** — `S`
+  Needs: S1-24. Home with zero notes: `NOTHING HERE YET` plus a line pointing at the
+  create control, centred, matching the note's own empty state.
+  *DoD:* shows on a fresh database, disappears on the first note.
+  *Refs:* §8
+
+- [ ] **S1-29 · Open/close animation** — `S`
   Needs: S1-20. Open 160ms, opacity 0→1 plus a 6px rise. Close 100ms, fade only.
   **No scale, no bounce, no tilt** (rule 5).
-  *DoD:* both animations visible and correct; nothing scales.
+  *DoD:* both visible and correct; nothing scales.
   *Refs:* §8, §5.5
 
-- [ ] **S1-22 · First-launch empty desktop state** — `S`
-  Needs: S1-20. `NOTHING HERE YET` (interface face 22) + "Press ⌘K to create your first
-  note." (body face, `dim`), gap 12, centred.
-  *DoD:* shows with zero widgets; disappears when the first one is created.
+- [ ] **S1-30 · Off-screen clamping** — `M`
+  Needs: S1-20. Clips at the boundary, radius and border simply cut — **no push-back, no
+  bounce, no snap-in**. At least 120px of width plus the full header stays grabbable.
+  Fully off-screen after a display change → nearest edge on next launch.
+  *DoD:* dragged to each edge and verified. The display-change case may not be testable
+  here — if not, mark it `🟡` and do not tick the box.
   *Refs:* §8
 
-- [ ] **S1-23 · Off-screen clamping** — `M`
-  Needs: S1-18. Clips at the boundary, radius and border simply cut — **no push-back, no
-  bounce, no snap-in**. At least 120px of width plus the full 32px header stays on screen so
-  the widget can always be grabbed. Fully off-screen after a display change → nearest edge
-  on next launch.
-  *DoD:* dragged to each edge and verified. The display-change case may not be testable here
-  — if not, mark it `🟡` with the reason and **do not tick the box**.
-  *Refs:* §8, §4.1
+### 1i — Command palette
 
-### 1i — Command palette (the only spec'd keyboard route to creating a note)
+Still built, per your "both together" — home for browsing and managing, ⌘K for fast
+keyboard creation from anywhere. This is also what keeps Stage 1's "creatable with no
+mouse" bar reachable.
 
-- [ ] **S1-24 · The five palette icons** — `S`
-  Needs: S1-05. `search`, `plus`, `check`, `settings`, `enter` — same construction rules as
-  S1-05, rendered at **24px, a size that exists nowhere else in the product**.
+- [ ] **S1-31 · The five palette icons** — `S`
+  Needs: S1-05. `search`, `plus`, `check`, `settings`, `enter`, same construction rules,
+  rendered at **24px — a size that exists nowhere else in the product**.
   *DoD:* all five render correctly at 24px.
   *Refs:* §5.6, §9
 
-- [ ] **S1-25 · Palette overlay shell** — `M`
-  Needs: S1-24, S1-02. 640px wide, radius 28, `plate` fill, 1px `edge`, drag-depth shadow.
-  Centred horizontally, top at ~15% of screen height. `scrim` behind it — **flat, no blur**.
-  This is the one deliberate translucency exception in the product and it exists only while
-  the palette is open.
-  *DoD:* the overlay appears centred with the scrim; nothing behind it is blurred.
+- [ ] **S1-32 · Palette overlay shell** — `M`
+  Needs: S1-31. 640px wide, radius 28, `plate` fill, 1px `edge`, drag-depth shadow.
+  Centred horizontally, top at ~15% of screen height. `scrim` behind it — **flat, no
+  blur**; the one deliberate translucency exception, and only while the palette is open.
+  *DoD:* appears centred with the scrim; nothing behind it is blurred.
   *Refs:* §9, §5.1
 
-- [ ] **S1-26 · Palette input row + empty-query actions** — `M`
-  Needs: S1-25. Input row 56px, padding 0/24, 24px `search` icon + 12px gap + query in
-  interface face 22 + a 2×22 caret. Empty placeholder `TYPE A COMMAND` (interface face 11,
-  `dim`). Default actions: **New note** (⌘N, `plus`), **New todo** (⌘T, `check`),
-  **Settings** (⌘, `settings`).
-  *DoD:* opens showing the three default actions; typing replaces them with results.
+- [ ] **S1-33 · Palette input row + empty-query actions** — `M`
+  Needs: S1-32. Input row 56px, padding 0/24, 24px `search` icon + 12px gap + query in
+  the interface face at 22px + a 2×22 caret. Empty placeholder `TYPE A COMMAND`.
+  Default actions: **New note** (⌘N, `plus`), **New todo** (⌘T, `check`), **Settings**
+  (⌘, `settings`).
+  *DoD:* opens showing the three defaults; typing replaces them with results.
   *Refs:* §9
 
-- [ ] **S1-27 · Palette results, selection, footer** — `M`
-  Needs: S1-26. Rows 48px, padding 0/24, 24px icon + 16px gap + body-face-14 label +
-  right-aligned interface-face-11 `dim` meta. Selection = row fill `elev-raised` and the
-  icon steps to `text` — **no accent fill, no left bar** (a stray accent bar was one of the
-  prior attempt's named bugs). Footer 32px with a 1px `edge` rule above, count on the left,
-  `↑↓ MOVE · ⏎ OPEN · ESC CLOSE` on the right.
-  *DoD:* ↑↓ moves the selection, ⏎ opens, Esc closes, the count is right, and there is no
-  accent colour anywhere in the overlay.
+- [ ] **S1-34 · Palette results, selection, footer** — `M`
+  Needs: S1-33. Rows 48px, 24px icon + 16px gap + body-14 label + right-aligned
+  interface-11 `dim` meta. Selection = row fill `elev-raised`, icon steps to `text` —
+  **no accent fill, no left bar**. Footer 32px, count left,
+  `↑↓ MOVE · ⏎ OPEN · ESC CLOSE` right. Searching existing notes belongs here too.
+  *DoD:* ↑↓ moves, ⏎ opens, Esc closes, count correct, no accent anywhere.
   *Refs:* §9, rule 2
 
-- [ ] **S1-28 · Palette hotkey** — `M`
-  Needs: S1-27. Ctrl+K opens the palette; ⌘N/Ctrl+N creates a note.
-  A **true OS-global** hotkey almost certainly needs a dependency or direct Win32 calls
-  outside the closed stack — **ask before adding one** (Hard Constraint 6). The spec
-  explicitly permits a stopgap bound in a focused window's `key-pressed`, provided you
-  **say plainly that it is a stopgap** which only fires while a Canvas window has focus.
-  *DoD:* a note is creatable with **no mouse at all** — this is Stage 1's own bar. The real
-  scope of the hotkey is stated honestly in `progress.md`.
-  *Refs:* §14 Stage 1 item 10, §2.6
+- [ ] **S1-35 · Palette hotkey** — `M`
+  Needs: S1-34. Ctrl+K opens it; Ctrl+N creates a note.
+  A **true OS-global** hotkey needs Win32 `RegisterHotKey` — `windows-sys` is already a
+  dependency by then, so this no longer needs a separate sign-off. The stopgap bound in a
+  focused window's `key-pressed` is acceptable first, provided it is **stated plainly**
+  as only firing while a Canvas window has focus.
+  *DoD:* a note is creatable with **no mouse at all**. The hotkey's real scope stated
+  honestly in `progress.md`.
+  *Refs:* §14 Stage 1 item 10
 
 ### 1j — Network-reflecting states
 
@@ -353,7 +408,7 @@ These need a peer. Expect several to sit at `🟡` until Stage 3 — that is cor
 expected, not a failure. Do not fake them, and do not animate anything that lies about the
 network.
 
-- [ ] **S1-29 · Sync / offline / error strip states + conflict UI** — `L`
+- [ ] **S1-36 · Sync / offline / error strip states + conflict UI** — `L`
   Needs: S1-04, S1-17. States 5, 6, and 8. `syncing` sweeps **only while sync is genuinely
   in flight**. Offline: five cells `dot-half`, steady, plus an optional
   `OFFLINE — N CHANGES QUEUED` line in interface face 11 `dim` — **no banner, no icon, no
@@ -364,8 +419,8 @@ network.
   Anything you cannot genuinely trigger → `🟡` with the reason.
   *Refs:* §7.6 states 5/6/8, §6.2, rules 2 and 3
 
-- [ ] **S1-30 · Presence: `PresencePill` + state 7** — `M`
-  Needs: S1-29. Pill height 20, min-width 28, padding 0/8, radius 999, 1px `edge`, 2-char
+- [ ] **S1-37 · Presence: `PresencePill` + state 7** — `M`
+  Needs: S1-36. Pill height 20, min-width 28, padding 0/8, radius 999, 1px `edge`, 2-char
   initials in interface face 11. Fill = that peer's grey step — peers are distinguished by
   **grey level and initials, never colour**. The strip fills from the right, one cell per
   peer. Pills occupy the **same box** as the controls: peers present and pointer outside →
@@ -377,7 +432,7 @@ network.
 
 ### 1k — The big one, and sign-off
 
-- [ ] **S1-31 · Rich text 1/5: delta model in `canvas-doc`** — `L`
+- [ ] **S1-38 · Rich text 1/5: delta model in `canvas-doc`** — `L`
   Needs: S1-15. One `yrs::Text` carrying inline attributes (`bold` / `italic` / `code` /
   `strike`) plus a block-level attribute marking list-item membership — the flat delta model
   Yjs uses with Quill. **Not** an `XmlFragment` tree: no headings, tables, or nesting are
@@ -387,8 +442,8 @@ network.
   overlapping formatting converge.
   *Refs:* §7.7, §11.1
 
-- [ ] **S1-32 · Rich text 2/5: styled-run layout renderer** — `L`
-  Needs: S1-31. Slint has **no built-in support** for mixed formatting within one flow —
+- [ ] **S1-39 · Rich text 2/5: styled-run layout renderer** — `L`
+  Needs: S1-38. Slint has **no built-in support** for mixed formatting within one flow —
   neither `Text` nor `TextInput`/`TextEdit` can do it. This is a custom wrapped flow of
   styled runs, and it is the single largest piece of engineering in the sticky note.
   Bold = weight 600 at the **same colour** — never a colour change. Strikethrough steps the
@@ -400,41 +455,41 @@ network.
   *DoD:* a document containing every format renders correctly and rewraps on resize.
   *Refs:* §7.7, §7.2
 
-- [ ] **S1-33 · Rich text 3/5: caret and selection** — `L`
-  Needs: S1-32. Caret 2×14 inline (2×18 on an empty line), colour `text`, 1000ms **2-step
+- [ ] **S1-40 · Rich text 3/5: caret and selection** — `L`
+  Needs: S1-40. Caret 2×14 inline (2×18 on an empty line), colour `text`, 1000ms **2-step
   hard switch — no fade**. Selection uses the `edge` background.
   *DoD:* click-to-place, drag-to-select, shift-arrow selection, and Home/End all land on the
   correct character across mixed-format runs.
   *Refs:* §7.2, §5.5 (caret row)
 
-- [ ] **S1-34 · Rich text 4/5: input and editing** — `L`
+- [ ] **S1-41 · Rich text 4/5: input and editing** — `L`
   Needs: S1-33. Insert, delete, backspace, paste-as-plain-text, Enter/paragraph splitting,
   and list continuation — all routed through the delta model, never through a plain string.
   *DoD:* editing mid-document preserves the surrounding formatting; the 12px paragraph gap
   holds.
   *Refs:* §7.7, §7.2
 
-- [ ] **S1-35 · Rich text 5/5: formatting shortcuts + persistence** — `M`
-  Needs: S1-34, S1-17. Ctrl+B, Ctrl+I, strikethrough, inline code, bullet toggle.
+- [ ] **S1-42 · Rich text 5/5: formatting shortcuts + persistence** — `M`
+  Needs: S1-41, S1-17. Ctrl+B, Ctrl+I, strikethrough, inline code, bullet toggle.
   *DoD:* **format a note, restart the app, the formatting is still there** — this is a named
   Stage 1 DoD item, not an implied one.
   *Refs:* §14 Stage 1 DoD
 
-- [ ] **S1-36 · Undo/redo backed by `revision_history`** — `L`
-  Needs: S1-35, S1-19. Backed by the stored revision history, **not** a local edit stack — a
+- [ ] **S1-43 · Undo/redo backed by `revision_history`** — `L`
+  Needs: S1-42, S1-19. Backed by the stored revision history, **not** a local edit stack — a
   local stack gives wrong results as soon as a remote edit interleaves.
   *DoD:* undo is correct **after a remote edit arrives mid-session** (named Stage 1 DoD).
-  Drive the remote edit from the S1-29 harness.
+  Drive the remote edit from the S1-36 harness.
   *Refs:* §14 Stage 1 item 12 and DoD
 
-- [ ] **S1-37 · Reduced motion** — `M`
-  Needs: S1-36. All travel, stepping, and shadow motion off; a 100ms crossfade replaces
+- [ ] **S1-44 · Reduced motion** — `M`
+  Needs: S1-43. All travel, stepping, and shadow motion off; a 100ms crossfade replaces
   them; dots hold their final state. **Required for sign-off**, not a deferred nice-to-have.
   *DoD:* with the OS reduced-motion setting on, no widget travels, steps, or shifts shadow.
   *Refs:* §5.5
 
-- [ ] **S1-38 · Stage 1 sign-off audit** — `M`
-  Needs: S1-37. Walk all 11 states of §7.6 against the table **and** against
+- [ ] **S1-45 · Stage 1 sign-off audit** — `M`
+  Needs: S1-44. Walk all 11 states of §7.6 against the table **and** against
   `handoff/screenshots/sticky-note-states.png`, side by side. Re-measure per-widget RSS
   (must be 5–15 MB) and cold launch. Re-check the five rules line by line — especially that
   `signal` red appears in exactly two places in the entire product, and that no dot cell

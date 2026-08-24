@@ -193,3 +193,37 @@ The user wants the product reshaped before persistence work starts:
 These reshape §8 and §9 of the spec (which assume a bare desktop of widgets plus a
 command palette, with no home surface at all). Scoping questions are open — do not write
 code for any of it until they are answered.
+
+### 2026-08-24 — Replanned around a home page; pin rebuilt
+
+**Backlog replanned.** §8 and §9 assume a bare desktop of widgets plus a ⌘K palette and
+no home surface. The product now has a home window, a tray icon, and a close that is not
+a delete, so Stage 1 section 1h was rewritten and everything after it renumbered.
+55 tasks, 13 done. Decisions taken at this point:
+- Pin = glued to the desktop layer.
+- Home page **and** command palette, both built.
+- Home shows every note, which are open, and creates/opens/closes/deletes them.
+- A tray icon keeps Canvas alive when home is closed.
+
+**Dependencies added — this is the Hard Constraint 6 record.** All signed off by the
+user in the same exchange that chose the behaviours requiring them:
+- `windows-sys` 0.59 (`Win32_Foundation`, `Win32_UI_WindowsAndMessaging`) — outside the
+  spec's closed stack. Needed for desktop-layer pinning, and later for a true global
+  hotkey (S1-35). Windows-only target dependency.
+- `raw-window-handle` 0.6.2 — to get the HWND out of Slint. Slint already depends on
+  this exact version, so it adds nothing new to the tree.
+- Slint's own `raw-window-handle-06` feature enabled; `system-tray` still to enable at
+  S1-27. Both are build flags inside the closed stack.
+
+**S1-22 — pin is now desktop-layer glue**
+- ✅ `always-on-top: true` removed from the note window. **Notes no longer float over
+  other apps in either state** — that was the intrusive behaviour.
+- ✅ Pinned: `SetWindowPos(HWND_BOTTOM, SWP_NOACTIVATE)` drops the note to the bottom of
+  the z-order. Unpinned: `HWND_NOTOPMOST` restores an ordinary window.
+- ✅ A 700ms poll re-applies the bottom position only while the note is **not** the
+  foreground window. That is what makes a pinned note still editable: click it and it
+  comes forward normally, click away and it settles back to the desktop on its own.
+  Polling rather than a focus-change hook because Slint exposes no window-level
+  focus-changed callback.
+- 🟡 Not yet watched work — needs a browser opened over a pinned note to confirm.
+- ❌ Pin state is not persisted yet; that lands with S1-21.
