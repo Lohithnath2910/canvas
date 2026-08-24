@@ -1,10 +1,24 @@
-> **Working copy.** The pristine handoff lives in `handoff/` — this root copy is what
-> Claude Code auto-loads each session. Only the five image links were repointed at
-> `handoff/screenshots/`; the spec text below is byte-identical to the original.
+> ## ⚠ READ THIS BEFORE ANYTHING ELSE
 >
-> **Session continuity:** read [TASKS.md](TASKS.md) for the numbered backlog and the
-> current task, and `progress.md` for what is actually verified working. Start every
-> session at the first unchecked task in TASKS.md.
+> **This spec is the original brief, not the current state of the build.** Nine of its
+> decisions have been deliberately overridden by the user after seeing the app run.
+> Following it literally will undo working, agreed-on behaviour.
+>
+> **Do this first, in order:**
+> 1. Read **`progress.md`** — its START HERE section has the current state, the file
+>    layout, the commands, the table of what overrides this spec, and the traps already hit.
+> 2. Read **`TASKS.md`** — the numbered backlog. Work from the first unticked box.
+> 3. Then read this spec for design detail.
+>
+> **Three standing rules that are not in this document:**
+> - **Write no code comments.** Anywhere. Reasoning goes in `progress.md`, `TASKS.md`
+>   and commit messages.
+> - **Only tick a `TASKS.md` box for behaviour you personally watched work.** Compiling
+>   is not done. This has already been got wrong four times.
+> - **Ask before adding any dependency** (Hard Constraint 6).
+>
+> The pristine original of this file is in `handoff/`. Only the five image links differ.
+
 
 # Canvas — Build From Scratch
 
