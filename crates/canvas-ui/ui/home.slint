@@ -4,7 +4,8 @@ import { Motion } from "theme/motion.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
-import { IconTrash, IconPlus, IconNote, IconCheck, IconColumns, IconCalendar, IconDoc } from "theme/icons.slint";
+import { IconTrash, IconPlus, IconNote, IconCheck, IconColumns, IconCalendar, IconDoc, IconX } from "theme/icons.slint";
+import { ResizeGrips } from "theme/chrome.slint";
 import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
 
 export struct NoteRow {
@@ -147,6 +148,8 @@ export component HomeWindow inherits Window {
     callback delete-row(string);
     callback window-moved(length, length);
     callback quit-requested();
+    callback close-requested();
+    callback resize-begin(int);
 
     preferred-width: 420px + 2 * Layout.plate-margin;
     preferred-height: 520px + 2 * Layout.plate-margin;
@@ -169,10 +172,10 @@ export component HomeWindow inherits Window {
         dragging: root.dragging;
 
         drag-area := TouchArea {
-            x: 0;
-            y: 0;
-            width: parent.width - Layout.pad - 24px;
-            height: Layout.header-band;
+            x: 16px;
+            y: 6px;
+            width: parent.width - Layout.pad - 40px;
+            height: Layout.header-band - 6px;
             moved => {
                 if (!root.dragging) { root.dragging = true; }
                 root.window-moved(
@@ -197,6 +200,15 @@ export component HomeWindow inherits Window {
                 height: Layout.strip-h;
                 state: root.open-count > 0 ? WidgetState.focused : WidgetState.idle;
             }
+        }
+
+        home-close := IconButton {
+            x: parent.width - Layout.pad - Layout.icon-size;
+            y: Layout.header-y;
+            width: Layout.icon-size;
+            revealed: true;
+            activated => { root.close-requested(); }
+            IconX { stroke-color: home-close.glyph-color; }
         }
 
         Text {
@@ -353,6 +365,14 @@ export component HomeWindow inherits Window {
                 }
             }
         }
+    }
+
+    ResizeGrips {
+        x: Layout.plate-margin;
+        y: Layout.plate-margin;
+        width: parent.width - 2 * Layout.plate-margin;
+        height: parent.height - 2 * Layout.plate-margin;
+        begin(h) => { root.resize-begin(h); }
     }
 
     FocusScope {

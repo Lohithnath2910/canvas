@@ -1,0 +1,109 @@
+export global HitCode {
+    out property <int> left: 10;
+    out property <int> right: 11;
+    out property <int> top: 12;
+    out property <int> top-left: 13;
+    out property <int> top-right: 14;
+    out property <int> bottom: 15;
+    out property <int> bottom-left: 16;
+    out property <int> bottom-right: 17;
+}
+
+component Grip inherits TouchArea {
+    in property <int> hit;
+    callback begin(int);
+    pointer-event(event) => {
+        if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+            root.begin(root.hit);
+        }
+    }
+}
+
+export component ResizeGrips inherits Rectangle {
+    callback begin(int);
+
+    property <length> edge: 6px;
+    property <length> corner: 16px;
+
+    background: transparent;
+
+    Grip {
+        x: 0;
+        y: 0;
+        width: root.corner;
+        height: root.corner;
+        hit: HitCode.top-left;
+        mouse-cursor: nwse-resize;
+        begin(h) => { root.begin(h); }
+    }
+
+    Grip {
+        x: parent.width - root.corner;
+        y: 0;
+        width: root.corner;
+        height: root.corner;
+        hit: HitCode.top-right;
+        mouse-cursor: nesw-resize;
+        begin(h) => { root.begin(h); }
+    }
+
+    Grip {
+        x: 0;
+        y: parent.height - root.corner;
+        width: root.corner;
+        height: root.corner;
+        hit: HitCode.bottom-left;
+        mouse-cursor: nesw-resize;
+        begin(h) => { root.begin(h); }
+    }
+
+    Grip {
+        x: parent.width - root.corner;
+        y: parent.height - root.corner;
+        width: root.corner;
+        height: root.corner;
+        hit: HitCode.bottom-right;
+        mouse-cursor: nwse-resize;
+        begin(h) => { root.begin(h); }
+    }
+
+    Grip {
+        x: root.corner;
+        y: 0;
+        width: parent.width - 2 * root.corner;
+        height: root.edge;
+        hit: HitCode.top;
+        mouse-cursor: ns-resize;
+        begin(h) => { root.begin(h); }
+    }
+
+    Grip {
+        x: root.corner;
+        y: parent.height - root.edge;
+        width: parent.width - 2 * root.corner;
+        height: root.edge;
+        hit: HitCode.bottom;
+        mouse-cursor: ns-resize;
+        begin(h) => { root.begin(h); }
+    }
+
+    Grip {
+        x: 0;
+        y: root.corner;
+        width: root.edge;
+        height: parent.height - 2 * root.corner;
+        hit: HitCode.left;
+        mouse-cursor: ew-resize;
+        begin(h) => { root.begin(h); }
+    }
+
+    Grip {
+        x: parent.width - root.edge;
+        y: root.corner;
+        width: root.edge;
+        height: parent.height - 2 * root.corner;
+        hit: HitCode.right;
+        mouse-cursor: ew-resize;
+        begin(h) => { root.begin(h); }
+    }
+}

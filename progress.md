@@ -343,3 +343,33 @@ Three issues raised after using the app. All three were real.
   nothing is dropped.
 - This is what Hard Constraint 2 actually asks for. The earlier claim should not have
   been written without checking the write path.
+
+### 2026-08-24 — Native resize, home close (user review)
+
+**Resize was broken, and the cause was structural.**
+- ❌ `resize-border-width: 6px` puts the grab zone at the **window** edge — which sits
+  24px out in the transparent `plate-margin`, over empty space. Dragging the visible
+  plate edge did nothing, because the plate edge is not the window edge. S1-06 was
+  ticked on the strength of the property being set, which was not evidence.
+- ✅ **Replaced with eight grips on the plate's own perimeter** — four 16px corners and
+  four 6px edges, in `theme/chrome.slint`. Each is a disjoint `TouchArea` (§13.3) and
+  each carries the correct resize cursor.
+- ✅ **The grips hand the drag to Windows** rather than tracking the pointer:
+  `ReleaseCapture()` then `SendMessage(hwnd, WM_NCLBUTTONDOWN, HT*)`. Windows runs its
+  own resize loop from there, so it behaves exactly like a normal window — live sizing,
+  correct cursors, Aero Snap, and `min-width`/`min-height` still enforced by Slint. No
+  manual pointer maths, and nothing to get wrong at DPI scaling.
+- The header drag region is now inset to x=16, y=6 so it cannot overlap the top and
+  corner grips. Two `TouchArea`s must never share a region.
+
+**Home could not be closed.**
+- ✅ Home now has its own `x` control, always visible (it is not a note; there is no
+  hover-reveal to hide it behind). It hides the window and leaves notes running.
+- ✅ Home also gets the same eight resize grips.
+
+**Note titles were clipped.**
+- The title elides because the header is a fixed 32px with an 88px control cluster; at
+  the 320px default width the title box is ~120px, and Silkscreen at 22px is wide.
+  Resizing now works, so the window can be widened — which is what the user asked for
+  rather than a type change. Double-clicking the header shows the full title in an
+  editable field regardless of window width.

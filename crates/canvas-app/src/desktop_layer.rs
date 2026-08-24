@@ -2,9 +2,10 @@
 mod imp {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, SetWindowPos, HWND_BOTTOM, HWND_NOTOPMOST, SWP_NOACTIVATE,
-        SWP_NOMOVE, SWP_NOSIZE,
+        GetForegroundWindow, SendMessageW, SetWindowPos, HWND_BOTTOM, HWND_NOTOPMOST,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WM_NCLBUTTONDOWN,
     };
 
     fn hwnd_of(window: &slint::Window) -> Option<HWND> {
@@ -45,12 +46,23 @@ mod imp {
             place(hwnd, HWND_BOTTOM);
         }
     }
+
+    pub fn begin_native_resize(window: &slint::Window, hit: i32) {
+        let Some(hwnd) = hwnd_of(window) else {
+            return;
+        };
+        unsafe {
+            ReleaseCapture();
+            SendMessageW(hwnd, WM_NCLBUTTONDOWN, hit as usize, 0);
+        }
+    }
 }
 
 #[cfg(not(windows))]
 mod imp {
     pub fn apply_pin(_window: &slint::Window, _pinned: bool) {}
     pub fn hold_at_desktop_layer(_window: &slint::Window) {}
+    pub fn begin_native_resize(_window: &slint::Window, _hit: i32) {}
 }
 
-pub use imp::{apply_pin, hold_at_desktop_layer};
+pub use imp::{apply_pin, begin_native_resize, hold_at_desktop_layer};

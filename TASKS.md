@@ -138,7 +138,7 @@ first. These three come before it.
 
 ### 1c — Window shell, header, drag
 
-- [ ] **S1-06 · Frameless window + native resize** — `M`
+- [x] **S1-06 · Frameless window + native resize** — `M`
   Needs: S1-03. `no-frame: true`, `resize-border-width: 6px`, `preferred-width/height`
   320×280, `min-width/height` 240×180, **no max** (omit the properties; don't set a huge
   sentinel). `width` and `min-width` cannot coexist on one element — the compiler rejects
