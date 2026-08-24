@@ -269,3 +269,26 @@ indexes a `yrs::Text` must use byte offsets.**
   updates. Trimming one widget provably leaves other widgets' history alone.
 - Note: the first version of this test asserted `count <= 200`, which the spec's own
   design does not hold — it bounces. The test now asserts the real contract.
+
+### 2026-08-24 — S1-17, S1-18, S1-20: the app runtime. Typing survives a restart.
+
+- ✅ **`canvas-app` is now a real multi-window runtime.** An `App` owns the `Store` and a
+  map of live notes keyed by widget id; each note owns its window, its CRDT doc and its
+  placement. Notes are spawned from the database at boot.
+- ✅ **Verified end-to-end, not assumed:** typed `persistence works` into the running
+  window via SendKeys, hard-killed the process, and read it back off disk with a new
+  `--dump` flag. Text intact, 17 revisions recorded. This is §14 Stage 1's
+  "text survives a restart" bullet, actually demonstrated.
+- ✅ Writes are debounced on a 500ms flush timer and never happen on the keystroke path
+  — a keystroke updates the doc and paints, and the snapshot is written later
+  (Hard Constraint 2). Every edit appends to `revision_history` immediately, which is
+  cheap, and the full snapshot is what gets debounced.
+- ✅ Position, size, tone and pin are all tracked into `WindowPlacement` and persisted.
+- ✅ `--dump` prints every widget with its text, revision count, position, tone and pin
+  state. Kept in — it is how persistence gets verified without needing eyes on a window.
+- ✅ Closing a note window calls `set_open(false)` and preserves the widget and document.
+
+**Known gap this creates, fixed by the home window (S1-23):** if you close the only note
+and relaunch, `to_open` is empty, no window opens, and the event loop exits immediately.
+The app currently has no surface that is not a note. This is exactly why the home window
+is the next task and not a later one.

@@ -5,7 +5,7 @@ mid-build, the next session reads this file, finds the first unchecked box, and
 starts there. Nothing needs re-deriving.
 
 **Last updated:** 2026-08-24
-**Current task:** `S1-17` — wire doc/UI/storage together so typing survives a restart.
+**Current task:** `S1-23` — home window shell, then the note list, create, delete, tray.
 **Stage:** 1 — Sticky note + app shell (replanned 2026-08-24)
 
 ---
@@ -247,7 +247,7 @@ first. These three come before it.
   reopening an existing db does not clobber it.
   *Refs:* §12
 
-- [ ] **S1-17 · Wire doc ↔ UI ↔ storage (no save button)** — `L`
+- [x] **S1-17 · Wire doc ↔ UI ↔ storage (no save button)** — `L`
   Needs: S1-09, S1-15, S1-16. Keystroke → local doc → paint, **then** persist. Persist on a
   debounce/idle, never synchronously on the UI thread's critical path. If a code path can
   make typing wait on I/O, it is wrong.
@@ -256,7 +256,7 @@ first. These three come before it.
   Constraint 2).
   *Refs:* §2.2, §2.4, §12
 
-- [ ] **S1-18 · Window position + size + z-order persistence** — `M`
+- [x] **S1-18 · Window position + size + z-order persistence** — `M`
   Needs: S1-17, S1-06. Persist to `window_positions` at the end of a move or resize.
   *DoD:* move and resize a note, restart → it reopens exactly where and how it was.
   *Refs:* §12, §8
@@ -279,7 +279,7 @@ Two dependency changes were signed off at this point, both required by these tas
 `windows-sys` (Win32, outside the spec's closed stack) and Slint's own `system-tray`
 and `raw-window-handle-06` features (inside it — build flags only).
 
-- [ ] **S1-20 · Multi-window runtime** — `L`
+- [x] **S1-20 · Multi-window runtime** — `L`
   Needs: S1-17. Rust owns a registry of live note windows keyed by widget id: spawn,
   look up, close, drop. One `StickyNoteWindow` per open note, each with its own
   position, size, tone and document. Z-order = most recently interacted on top;
