@@ -17,6 +17,7 @@ struct Note {
     window: StickyNoteWindow,
     doc: StickyNoteDoc,
     placement: WindowPlacement,
+    pending_updates: Vec<Vec<u8>>,
     text_dirty: bool,
     placement_dirty: bool,
 }
@@ -254,6 +255,7 @@ impl App {
                 window: window.clone_strong(),
                 doc,
                 placement,
+                pending_updates: Vec::new(),
                 text_dirty: false,
                 placement_dirty: false,
             },
@@ -266,13 +268,12 @@ impl App {
 
     pub fn close_note(app: &SharedApp, id: &str) {
         let mut a = app.borrow_mut();
-        if let Some(note) = a.notes.remove(id) {
+        if let Some(mut note) = a.notes.remove(id) {
             let _ = note.window.hide();
-            let _ = a.store.save_document(
-                id,
-                &note.doc.snapshot(),
-                &note.doc.state_vector(),
-            );
+            for update in note.pending_updates.drain(..) {
+                let _ = a.store.append_revision(id, &update);
+            }
+            let _ = a.store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
             let _ = a.store.save_placement(id, &note.placement);
         }
         let _ = a.store.set_open(id, false);
@@ -303,6 +304,9 @@ impl App {
             let App { store, notes, .. } = &mut *a;
             for (id, note) in notes.iter_mut() {
                 if note.text_dirty {
+                    for update in note.pending_updates.drain(..) {
+                        let _ = store.append_revision(id, &update);
+                    }
                     let _ =
                         store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
                     let _ = store.touch(id);
@@ -320,6 +324,9 @@ impl App {
         let mut a = app.borrow_mut();
         let App { store, notes, .. } = &mut *a;
         for (id, note) in notes.iter_mut() {
+            for update in note.pending_updates.drain(..) {
+                let _ = store.append_revision(id, &update);
+            }
             let _ = store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
             let _ = store.save_placement(id, &note.placement);
             note.text_dirty = false;
@@ -344,9 +351,10 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
                 return;
             };
             if let Some(update) = note.doc.set_text(&text) {
-                let _ = store.append_revision(&id, &update);
+                note.pending_updates.push(update);
                 note.text_dirty = true;
             }
+            let _ = store;
         });
     }
 
@@ -413,6 +421,41 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
                 note.placement.pinned = pinned;
                 note.placement_dirty = true;
             }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_title_edited(move |title| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let trimmed = title.trim();
+            let title = if trimmed.is_empty() {
+                canvas_storage::DEFAULT_TITLE
+            } else {
+                trimmed
+            };
+            let Ok(a) = app.try_borrow() else {
+                return;
+            };
+            let _ = a.store.set_title(&id, title);
+            drop(a);
+            App::refresh_home(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_close_requested(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            App::close_note(&app, &id);
+            App::refresh_home(&app);
+            crate::maybe_quit(&app);
         });
     }
 

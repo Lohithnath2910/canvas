@@ -4,13 +4,13 @@ import { Motion } from "theme/motion.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
-import { IconPalette, IconPin, IconTrash } from "theme/icons.slint";
+import { IconPalette, IconPin, IconTrash, IconX } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
 
 export { WidgetState }
 
 export component StickyNoteWindow inherits Window {
-    in property <string> note-title: "UNTITLED";
+    in-out property <string> note-title: "UNTITLED";
     in-out property <string> note-text: "";
     in property <WidgetState> strip-state: WidgetState.idle;
     in property <int> peer-count: 0;
@@ -25,6 +25,8 @@ export component StickyNoteWindow inherits Window {
     callback tone-changed(int);
     callback pin-toggled(bool);
     callback delete-confirmed();
+    callback title-edited(string);
+    callback close-requested();
 
     preferred-width: Layout.note-w + 2 * Layout.plate-margin;
     preferred-height: Layout.note-h + 2 * Layout.plate-margin;
@@ -37,6 +39,7 @@ export component StickyNoteWindow inherits Window {
 
     property <bool> dragging: false;
     property <bool> confirming-delete: false;
+    property <bool> editing-title: false;
     property <bool> body-empty: root.note-text == "";
 
     property <int> dev-state: -1;
@@ -71,6 +74,8 @@ export component StickyNoteWindow inherits Window {
         || colour-btn.hovered || colour-btn.focused
         || pin-btn.hovered || pin-btn.focused
         || trash-btn.hovered || trash-btn.focused
+        || close-btn.hovered || close-btn.focused
+        || root.editing-title
         || body-input.has-focus;
 
     property <length> confirm-h: 75px;
@@ -152,7 +157,7 @@ export component StickyNoteWindow inherits Window {
         }
 
         colour-btn := IconButton {
-            x: parent.width - Layout.pad - Layout.cluster-w;
+            x: parent.width - Layout.pad - 88px;
             y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
@@ -164,7 +169,7 @@ export component StickyNoteWindow inherits Window {
         }
 
         pin-btn := IconButton {
-            x: parent.width - Layout.pad - 40px;
+            x: parent.width - Layout.pad - 64px;
             y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
@@ -178,12 +183,21 @@ export component StickyNoteWindow inherits Window {
         }
 
         trash-btn := IconButton {
+            x: parent.width - Layout.pad - 40px;
+            y: Layout.header-y;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            activated => { root.confirming-delete = true; }
+            IconTrash { stroke-color: trash-btn.glyph-color; }
+        }
+
+        close-btn := IconButton {
             x: parent.width - Layout.pad - Layout.icon-size;
             y: Layout.header-y;
             width: Layout.icon-size;
             revealed: root.controls-visible;
-            activated => { root.confirming-delete = true; }
-            IconTrash { stroke-color: trash-btn.glyph-color; }
+            activated => { root.close-requested(); }
+            IconX { stroke-color: close-btn.glyph-color; }
         }
 
         drag-area := TouchArea {
@@ -207,6 +221,7 @@ export component StickyNoteWindow inherits Window {
                     root.drag-ended();
                 }
             }
+            double-clicked => { root.editing-title = true; }
         }
 
         Rectangle {
@@ -224,7 +239,7 @@ export component StickyNoteWindow inherits Window {
             }
         }
 
-        Text {
+        if !root.editing-title: Text {
             x: Layout.title-x;
             y: Layout.header-y;
             width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
@@ -238,6 +253,48 @@ export component StickyNoteWindow inherits Window {
             horizontal-alignment: left;
             overflow: elide;
             wrap: no-wrap;
+        }
+
+        if root.editing-title: Rectangle {
+            x: Layout.title-x - 6px;
+            y: Layout.header-y;
+            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            height: Layout.header-h;
+            background: Palette.elev-recessed;
+            border-radius: Layout.radius-control;
+            border-width: 1px;
+            border-color: Palette.edge;
+
+            title-input := TextInput {
+                x: 6px;
+                y: 0;
+                width: parent.width - 12px;
+                height: parent.height;
+                text: root.note-title;
+                single-line: true;
+                vertical-alignment: center;
+                color: Palette.text;
+                selection-background-color: Palette.edge;
+                selection-foreground-color: Palette.text;
+                text-cursor-width: 2px;
+                font-family: Typography.interface-face;
+                font-size: Typography.title-size;
+                letter-spacing: Typography.title-tracking;
+                init => { self.focus(); self.select-all(); }
+                edited => { root.title-edited(self.text); }
+                accepted => {
+                    root.editing-title = false;
+                    body-input.focus();
+                }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.editing-title = false;
+                        body-input.focus();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
         }
 
         Rectangle {

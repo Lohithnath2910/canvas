@@ -311,3 +311,35 @@ is the next task and not a later one.
   Widget type is shown by its own glyph on each row, which is what will make todo,
   kanban and calendar rows legible later without further work.
 - Memory with home plus one note open: 35.4 MB working set (debug build).
+
+### 2026-08-24 — Rename, close, and the saving path (user review)
+
+Three issues raised after using the app. All three were real.
+
+**1. Notes could not be renamed — every note was `UNTITLED` forever.**
+- ✅ **Double-click the header to rename.** The title becomes a `TextInput` in a recessed
+  field, text pre-selected; Enter or Esc returns to the body. Every keystroke commits, so
+  clicking away never loses the edit. An empty title falls back to `UNTITLED`.
+- Double-click rather than single-click deliberately: the header is also the drag region,
+  and giving the title its own `TouchArea` would put two of them in the same screen
+  region, which is the §13.3 failure mode. `double-clicked` on the existing drag
+  `TouchArea` avoids that entirely — one touch region, two gestures.
+
+**2. Notes could only be deleted, never closed.**
+- ✅ **A close control (`x`) is now the rightmost header icon.** Cluster is
+  colour · pin · delete · close, 88px wide. Close hides the window and clears the `open`
+  flag; the note keeps its text, position, tone and pin, and reopens from home unchanged.
+- The data layer already supported this (S1-21) — there was simply no way to reach it
+  from the UI, which is exactly the gap reported.
+
+**3. "The saving part is not so clean" — correct, and it was my bug.**
+- ❌ **Was:** every single keystroke performed a synchronous SQLite INSERT into
+  `revision_history`. The previous entry in this log claims "nothing touches disk on the
+  keystroke path" — **that claim was wrong**, and only the snapshot was actually
+  debounced.
+- ✅ **Now:** updates accumulate in an in-memory `pending_updates` buffer and are written
+  in a batch by the 500ms flush timer, alongside the snapshot. A keystroke now touches no
+  disk at all. Buffered updates are also drained on close, on delete and on quit, so
+  nothing is dropped.
+- This is what Hard Constraint 2 actually asks for. The earlier claim should not have
+  been written without checking the write path.
