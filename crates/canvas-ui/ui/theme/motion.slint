@@ -1,34 +1,24 @@
-// Motion. CLAUDE.md §5.5.
-//
-// ONE easing curve for the whole product: cubic-bezier(0.2, 0, 0, 1).
-// No scale, no overshoot, no bounce, no tilt anywhere (rule 5).
-//
-// Reduced motion is required for sign-off, not a deferred nice-to-have: all
-// travel, stepping and shadow motion goes off and a 100ms crossfade replaces
-// it. Dots hold their final state.
 
 export global Motion {
     in-out property <bool> reduced: false;
 
     out property <easing> standard: cubic-bezier(0.2, 0, 0, 1);
 
-    // Widget open: opacity 0→1, translateY 6px→0. No scale.
     out property <duration> open: root.reduced ? 100ms : 160ms;
-    // Widget close: opacity 1→0 only.
+
     out property <duration> close: 100ms;
-    // Control press: background steps to the next grey level.
+
     out property <duration> press: root.reduced ? 100ms : 80ms;
-    // Hover reveal: opacity / fill / border-colour only.
+
     out property <duration> hover: 100ms;
-    // Drag is 1:1 pointer follow with no inertia; only the shadow animates.
+
     out property <duration> drag-shadow: root.reduced ? 0ms : 100ms;
-    // Dot state change: STEPPED, never interpolated (rule 4).
+
     out property <duration> dot-step: 120ms;
-    // Presence cursor: linear, never snaps.
+
     out property <duration> presence: root.reduced ? 0ms : 80ms;
-    // Caret: 2-step hard switch, no fade.
+
     out property <duration> caret-blink: 1000ms;
 
-    // Travel distance for the open animation, suppressed under reduced motion.
     out property <length> open-rise: root.reduced ? 0px : 6px;
 }

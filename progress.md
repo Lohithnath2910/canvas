@@ -106,3 +106,27 @@ unproven against the actually-installed crate versions.
   the glyph strip's other six states. All await a verification pass.
 - ❌ Nothing is persisted yet. No CRDT, no SQLite. `canvas-doc`, `canvas-storage` and
   `canvas-sync` are still empty stubs.
+
+### 2026-08-24 — User-directed design revisions
+
+Three spec deviations, all decided by the user after looking at the running app.
+They override the corresponding spec values from here on:
+
+- ✅ **Glyph strip is 8×8 cells with 4px gaps (56×8 total)**, not §6.2's 3×3/2px/23×3.
+  At spec size it was unreadable on a real screen. `Layout.dot-size`, `dot-gap`,
+  `strip-w`, `strip-h` carry it; the title's left edge moves 51 → 84 to follow.
+- ✅ **Header content is vertically centred in its band**: 8px above, 8px below,
+  rather than §7.1's 16 above / 0 below. Band total stays 48px, so every body-box
+  measurement in §7.3 still holds exactly.
+- ✅ **Empty state is a true placeholder**, not §7.6 state 1's two-line block:
+  one line of `NOTHING HERE YET` at 25% opacity sitting on the body's first line,
+  caret at its start. "Start typing." is removed — it was what pushed the caret
+  down a line.
+
+- ✅ **All code comments removed, and no new ones will be written.** User instruction.
+  The reasoning behind the non-obvious code (the §13.3 disjoint-TouchArea header
+  partition, the §13.4 explicit-size requirement on the glyph strip, why the body uses
+  bare `TextInput` rather than `TextEdit`) now lives only in TASKS.md, this log, and
+  the git history. Anyone editing the .slint files should read those first — the code
+  no longer warns you at the point of the mistake.
+- ✅ `cargo clippy --workspace --all-targets` still clean after the strip.

@@ -1,23 +1,16 @@
-// Interactive controls. CLAUDE.md §6.3, §6.9, §7.5.
 
 import { Palette } from "palette.slint";
 import { Typography } from "typography.slint";
 import { Motion } from "motion.slint";
 import { Layout } from "layout.slint";
 
-// A focusable 16px header icon.
-//
-// The hit region is wider than the glyph so the cluster tiles with no gaps and
-// no overlap — two TouchAreas must never occupy the same screen region (§13.3).
-// FocusScope is not a TouchArea, so pairing them here does not reintroduce that
-// problem; it is what makes the control reachable by Tab (§7.5).
 export component IconButton inherits Rectangle {
     in property <bool> revealed: true;
     callback activated();
 
     out property <bool> hovered: touch.has-hover;
     out property <bool> focused: focus.has-focus;
-    // Rest colour `dim`, active/hover colour `text` (§5.6).
+
     out property <color> glyph-color: (touch.has-hover || focus.has-focus)
         ? Palette.text
         : Palette.dim;
@@ -48,8 +41,6 @@ export component IconButton inherits Rectangle {
         }
     }
 
-    // Focus ring: 2px `text` at 2px offset, outside the glyph box. Radius
-    // follows the control's own radius + 2. NEVER `signal` (§6.9).
     if focus.has-focus: Rectangle {
         x: -Layout.focus-offset - Layout.focus-width;
         y: (parent.height - Layout.icon-size) / 2 - Layout.focus-offset - Layout.focus-width;
@@ -61,7 +52,6 @@ export component IconButton inherits Rectangle {
         border-radius: Layout.radius-control + Layout.focus-offset + Layout.focus-width;
     }
 
-    // Hover reveal is opacity only — the position never moves (§7.4).
     Rectangle {
         x: 0;
         y: (parent.height - Layout.icon-size) / 2;
@@ -75,11 +65,6 @@ export component IconButton inherits Rectangle {
 
 export enum ButtonVariant { default, primary, destructive }
 
-// Button — §6.3. Radius 8, padding 8/16, computed height 34px, label in the
-// interface face at 11px UPPERCASE +0.08em, never wraps.
-//
-// `signal` red appears on the destructive variant and nowhere else in this
-// component; it is one of the only two places it appears in the product.
 export component Button inherits Rectangle {
     in property <string> label;
     in property <ButtonVariant> variant: ButtonVariant.default;
@@ -111,7 +96,6 @@ export component Button inherits Rectangle {
             : root.hovered ? Palette.hover-default
             : Palette.elev-raised);
 
-    // Disabled = the whole control at 0.40 opacity.
     opacity: root.enabled ? 1.0 : 0.40;
 
     animate background { duration: Motion.press; easing: Motion.standard; }

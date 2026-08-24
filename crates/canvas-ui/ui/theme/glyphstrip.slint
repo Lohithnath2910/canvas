@@ -1,16 +1,6 @@
-// GlyphStrip — the signature element. CLAUDE.md §6.2.
-//
-// Five dot-matrix cells, 3x3 each, 2px gap, 23x3px total. The FIRST element in
-// every header, and THE ONLY STATUS INDICATOR IN THE ENTIRE PRODUCT (rule 3):
-// no sync icon, no online dot, no banner, no toast, anywhere.
-//
-// Cells are binary (rule 4) — text, dim, signal, or off. Nothing between, no
-// fade, no glow. State changes are STEPPED at 120ms per cell and must never be
-// interpolated; the first opacity tween added to a dot cell destroys the
-// product's identity.
-
 import { Palette } from "palette.slint";
 import { Motion } from "motion.slint";
+import { Layout } from "layout.slint";
 
 export enum WidgetState {
     idle,
@@ -23,23 +13,19 @@ export enum WidgetState {
 }
 
 component DotCell inherits Rectangle {
-    width: 3px;
-    height: 3px;
-    // Deliberately no `animate background` — see rule 4 above.
+    width: Layout.dot-size;
+    height: Layout.dot-size;
 }
 
 export component GlyphStrip inherits HorizontalLayout {
     in property <WidgetState> state: WidgetState.idle;
     in property <int> peer-count: 0;
 
-    spacing: 2px;
+    spacing: Layout.dot-gap;
 
     property <int> sync-step: 0;
-    // Peers fill from the right, capped at the five available cells.
     property <int> lit-peers: root.peer-count > 5 ? 5 : root.peer-count;
 
-    // Loops ONLY while sync is genuinely in flight. A decorative loop that
-    // lies about the network is worse than no indicator (§6.2).
     Timer {
         interval: Motion.dot-step;
         running: root.state == WidgetState.syncing && !Motion.reduced;
@@ -50,26 +36,20 @@ export component GlyphStrip inherits HorizontalLayout {
 
     for i in 5: DotCell {
         background:
-            // error: cell 3 (index 2) holds `signal` until resolved.
             root.state == WidgetState.error
                 ? (i == 2 ? Palette.dot-signal : Palette.dot-unlit)
-            // focused: all five lit.
             : root.state == WidgetState.focused
                 ? Palette.dot-lit
-            // offline: all five half. Offline is normal, not an error.
             : root.state == WidgetState.offline
                 ? Palette.dot-half
-            // syncing: one lit cell advances 1→5 then wraps.
             : root.state == WidgetState.syncing
                 ? (i == root.sync-step ? Palette.dot-lit : Palette.dot-unlit)
-            // peers / peers-idle: rightmost n lit, filling from the right.
             : (root.state == WidgetState.peers || root.state == WidgetState.peers-idle)
                 ? (i >= 5 - root.lit-peers
                     ? (root.state == WidgetState.peers-idle
                         ? Palette.dot-half
                         : Palette.dot-lit)
                     : Palette.dot-unlit)
-            // idle: cell 1 half, cells 2-5 unlit.
             : (i == 0 ? Palette.dot-half : Palette.dot-unlit);
     }
 }

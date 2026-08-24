@@ -1,25 +1,3 @@
-// Sticky note. CLAUDE.md §7.
-//
-// A widget is not a window — it is a readout: a flat monochrome plate that
-// shows one thing and reports its own state. The Glyph Strip is the only status
-// indicator it has (rule 3): no sync icon, no online dot, no banner, no toast.
-//
-// Vertical anatomy, which reproduces §7.3's stated body boxes exactly at all
-// three sizes (240x180 -> 206x115, 320x280 -> 286x215, 520x600 -> 486x535):
-//
-//     16   top padding
-//     32   header (fixed on every widget type at every size)
-//      1   hairline, full bleed
-//      *   body, inset 16 left and right
-//     16   bottom padding
-//
-// Horizontal header map. No two TouchAreas ever overlap (§13.3):
-//
-//     [ drag ...................... ][ colour ][ pin ][ trash ]
-//     0                          W-80      W-56    W-32     W-16
-//
-// Declaration order below is TAB ORDER (§7.5): body, colour, pin, delete.
-
 import { Palette } from "theme/palette.slint";
 import { Typography } from "theme/typography.slint";
 import { Motion } from "theme/motion.slint";
@@ -32,19 +10,14 @@ import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
 export { WidgetState }
 
 export component StickyNoteWindow inherits Window {
-    // --- In ------------------------------------------------------------------
     in property <string> note-title: "UNTITLED";
     in-out property <string> note-text: "";
     in property <WidgetState> strip-state: WidgetState.idle;
     in property <int> peer-count: 0;
     in-out property <bool> pinned: false;
-    // 0 = standard plate, 1-4 = grey steps (§5.1 plate-tone).
     in-out property <int> tone: 0;
-    // State 11. Set by the desktop layer when this widget was reached by
-    // keyboard rather than by click — see the ring's own comment below.
     in property <bool> keyboard-focused: false;
 
-    // --- Out -----------------------------------------------------------------
     callback window-moved(length, length);
     callback drag-started();
     callback drag-ended();
@@ -53,47 +26,25 @@ export component StickyNoteWindow inherits Window {
     callback pin-toggled(bool);
     callback delete-confirmed();
 
-    // --- Window --------------------------------------------------------------
-    // `width`/`height` and `min-width`/`min-height` cannot both be set on one
-    // element — the compiler rejects it outright (§13.5). Hence preferred-*.
-    // There is deliberately no max: "no maximum" means omitting the property,
-    // not setting a huge sentinel value.
     preferred-width: Layout.note-w + 2 * Layout.plate-margin;
     preferred-height: Layout.note-h + 2 * Layout.plate-margin;
     min-width: Layout.note-min-w + 2 * Layout.plate-margin;
     min-height: Layout.note-min-h + 2 * Layout.plate-margin;
     no-frame: true;
-    // Native OS-level frameless resize from any edge or corner, aspect never
-    // locked. Confirmed working in 1.17.1 — no manual pointer-tracking needed.
     resize-border-width: 6px;
-    // Transparent so the plate's drop shadow and outside focus ring have room
-    // to draw; nothing renders beyond a window's own bounds.
     background: transparent;
     title: "Canvas";
-    // §8: widgets are free-floating and always-on-top. Slint 1.17 exposes this
-    // directly on Window, so no dependency outside the closed stack is needed.
     always-on-top: true;
 
-    // --- State ---------------------------------------------------------------
     property <bool> dragging: false;
     property <bool> confirming-delete: false;
     property <bool> body-empty: root.note-text == "";
 
-    // States 2 and 3: a note with focus shows `focused`, one without shows
-    // `idle`. Any real state the app reports (syncing/offline/peers/error)
-    // outranks both — the strip must never lie about the network.
     property <WidgetState> effective-state:
         (root.strip-state == WidgetState.idle && body-input.has-focus)
             ? WidgetState.focused
             : root.strip-state;
 
-    // §7.4: revealed by the pointer entering the note, or keyboard focus
-    // entering it. Tracked as the OR of every disjoint region's own has-hover
-    // rather than one overlapping tracking layer (§13.3).
-    //
-    // Accepted scope reduction, called out in §13.3: hover over the BODY does
-    // not reveal the cluster, because a tracking layer there would sit on top
-    // of the TextInput and break caret placement. Body focus does reveal it.
     property <bool> controls-visible:
         drag-area.has-hover
         || colour-btn.hovered || colour-btn.focused
@@ -101,7 +52,6 @@ export component StickyNoteWindow inherits Window {
         || trash-btn.hovered || trash-btn.focused
         || body-input.has-focus;
 
-    // Confirm block: hairline + 12 + label 16 + 12 + button 34.
     property <length> confirm-h: 75px;
 
     plate := Panel {
@@ -113,15 +63,6 @@ export component StickyNoteWindow inherits Window {
         dragging: root.dragging;
         tone: root.tone;
 
-        // --- Focus ring on the plate (§6.9, state 11) --------------------
-        // 2px `text` at 2px offset, OUTSIDE the border, radius 20+2+2.
-        // Never `signal` — a red focus ring reads as a warning, which is a bug.
-        //
-        // Deliberately NOT driven by body focus. State 3 (filled, focused /
-        // editing) says "no border/fill/shadow change from state 2", and the
-        // body auto-focuses on open, so a ring keyed to it would be permanent
-        // and would report nothing. It is driven by the desktop layer instead,
-        // which knows whether the widget was reached by keyboard or by click.
         if root.keyboard-focused: Rectangle {
             x: -(Layout.focus-offset + Layout.focus-width);
             y: -(Layout.focus-offset + Layout.focus-width);
@@ -133,65 +74,42 @@ export component StickyNoteWindow inherits Window {
             border-radius: Layout.radius-plate + Layout.focus-offset + Layout.focus-width;
         }
 
-        // =================================================================
-        // Body — declared FIRST so it is first in the tab order (§7.5).
-        // =================================================================
         Rectangle {
             x: Layout.pad;
-            y: Layout.pad + Layout.header-h + 1px;
+            y: Layout.header-band + 1px;
             width: parent.width - 2 * Layout.pad;
             height: parent.height - self.y - Layout.pad
                 - (root.confirming-delete ? root.confirm-h : 0px);
             clip: true;
 
-            // Empty state (§7.6 state 1): the two lines, gap 8, CARET AFTER.
-            // Always present rather than behind an `if` so its height can be
-            // measured — the input is offset below it so the caret lands after
-            // the block instead of on top of the first line.
-            placeholder := VerticalLayout {
+            if root.body-empty && !root.confirming-delete: Text {
                 x: 0;
                 y: 0;
-                height: self.preferred-height;
-                opacity: (root.body-empty && !root.confirming-delete) ? 1.0 : 0.0;
-                alignment: start;
-                spacing: 8px;
-                Text {
-                    text: "NOTHING HERE YET";
-                    color: Palette.text;
-                    font-family: Typography.interface-face;
-                    font-size: Typography.title-size;
-                    letter-spacing: Typography.title-tracking;
-                }
-                Text {
-                    text: "Start typing.";
-                    color: Palette.dim;
-                    font-family: Typography.system-sans;
-                    font-size: Typography.body-size;
-                }
+                width: parent.width;
+                height: Typography.body-line;
+                text: "NOTHING HERE YET";
+                color: Palette.text;
+                opacity: Layout.placeholder-opacity;
+                font-family: Typography.interface-face;
+                font-size: Typography.title-size;
+                letter-spacing: Typography.title-tracking;
+                vertical-alignment: center;
+                overflow: elide;
+                wrap: no-wrap;
             }
 
-            // Overflow clips and scrolls at the body edge with NO visible
-            // scrollbar track — hence a bare Flickable, not a ScrollView.
             Flickable {
                 x: 0;
-                y: (root.body-empty && !root.confirming-delete)
-                    ? placeholder.height + 8px
-                    : 0px;
+                y: 0;
                 width: 100%;
-                height: parent.height - self.y;
+                height: 100%;
                 viewport-height: max(body-input.preferred-height, self.height);
 
-                // The bare TextInput primitive, NEVER std-widgets' TextEdit:
-                // the Slint compiler defaults to the `fluent` style whenever
-                // none is configured, and Fluent's TextEdit draws a 2px blue
-                // accent bar on focus that is not exposed as an overridable
-                // property (§13.2). Nothing in this product is blue.
                 body-input := TextInput {
                     width: 100%;
                     wrap: word-wrap;
                     single-line: false;
                     text <=> root.note-text;
-                    // State 10: body text steps to `dim` while confirming.
                     color: root.confirming-delete ? Palette.dim : Palette.text;
                     selection-background-color: Palette.edge;
                     selection-foreground-color: Palette.text;
@@ -201,7 +119,6 @@ export component StickyNoteWindow inherits Window {
                     read-only: root.confirming-delete;
                     edited => { root.text-edited(self.text); }
                     key-pressed(event) => {
-                        // Esc drops focus and hides the cluster (§7.5).
                         if (event.text == Key.Escape) {
                             body-input.clear-focus();
                             return accept;
@@ -212,17 +129,11 @@ export component StickyNoteWindow inherits Window {
             }
         }
 
-        // =================================================================
-        // Header controls — tab order continues: colour, pin, delete.
-        // =================================================================
         colour-btn := IconButton {
             x: parent.width - Layout.pad - Layout.cluster-w;
-            y: Layout.pad;
+            y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
-            // Cycles the plate through the grey steps. Rule 1 leaves no colour
-            // for a colour control to set, so it sets grey level instead — the
-            // same mechanism peers are distinguished by (§5.1).
             activated => {
                 root.tone = root.tone >= 4 ? 0 : root.tone + 1;
                 root.tone-changed(root.tone);
@@ -232,7 +143,7 @@ export component StickyNoteWindow inherits Window {
 
         pin-btn := IconButton {
             x: parent.width - Layout.pad - 40px;
-            y: Layout.pad;
+            y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
             activated => {
@@ -246,21 +157,18 @@ export component StickyNoteWindow inherits Window {
 
         trash-btn := IconButton {
             x: parent.width - Layout.pad - Layout.icon-size;
-            y: Layout.pad;
+            y: Layout.header-y;
             width: Layout.icon-size;
             revealed: root.controls-visible;
-            // Enter on delete opens delete-confirm; Esc cancels it (§7.5).
             activated => { root.confirming-delete = true; }
             IconTrash { stroke-color: trash-btn.glyph-color; }
         }
 
-        // Drag region — everything to the LEFT of the cluster, ending exactly
-        // where the icons begin. 1:1 pointer follow, no inertia (§5.5).
         drag-area := TouchArea {
             x: 0;
-            y: Layout.pad;
+            y: 0;
             width: parent.width - Layout.pad - Layout.cluster-w;
-            height: Layout.header-h;
+            height: Layout.header-band;
             moved => {
                 if (!root.dragging) {
                     root.dragging = true;
@@ -279,23 +187,12 @@ export component StickyNoteWindow inherits Window {
             }
         }
 
-        // Glyph strip — first element in every header, vertically centred.
-        // Wrapped in a plain Rectangle because GlyphStrip is itself a
-        // HorizontalLayout: placed directly inside another layout it gets
-        // stretched and an explicit height/y on it is silently ignored
-        // (§6.2, §13.4). It carries no TouchArea, so rendering it on top of
-        // the drag region creates no event ambiguity — only visual layering.
         Rectangle {
             x: Layout.pad;
-            y: Layout.pad;
+            y: Layout.header-y;
             width: Layout.strip-w;
             height: Layout.header-h;
             GlyphStrip {
-                // The explicit 23x3 is load-bearing. A layout element inside a
-                // plain Rectangle still expands to fill it, so without these
-                // two lines the strip becomes 23x32, its cells stretch, and
-                // `(parent.height - self.height) / 2` evaluates to 0 — which
-                // parks it against the plate's top rounded corner.
                 x: 0;
                 y: (Layout.header-h - Layout.strip-h) / 2;
                 width: Layout.strip-w;
@@ -305,10 +202,9 @@ export component StickyNoteWindow inherits Window {
             }
         }
 
-        // Title — interface face 22, UPPERCASE, ellipsis, never wraps.
         Text {
             x: Layout.title-x;
-            y: Layout.pad;
+            y: Layout.header-y;
             width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
             height: Layout.header-h;
             text: root.note-title;
@@ -322,20 +218,14 @@ export component StickyNoteWindow inherits Window {
             wrap: no-wrap;
         }
 
-        // --- Header hairline, full bleed, no inset -----------------------
         Rectangle {
             x: 0;
-            y: Layout.pad + Layout.header-h;
+            y: Layout.header-band;
             width: parent.width;
             height: 1px;
             background: Palette.edge;
         }
 
-        // =================================================================
-        // Delete confirm — §7.6 state 10. IN-WIDGET: no modal, no desktop
-        // dimming. The hairline is `edge`, not `signal`; the only red here is
-        // the destructive button's own.
-        // =================================================================
         if root.confirming-delete: Rectangle {
             x: 0;
             y: parent.height - Layout.pad - root.confirm-h;
@@ -368,7 +258,7 @@ export component StickyNoteWindow inherits Window {
                 spacing: 8px;
                 alignment: start;
 
-                delete-btn := Button {
+                Button {
                     label: "DELETE NOTE";
                     variant: ButtonVariant.destructive;
                     clicked => { root.delete-confirmed(); }
@@ -383,7 +273,6 @@ export component StickyNoteWindow inherits Window {
                 }
             }
 
-            // Esc cancels the confirm (§7.5).
             FocusScope {
                 width: 0px;
                 height: 0px;
@@ -399,6 +288,5 @@ export component StickyNoteWindow inherits Window {
         }
     }
 
-    // A newly created note starts ready to type into (§7.6 state 1, §13.2).
     init => { body-input.focus(); }
 }
