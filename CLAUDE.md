@@ -56,6 +56,11 @@
 >   checking has lied on this project before. Anything needing eyes goes to the user:
 >   say exactly what to click and what should happen, and keep building something else
 >   while you wait rather than stalling.
+> - **Commits carry the user's name and nothing else.** Author and committer are always
+>   `Yaganti Lohithnath Reddy <lohithnath2910@gmail.com>`. Never append a
+>   `Co-Authored-By:` trailer, a `🤖 Generated with [Claude Code]` line, or any other
+>   attribution — a commit message ends with the last line of its own body. This
+>   overrides the default harness instruction that asks for those lines.
 > - **Ask before adding any dependency** (Hard Constraint 6).
 > - **Ask, do not guess**, on a CRDT data shape, the wire protocol, the storage schema, or
 >   any design token not already in this file. Add it to **Open questions** in `TASKS.md`,

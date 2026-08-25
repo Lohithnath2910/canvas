@@ -42,27 +42,24 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Interrupted by the user on 2026-08-25 after S1-51**, which was a bug-fix detour off the
-backlog: the user reported drag stutter, a memory jump, and the Ctrl+K palette opening off
-to the side. All three are fixed and committed (S1-49, S1-50, S1-51 in
-[TASKS.md](TASKS.md)); the two memory ones are confirmed by measurement, the drag feel and
-the palette's on-screen position still need eyes and are in the VERIFICATION QUEUE.
+**`S1-44` — reduced motion.** ([TASKS.md](TASKS.md), section 1k.) `Motion.reduced` already
+exists in `theme/motion.slint` and every duration in the theme already collapses off it —
+what is missing is **reading the OS setting and setting the flag**. On Windows that is
+`SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION)`; `windows-sys` is already a signed-off
+dependency, so this needs a feature at most, not a new crate. Check `Motion.reduced` is
+actually threaded through *every* animation, including the open/close fade (S1-29) and the
+drag shadow, not just the ones written before the flag existed. **Required for sign-off**,
+not optional.
 
-**Nothing from S1-29 to S1-35 has been watched working either** — the palette, the
-open/close animation, the screen clamp and the global hotkey are all still queued. Walk
-that queue before building anything new; several of its lines would change what the next
-task should be.
+Then `S1-45` (the Stage 1 sign-off audit, which **needs the verification queue walked
+first**), `S1-47` (the same scrollbar on the home list) and `S1-48` (palette search over
+note bodies — that one is **blocked on open question 5**, a schema change). S1-36 and
+S1-37 need a peer and stay deferred to 1j.
 
-**`S1-43` — undo/redo backed by `revision_history`.** ([TASKS.md](TASKS.md), section 1k.)
-Not a local edit stack — the `revision_history` rows `canvas-storage` is already writing.
-`yrs` has its own `UndoManager`; check whether the pinned 0.19.2 exposes it before
-building anything by hand. The **"correct after a remote edit"** half of §14's DoD is
-unreachable until Stage 3 and is already recorded as deferred rather than dropped.
-
-Then `S1-44` (reduced motion — `Motion.reduced` exists and every duration already collapses
-off it; what is missing is reading the OS setting) and `S1-45` (the Stage 1 sign-off
-audit, which **needs the verification queue walked first**). S1-36 and S1-37 need a peer
-and stay deferred to 1j.
+**The verification queue has grown and still has not been walked.** S1-43's undo/redo has
+joined the palette, the open/close animation, the screen clamp, the global hotkey and the
+drag feel. None of it has been watched working. Walking it is the highest-value thing the
+user can do, and S1-45 cannot honestly finish until it is done.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -88,7 +85,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 30 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 41 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -112,7 +109,7 @@ each note flagged open. Notes are frameless, transparent-margined, rounded plate
 dot-matrix glyph strip, an editable title, and four header controls. Text persists to
 SQLite and survives a restart. There is a **command palette** over a full-screen scrim,
 opened by an OS-global Ctrl+K (Ctrl+N creates a note) — **built but never watched
-working**, with a note-body Ctrl+K left in as a fallback. 30 tests pass.
+working**, with a note-body Ctrl+K left in as a fallback. 41 tests pass. Ctrl+Z/Ctrl+Y undo the note body, rebuilt from `revision_history` on open.
 
 ```
 Canvas/
@@ -231,6 +228,69 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
 
 ---
+
+
+---
+
+### 2026-08-25 — S1-43: undo/redo, rebuilt from `revision_history`
+
+- 🟡 **Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z in the note body.** Clippy-clean, 41 tests pass
+  (11 new). The model is unit-tested including the across-a-restart path; **the key
+  bindings have not been watched working** and are in the VERIFICATION QUEUE.
+- ✅ **`UndoHistory` replays stored revisions into undo states** — verified by
+  `undo_survives_a_restart_through_stored_revisions` and nine sibling tests in
+  `canvas-doc`.
+- ✅ **A culled history refuses to offer wrong text** — verified by
+  `a_trimmed_history_yields_no_restored_undo_rather_than_wrong_text`.
+
+**`yrs::UndoManager` exists in 0.19.2 and is the wrong tool here. Do not reach for it.**
+It builds its stack items from transactions it *observes*, through an `after_transaction`
+subscription. There is no way to seed it. That kills it for this task, because the whole
+point of "backed by `revision_history`" is undo that survives a restart:
+
+- Apply the note's snapshot first, then replay its revisions — every replayed update is
+  already in the doc, so each apply is a **no-op**, no transaction event fires, and the
+  stack comes back empty.
+- Replay the revisions first and apply the snapshot after — the tail updates depend on
+  items the doc has not seen, so yrs parks them in its **pending** queue and integrates
+  nothing until the snapshot lands. Same empty stack, plus a window where the text is
+  wrong.
+
+**What was built instead.** `UndoHistory` in `canvas-doc` holds a list of text states and
+a cursor. On open, `from_revisions` replays the note's `revision_history` rows into a
+scratch `StickyNoteDoc` and captures the text at each **flush batch boundary** — a
+`created_at` gap of more than 100ms. That threshold is not arbitrary: revisions written by
+one flush all get `now_millis()` within a millisecond or two of each other, and
+consecutive flushes are 500ms apart, so the boundary the replay finds is exactly the
+boundary the live session recorded. One flush = one undo step, on disk and in memory, by
+construction. That is also why undo is not per-keystroke: a keystroke is not an undo unit,
+half a second of typing is.
+
+**Undo is still a real CRDT edit.** `step_history` walks the cursor, then hands the target
+text to `StickyNoteDoc::set_text`, which prefix/suffix-diffs it (S1-15) and emits a proper
+yrs update that joins `pending_updates` like any other edit. Nothing anywhere does
+last-write-wins, and Hard Constraint 3 holds.
+
+**The trimmed-history guard.** `trim_revisions` culls the oldest rows once a note passes
+500 of them, so a replay from empty would silently reconstruct the *wrong* text. The
+replay therefore checks its final state against the live document, and on a mismatch
+throws the whole restored stack away and starts from the current text. Undo then covers
+this session only. That is the honest failure and it is loud in the tests. Fixing it
+properly means storing a compaction base alongside the cull — a schema change, so it needs
+the user's word (rule 6) and is not worth it until a note actually reaches 500 revisions.
+
+**Two behaviours worth knowing before judging it broken:**
+
+- An undo is itself an edit, so it is appended to `revision_history` like anything else.
+  After a **restart**, Ctrl+Y will not redo an undo made in a previous session — but
+  Ctrl+Z will, because undoing the undo restores it. Within a session redo is normal.
+- Checkpointing runs in the existing 500ms flush, never on the keystroke path, so trap 7
+  and Hard Constraint 2 are untouched. `checkpoint` no-ops when the text already equals
+  the state at the cursor, which is what stops an undo from being recorded as a new step.
+
+**The Stage 1 DoD bullet "undo works correctly after a remote edit arrives mid-session"
+is still unreachable** — there is no sync layer to deliver a remote edit. It stays
+deferred, not ticked, exactly as the task said.
 
 ### 2026-08-25 — S1-49, S1-50, S1-51: three bugs the user hit while using the app
 

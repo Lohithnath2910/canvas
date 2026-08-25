@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-43` — undo/redo backed by `revision_history`
+**Current task:** `S1-44` — reduced motion
 **Stage:** 1 — Sticky note + app shell
-**Done:** 23 ticked, 46 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks)
-**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Done:** 23 ticked, 46 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 41 tests pass.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -189,6 +189,24 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
       and logged as **S1-48**, not a bug
 - [ ] 🟡 `New todo` and `Settings` do nothing — there is no todo type until Stage W and no
       settings screen at all. Both print a line to the console instead of pretending
+
+
+**Undo / redo** → **S1-43**
+- [ ] Type a sentence into a note, wait a second, type another, then press **Ctrl+Z** —
+      the second sentence goes and the first stays. Ctrl+Z again clears the first.
+      **Ctrl+Y** (or **Ctrl+Shift+Z**) puts each one back
+- [ ] Undo far enough that the note is empty — `NOTHING HERE YET` comes back and further
+      Ctrl+Z does nothing (no crash, no flicker)
+- [ ] Undo once, then type a new word — Ctrl+Y must now do **nothing**: the redo tail is
+      gone, which is correct
+- [ ] **The restart one.** Type three separate sentences, pausing ~1s between each. Close
+      the note's window with `x`, reopen it from the home list, and press Ctrl+Z — it must
+      still walk back through those three sentences. Now quit from the tray, relaunch, and
+      do the same
+- [ ] Undo, then check the home row's preview line updates to match
+- [ ] 🟡 An undo is itself recorded as a forward step on disk. So after a **restart**,
+      Ctrl+Y will not redo an undo made in the previous session — Ctrl+Z will, because it
+      undoes the undo. Deliberate, not a bug
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -689,7 +707,21 @@ exist yet (rule 3).
   operates on the plain-text doc. Backed by the stored revision history, **not** a local
   edit stack — a local stack gives wrong results as soon as a remote edit interleaves, and
   building it as a stack now would only have to be thrown away at Stage 3.
-  *DoD:* undo/redo correct across a restart, single-player. The named Stage 1 DoD bullet
+  **Built 2026-08-25 as `UndoHistory` in `canvas-doc`.** `yrs::UndoManager` exists in
+  0.19.2 and was rejected for a specific reason: its stack items are built from observed
+  transactions, so it **cannot be seeded from stored updates** — replaying a note's
+  revisions onto a doc that already holds the snapshot is a no-op and produces no stack at
+  all, which kills the across-a-restart half of the DoD. `UndoHistory` instead replays
+  `revision_history` into a scratch doc and captures the text at each flush batch
+  boundary (`created_at` gap > 100ms; batches land ~500ms apart because the flush timer
+  does). Undo/redo then walk those states and re-enter the live doc through
+  `StickyNoteDoc::set_text`, so every step is still a real CRDT diff and no code path
+  does last-write-wins. If the replay's final text does not match the live doc — which is
+  what a `trim_revisions` cull looks like — the restored stack is discarded rather than
+  offering wrong text. Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z in the note body.
+  *DoD:* undo/redo correct across a restart, single-player. 🟡 — the model is unit-tested
+  (10 tests, including the restart path), but the key bindings have not been watched
+  working. In the verification queue. The named Stage 1 DoD bullet
   — *"undo works correctly after a remote edit arrives mid-session"* — **cannot be
   satisfied until Stage 3 exists.** Mark that half 🟡 with this reason; do not tick it and
   do not fake a remote edit.

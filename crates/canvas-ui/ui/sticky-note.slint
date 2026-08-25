@@ -28,6 +28,8 @@ export component StickyNoteWindow inherits Window {
     callback title-edited(string);
     callback close-requested();
     callback palette-requested();
+    callback undo-requested();
+    callback redo-requested();
 
     preferred-width: Layout.note-w + 2 * Layout.plate-margin;
     preferred-height: Layout.note-h + 2 * Layout.plate-margin;
@@ -156,6 +158,18 @@ export component StickyNoteWindow inherits Window {
                     key-pressed(event) => {
                         if (event.text == Key.Escape) {
                             body-input.clear-focus();
+                            return accept;
+                        }
+                        if (event.modifiers.control && (event.text == "z" || event.text == "Z")) {
+                            if (event.modifiers.shift) {
+                                root.redo-requested();
+                            } else {
+                                root.undo-requested();
+                            }
+                            return accept;
+                        }
+                        if (event.modifiers.control && (event.text == "y" || event.text == "Y")) {
+                            root.redo-requested();
                             return accept;
                         }
                         if (event.modifiers.control && event.text == "k") {

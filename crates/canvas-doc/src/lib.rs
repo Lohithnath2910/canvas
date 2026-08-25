@@ -89,6 +89,107 @@ impl StickyNoteDoc {
     }
 }
 
+pub const BATCH_GAP_MS: i64 = 100;
+pub const MAX_CHECKPOINTS: usize = 200;
+
+pub struct UndoHistory {
+    states: Vec<String>,
+    cursor: usize,
+    restored: bool,
+}
+
+impl UndoHistory {
+    pub fn new(current: &str) -> Self {
+        Self {
+            states: vec![current.to_string()],
+            cursor: 0,
+            restored: false,
+        }
+    }
+
+    pub fn from_revisions(revisions: &[(Vec<u8>, i64)], current: &str) -> Self {
+        let replay = StickyNoteDoc::new();
+        let mut states = vec![String::new()];
+        let mut previous: Option<i64> = None;
+
+        for (blob, created_at) in revisions {
+            if previous.is_some_and(|prev| created_at - prev > BATCH_GAP_MS) {
+                push_state(&mut states, replay.get_text());
+            }
+            if !replay.apply_update(blob) {
+                return Self::new(current);
+            }
+            previous = Some(*created_at);
+        }
+        push_state(&mut states, replay.get_text());
+
+        if states.last().map(String::as_str) != Some(current) {
+            return Self::new(current);
+        }
+
+        let cursor = states.len() - 1;
+        Self {
+            states,
+            cursor,
+            restored: cursor > 0,
+        }
+    }
+
+    pub fn restored(&self) -> bool {
+        self.restored
+    }
+
+    pub fn depth(&self) -> usize {
+        self.states.len()
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.cursor > 0
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.cursor + 1 < self.states.len()
+    }
+
+    pub fn checkpoint(&mut self, text: &str) {
+        if self.states[self.cursor] == text {
+            return;
+        }
+        self.states.truncate(self.cursor + 1);
+        self.states.push(text.to_string());
+        while self.states.len() > MAX_CHECKPOINTS {
+            self.states.remove(0);
+        }
+        self.cursor = self.states.len() - 1;
+    }
+
+    pub fn undo(&mut self) -> Option<&str> {
+        if !self.can_undo() {
+            return None;
+        }
+        self.cursor -= 1;
+        Some(&self.states[self.cursor])
+    }
+
+    pub fn redo(&mut self) -> Option<&str> {
+        if !self.can_redo() {
+            return None;
+        }
+        self.cursor += 1;
+        Some(&self.states[self.cursor])
+    }
+}
+
+fn push_state(states: &mut Vec<String>, text: String) {
+    if states.last().is_some_and(|last| *last == text) {
+        return;
+    }
+    states.push(text);
+    while states.len() > MAX_CHECKPOINTS {
+        states.remove(0);
+    }
+}
+
 fn common_affixes(old: &str, new: &str) -> (usize, usize) {
     let ob = old.as_bytes();
     let nb = new.as_bytes();
@@ -120,6 +221,124 @@ fn common_affixes(old: &str, new: &str) -> (usize, usize) {
 mod tests {
     use super::*;
 
+    fn recorded(edits: &[&str]) -> (Vec<(Vec<u8>, i64)>, String) {
+        let doc = StickyNoteDoc::new();
+        let mut revisions = Vec::new();
+        let mut clock = 1_000i64;
+        for text in edits {
+            if let Some(update) = doc.set_text(text) {
+                revisions.push((update, clock));
+            }
+            clock += 500;
+        }
+        (revisions, doc.get_text())
+    }
+
+    #[test]
+    fn history_replays_one_step_per_flush_batch() {
+        let (revisions, current) = recorded(&["a", "ab", "abc"]);
+        let history = UndoHistory::from_revisions(&revisions, &current);
+        assert!(history.restored());
+        assert_eq!(history.depth(), 4);
+    }
+
+    #[test]
+    fn history_groups_revisions_written_in_the_same_batch() {
+        let doc = StickyNoteDoc::new();
+        let mut revisions = Vec::new();
+        for text in ["h", "he", "hel", "hell", "hello"] {
+            revisions.push((doc.set_text(text).unwrap(), 5_000));
+        }
+        let history = UndoHistory::from_revisions(&revisions, &doc.get_text());
+        assert_eq!(history.depth(), 2);
+    }
+
+    #[test]
+    fn undo_walks_back_through_replayed_states() {
+        let (revisions, current) = recorded(&["one", "one two", "one two three"]);
+        let mut history = UndoHistory::from_revisions(&revisions, &current);
+        assert_eq!(history.undo(), Some("one two"));
+        assert_eq!(history.undo(), Some("one"));
+        assert_eq!(history.undo(), Some(""));
+        assert_eq!(history.undo(), None);
+    }
+
+    #[test]
+    fn redo_walks_forward_again() {
+        let (revisions, current) = recorded(&["one", "one two"]);
+        let mut history = UndoHistory::from_revisions(&revisions, &current);
+        history.undo();
+        history.undo();
+        assert_eq!(history.redo(), Some("one"));
+        assert_eq!(history.redo(), Some("one two"));
+        assert_eq!(history.redo(), None);
+    }
+
+    #[test]
+    fn a_new_edit_after_an_undo_drops_the_redo_tail() {
+        let (revisions, current) = recorded(&["a", "ab"]);
+        let mut history = UndoHistory::from_revisions(&revisions, &current);
+        history.undo();
+        assert!(history.can_redo());
+        history.checkpoint("aZ");
+        assert!(!history.can_redo());
+        assert_eq!(history.undo(), Some("a"));
+    }
+
+    #[test]
+    fn restoring_a_state_is_not_recorded_as_a_new_one() {
+        let mut history = UndoHistory::new("");
+        history.checkpoint("a");
+        history.checkpoint("ab");
+        let target = history.undo().unwrap().to_string();
+        history.checkpoint(&target);
+        assert!(history.can_redo());
+        assert_eq!(history.depth(), 3);
+    }
+
+    #[test]
+    fn a_trimmed_history_yields_no_restored_undo_rather_than_wrong_text() {
+        let (mut revisions, current) = recorded(&["alpha", "alpha beta", "alpha beta gamma"]);
+        revisions.remove(0);
+        let history = UndoHistory::from_revisions(&revisions, &current);
+        assert!(!history.restored());
+        assert!(!history.can_undo());
+    }
+
+    #[test]
+    fn an_empty_history_starts_at_the_current_text() {
+        let history = UndoHistory::from_revisions(&[], "");
+        assert!(!history.can_undo());
+        assert!(!history.can_redo());
+        assert_eq!(history.depth(), 1);
+    }
+
+    #[test]
+    fn checkpoints_stay_bounded() {
+        let mut history = UndoHistory::new("");
+        for i in 0..(MAX_CHECKPOINTS + 50) {
+            history.checkpoint(&format!("state {i}"));
+        }
+        assert_eq!(history.depth(), MAX_CHECKPOINTS);
+    }
+
+    #[test]
+    fn undo_survives_a_restart_through_stored_revisions() {
+        let doc = StickyNoteDoc::new();
+        let mut revisions = Vec::new();
+        let mut clock = 1_000i64;
+        for text in ["draft", "draft two", "draft three"] {
+            revisions.push((doc.set_text(text).unwrap(), clock));
+            clock += 500;
+        }
+        let snapshot = doc.snapshot();
+
+        let reopened = StickyNoteDoc::load(&snapshot);
+        let mut history = UndoHistory::from_revisions(&revisions, &reopened.get_text());
+        let target = history.undo().unwrap().to_string();
+        reopened.set_text(&target);
+        assert_eq!(reopened.get_text(), "draft two");
+    }
     #[test]
     fn round_trips_through_snapshot() {
         let doc = StickyNoteDoc::new();

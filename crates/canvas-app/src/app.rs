@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use slint::ComponentHandle;
 
-use canvas_doc::StickyNoteDoc;
+use canvas_doc::{StickyNoteDoc, UndoHistory};
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
     platform_system_sans, CanvasTray, HomeWindow, NoteRow, PaletteRow, PaletteWindow,
@@ -143,6 +143,7 @@ struct Note {
     window: StickyNoteWindow,
     doc: StickyNoteDoc,
     placement: WindowPlacement,
+    history: UndoHistory,
     pending_updates: Vec<Vec<u8>>,
     text_dirty: bool,
     placement_dirty: bool,
@@ -377,7 +378,7 @@ impl App {
             return Ok(());
         }
 
-        let (title, placement, doc) = {
+        let (title, placement, doc, history) = {
             let a = app.borrow();
             let widget = a
                 .store
@@ -391,7 +392,9 @@ impl App {
                 Some(bytes) if !bytes.is_empty() => StickyNoteDoc::load(&bytes),
                 _ => StickyNoteDoc::new(),
             };
-            (widget.title, placement, doc)
+            let revisions = a.store.revisions_with_time(id).unwrap_or_default();
+            let history = UndoHistory::from_revisions(&revisions, &doc.get_text());
+            (widget.title, placement, doc, history)
         };
 
         let window = StickyNoteWindow::new()?;
@@ -417,6 +420,7 @@ impl App {
             Note {
                 window: window.clone_strong(),
                 doc,
+                history,
                 placement,
                 pending_updates: Vec::new(),
                 text_dirty: false,
@@ -469,6 +473,40 @@ impl App {
         let _ = a.store.delete_widget(id);
     }
 
+    pub fn undo_note(app: &SharedApp, id: &str) {
+        App::step_history(app, id, true);
+    }
+
+    pub fn redo_note(app: &SharedApp, id: &str) {
+        App::step_history(app, id, false);
+    }
+
+    fn step_history(app: &SharedApp, id: &str, backwards: bool) {
+        let restored = {
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            let Some(note) = a.notes.get_mut(id) else {
+                return;
+            };
+            let step = if backwards {
+                note.history.undo()
+            } else {
+                note.history.redo()
+            };
+            let Some(target) = step.map(str::to_string) else {
+                return;
+            };
+            if let Some(update) = note.doc.set_text(&target) {
+                note.pending_updates.push(update);
+                note.text_dirty = true;
+            }
+            (note.window.clone_strong(), target)
+        };
+        restored.0.set_note_text(restored.1.into());
+        App::refresh_home(app);
+    }
+
     pub fn open_count(app: &SharedApp) -> usize {
         app.borrow().notes.len()
     }
@@ -491,6 +529,7 @@ impl App {
                     }
                     let _ = store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
                     let _ = store.touch(id);
+                    note.history.checkpoint(&note.doc.get_text());
                     note.text_dirty = false;
                 }
                 if note.placement_dirty {
@@ -510,6 +549,7 @@ impl App {
             }
             let _ = store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
             let _ = store.save_placement(id, &note.placement);
+            note.history.checkpoint(&note.doc.get_text());
             note.text_dirty = false;
             note.placement_dirty = false;
         }
@@ -671,6 +711,26 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
         window.on_palette_requested(move || {
             if let Some(app) = weak.upgrade() {
                 App::show_palette(&app);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_undo_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::undo_note(&app, &id);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_redo_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::redo_note(&app, &id);
             }
         });
     }

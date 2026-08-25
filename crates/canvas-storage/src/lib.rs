@@ -382,6 +382,14 @@ impl Store {
         rows.collect()
     }
 
+    pub fn revisions_with_time(&self, id: &str) -> Result<Vec<(Vec<u8>, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT update_blob, created_at FROM revision_history
+             WHERE widget_id = ?1 ORDER BY created_at ASC, rowid ASC",
+        )?;
+        let rows = stmt.query_map(params![id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect()
+    }
     fn trim_revisions(&self, id: &str) -> Result<()> {
         const HIGH_WATER: i64 = 500;
         const KEEP: i64 = 200;
@@ -450,6 +458,20 @@ mod tests {
         Store::open_in_memory().expect("in-memory store")
     }
 
+    #[test]
+    fn revisions_come_back_with_their_timestamps_in_order() {
+        let s = store();
+        let (w, _) = s.create_widget(KIND_STICKY_NOTE).unwrap();
+        s.append_revision(&w.id, b"first").unwrap();
+        s.append_revision(&w.id, b"second").unwrap();
+
+        let rows = s.revisions_with_time(&w.id).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].0, b"first");
+        assert_eq!(rows[1].0, b"second");
+        assert!(rows[0].1 <= rows[1].1);
+        assert!(rows[0].1 > 0);
+    }
     #[test]
     fn creates_every_table() {
         let s = store();
