@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `SW-02` — home: a create control per type
+**Current task:** `SW-04` — `TodoListDoc` in `canvas-doc` (SW-02 is skipped until a second type exists)
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
 **Done:** 23 ticked, 46 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 41 tests pass.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -248,6 +248,31 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
 - [ ] Ctrl+K and type a note's title — the result row's 24px glyph is the **note** glyph.
       SW-01 made the palette pick its glyph by widget type instead of hardcoding `note`,
       so this is the line that proves the mapping still resolves → **S1-34**
+
+
+**The four library components** → **SW-03**
+
+`cargo run -p canvas-app -- --gallery` opens a dev-only window with all four in every
+state §6 lists. Check each against §6's own table.
+
+- [ ] **Checkbox box is a 16×16 SQUARE with barely-rounded corners**, not a disc. That is
+      the whole reason §5.4 carves out 2px for it
+- [ ] Checked shows **no tick** — the fill going white *is* the state
+- [ ] Hover a checkbox: the box border steps `edge` → `dim`, the label does not move
+- [ ] The completed row's label is `dim` with a 1px strike **that stops where the text
+      stops**, not one running to the edge of the row
+- [ ] Tab to a checkbox and press Space — it toggles, and the focus ring is a 2px **white**
+      square ring around the box. Never red (§6.9)
+- [ ] Tag: rest is dark with a dim label and a hairline border; active is a solid white
+      pill with black text and **no** border. Both fully round
+- [ ] TextField: hover the first one — the border steps `edge` → `dim`. **Click into it and
+      check the caret lands where you clicked**, not just at the end. That is the specific
+      thing the nested-TouchArea decision could have broken
+- [ ] The error field's border is red and **nothing else is** — no red text, no icon, no
+      message inside the field (§6.6)
+- [ ] Focused field: 2px white ring sitting 2px outside the border, corners following it
+- [ ] The disabled field is uniformly faded, text included, and will not take a caret
+- [ ] Divider is a 1px hairline running the full width with no inset at either end
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -936,6 +961,13 @@ because the app is currently hardcoded to a single type.
   §5.6 glyph — the row glyphs in `home.slint` already exist and already pick correctly by
   kind, so the list side needs no work. New widgets get their own type's default size
   (already correct in `canvas-storage`) and the title `UNTITLED`.
+  **Skipped 2026-08-25 — deliberately out of order, not blocked.** Its DoD is *"each type
+  creatable from home … opens its own window"*, and today the sticky note is the only type
+  with a window, so building the strip now produces one control that already exists plus
+  a row of buttons that would print "no window yet" to the console. The runtime side it
+  needs is already done: `App::create_widget(app, kind)` landed with SW-01 and
+  `create_note` is a one-line wrapper over it. **Come back to this once SW-05 gives it a
+  second real type to offer.**
   *DoD:* each type creatable from home, appears in the list with the right glyph, opens
   its own window, and survives a restart.
 
@@ -944,7 +976,25 @@ because the app is currently hardcoded to a single type.
   Build `Checkbox` (§6.4 — radius **2px**, not 8px: 8px on a 16×16 box renders as a disc,
   and there is **no tick glyph**, the fill *is* the state), `Tag` (§6.5), `Divider` (§6.7),
   `TextField` (§6.6).
+  **Built 2026-08-25**, all four in `theme/controls.slint`, plus the §6 numbers they need
+  as tokens in `theme/layout.slint` (`checkbox-size/gap/row-h`, `tag-h`, `tag-pad-x`,
+  `field-h`, `field-pad-x`, `field-gap`). Every one is a number §6 already states — none
+  invented. Labels use `Typography.body-face`, which the override table makes Silkscreen,
+  not the spec's system sans.
+  **`TextField` needs a hover border, and that looked like it collided with trap 6.** It
+  does not: `TouchArea::input_event_filter_before_children` returns
+  `ForwardAndInterceptGrab`, so a `TouchArea` **forwards pointer events to its own
+  children** and only claims the grab if no child takes it. Trap 6 is about *sibling*
+  areas overlapping, not a parent wrapping its child. So the `TextInput` sits inside the
+  hover `TouchArea` and still gets its own clicks and caret placement.
+  **The DoD needs somewhere to look, so `--gallery` exists.** `cargo run -p canvas-app --
+  --gallery` opens a dev-only window showing all four in every state §6 lists, including
+  the ones no real widget will reach for a while (`Tag` active, `TextField` error and
+  disabled). It is a harness, not product UI, and it is the only way this DoD can be
+  checked before SW-05 exists.
   *DoD:* each rendered against its §6 table by eye, in every state the table lists.
+  🟡 **needs eyes** — the window opens and stays up, but nothing in it has been looked at.
+  In the verification queue.
 
 ### Wb — Todo
 

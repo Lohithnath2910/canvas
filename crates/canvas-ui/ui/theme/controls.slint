@@ -198,3 +198,220 @@ export component ScrollBar inherits Rectangle {
         animate background { duration: Motion.hover; easing: Ease.standard; }
     }
 }
+
+export component Checkbox inherits Rectangle {
+    in property <bool> checked: false;
+    in property <bool> completed: false;
+    in property <string> label: "";
+    in property <bool> enabled: true;
+    callback toggled();
+
+    out property <bool> focused: focus.has-focus;
+    out property <bool> hovered: touch.has-hover;
+
+    height: Layout.checkbox-row-h;
+    opacity: root.enabled ? 1.0 : 0.40;
+
+    public function take-focus() { focus.focus(); }
+
+    focus := FocusScope {
+        width: 100%;
+        height: 100%;
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.toggled();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            focus.focus();
+            root.toggled();
+        }
+    }
+
+    box := Rectangle {
+        x: 0;
+        y: (parent.height - Layout.checkbox-size) / 2;
+        width: Layout.checkbox-size;
+        height: Layout.checkbox-size;
+        border-radius: Layout.radius-checkbox;
+        border-width: 1px;
+        border-color: root.checked
+            ? Palette.text
+            : (touch.has-hover ? Palette.dim : Palette.edge);
+        background: root.checked ? Palette.text : Palette.elev-recessed;
+        animate background, border-color { duration: Motion.press; easing: Ease.standard; }
+    }
+
+    label-text := Text {
+        x: Layout.checkbox-size + Layout.checkbox-gap;
+        y: 0;
+        width: parent.width - self.x;
+        height: parent.height;
+        vertical-alignment: center;
+        text: root.label;
+        color: root.completed ? Palette.dim : Palette.text;
+        font-family: Typography.body-face;
+        font-size: Typography.body-size;
+        overflow: elide;
+        wrap: no-wrap;
+    }
+
+    if root.completed: Rectangle {
+        x: label-text.x;
+        y: parent.height / 2;
+        width: min(label-text.preferred-width, label-text.width);
+        height: 1px;
+        background: Palette.dim;
+    }
+
+    if focus.has-focus: Rectangle {
+        x: box.x - Layout.focus-offset - Layout.focus-width;
+        y: box.y - Layout.focus-offset - Layout.focus-width;
+        width: Layout.checkbox-size + 2 * (Layout.focus-offset + Layout.focus-width);
+        height: Layout.checkbox-size + 2 * (Layout.focus-offset + Layout.focus-width);
+        background: transparent;
+        border-width: Layout.focus-width;
+        border-color: Palette.text;
+        border-radius: Layout.radius-checkbox + Layout.focus-offset + Layout.focus-width;
+    }
+}
+
+export component Tag inherits Rectangle {
+    in property <string> label: "";
+    in property <bool> active: false;
+
+    height: Layout.tag-h;
+    width: tag-label.width + 2 * Layout.tag-pad-x;
+    border-radius: Layout.radius-pill;
+    border-width: root.active ? 0px : 1px;
+    border-color: Palette.edge;
+    background: root.active ? Palette.text : Palette.elev-raised;
+
+    tag-label := Text {
+        x: Layout.tag-pad-x;
+        y: (parent.height - self.height) / 2;
+        text: root.label;
+        color: root.active ? Palette.base : Palette.dim;
+        font-family: Typography.interface-face;
+        font-size: Typography.label-size;
+        letter-spacing: Typography.label-tracking;
+        wrap: no-wrap;
+    }
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Palette.edge;
+}
+
+export component TextField inherits Rectangle {
+    in property <string> label: "";
+    in property <string> placeholder: "";
+    in property <bool> error: false;
+    in property <bool> enabled: true;
+    in-out property <string> text: "";
+    callback edited(string);
+    callback accepted(string);
+
+    out property <bool> focused: input.has-focus;
+
+    property <length> label-h: root.label == "" ? 0px : Typography.label-line;
+    property <length> label-gap: root.label == "" ? 0px : Layout.field-gap;
+
+    height: root.label-h + root.label-gap + Layout.field-h;
+    opacity: root.enabled ? 1.0 : 0.40;
+
+    public function take-focus() { input.focus(); }
+
+    if root.label != "": Text {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: Typography.label-line;
+        vertical-alignment: center;
+        text: root.label;
+        color: Palette.dim;
+        font-family: Typography.interface-face;
+        font-size: Typography.label-size;
+        letter-spacing: Typography.label-tracking;
+        overflow: elide;
+        wrap: no-wrap;
+    }
+
+    frame := Rectangle {
+        x: 0;
+        y: root.label-h + root.label-gap;
+        width: parent.width;
+        height: Layout.field-h;
+        background: Palette.elev-recessed;
+        border-radius: Layout.radius-control;
+        border-width: 1px;
+        border-color: root.error
+            ? Palette.signal
+            : (hover.has-hover ? Palette.dim : Palette.edge);
+        animate border-color { duration: Motion.hover; easing: Ease.standard; }
+
+        hover := TouchArea {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: parent.height;
+            enabled: root.enabled;
+
+            input := TextInput {
+                x: Layout.field-pad-x;
+                y: 0;
+                width: parent.width - 2 * Layout.field-pad-x;
+                height: parent.height;
+                text <=> root.text;
+                single-line: true;
+                vertical-alignment: center;
+                read-only: !root.enabled;
+                color: Palette.text;
+                selection-background-color: Palette.edge;
+                selection-foreground-color: Palette.text;
+                text-cursor-width: 2px;
+                font-family: Typography.body-face;
+                font-size: Typography.body-size;
+                edited => { root.edited(self.text); }
+                accepted => { root.accepted(self.text); }
+            }
+        }
+
+        if root.placeholder != "" && root.text == "": Text {
+            x: Layout.field-pad-x;
+            y: 0;
+            width: parent.width - 2 * Layout.field-pad-x;
+            height: parent.height;
+            vertical-alignment: center;
+            text: root.placeholder;
+            color: Palette.text;
+            opacity: Layout.placeholder-opacity;
+            font-family: Typography.body-face;
+            font-size: Typography.body-size;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+    }
+
+    if input.has-focus: Rectangle {
+        x: frame.x - Layout.focus-offset - Layout.focus-width;
+        y: frame.y - Layout.focus-offset - Layout.focus-width;
+        width: frame.width + 2 * (Layout.focus-offset + Layout.focus-width);
+        height: frame.height + 2 * (Layout.focus-offset + Layout.focus-width);
+        background: transparent;
+        border-width: Layout.focus-width;
+        border-color: Palette.text;
+        border-radius: Layout.radius-control + Layout.focus-offset + Layout.focus-width;
+    }
+}

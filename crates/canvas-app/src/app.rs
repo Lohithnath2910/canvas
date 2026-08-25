@@ -1199,6 +1199,19 @@ impl App {
     }
 }
 
+pub fn gallery() -> Result<(), Box<dyn std::error::Error>> {
+    let window = canvas_ui::GalleryWindow::new()?;
+    window
+        .global::<canvas_ui::Typography>()
+        .set_system_sans(canvas_ui::platform_system_sans().into());
+    window
+        .global::<canvas_ui::Motion>()
+        .set_reduced(crate::reduced_motion::wanted());
+    window.show()?;
+    slint::run_event_loop()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{count_label, default_actions, ACTION_NEW_NOTE, ACTION_NEW_TODO, ACTION_SETTINGS};

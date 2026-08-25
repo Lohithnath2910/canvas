@@ -19,6 +19,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return app::dump();
     }
 
+    if std::env::args().any(|a| a == "--gallery") {
+        select_backend();
+        return app::gallery();
+    }
+
     select_backend();
 
     let app = App::boot()?;

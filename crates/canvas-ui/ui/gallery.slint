@@ -1,0 +1,125 @@
+import { Palette } from "theme/palette.slint";
+import { Typography } from "theme/typography.slint";
+import { Layout } from "theme/layout.slint";
+import { Panel } from "theme/surface.slint";
+import { Checkbox, Tag, Divider, TextField, ScrollBar } from "theme/controls.slint";
+
+component SectionLabel inherits Text {
+    height: Typography.label-line;
+    color: Palette.dim;
+    font-family: Typography.interface-face;
+    font-size: Typography.label-size;
+    letter-spacing: Typography.label-tracking;
+    wrap: no-wrap;
+}
+
+export component GalleryWindow inherits Window {
+    preferred-width: 560px;
+    preferred-height: 760px;
+    min-width: 400px;
+    min-height: 400px;
+    background: Palette.base;
+    title: "Canvas — component gallery";
+
+    in-out property <bool> box-rest: false;
+    in-out property <bool> box-checked: true;
+    in-out property <bool> box-done: true;
+    in-out property <string> field-plain: "";
+    in-out property <string> field-labelled: "Typed value";
+    in-out property <string> field-error: "not a number";
+
+    Panel {
+        x: Layout.pad;
+        y: Layout.pad;
+        width: parent.width - 2 * Layout.pad;
+        height: parent.height - 2 * Layout.pad;
+        corner-radius: Layout.radius-plate;
+
+        body := Flickable {
+            x: Layout.pad;
+            y: Layout.pad;
+            width: parent.width - 2 * Layout.pad - Layout.scroll-gutter;
+            height: parent.height - 2 * Layout.pad;
+            viewport-height: max(stack.preferred-height, self.height);
+
+            stack := VerticalLayout {
+                width: 100%;
+                alignment: start;
+                spacing: 12px;
+
+                SectionLabel { text: "CHECKBOX — REST · HOVER ME · CHECKED · COMPLETED"; }
+
+                Checkbox {
+                    label: "Rest — box elev-recessed, border edge";
+                    checked <=> root.box-rest;
+                    toggled => { root.box-rest = !root.box-rest; }
+                }
+                Checkbox {
+                    label: "Checked — fill steps to text, no tick glyph";
+                    checked <=> root.box-checked;
+                    toggled => { root.box-checked = !root.box-checked; }
+                }
+                Checkbox {
+                    label: "Completed — label dim, 1px strike";
+                    checked <=> root.box-done;
+                    completed: root.box-done;
+                    toggled => { root.box-done = !root.box-done; }
+                }
+                Checkbox {
+                    label: "Disabled — whole control at 0.40";
+                    enabled: false;
+                }
+
+                Rectangle { height: 12px; }
+                SectionLabel { text: "TAG — REST · ACTIVE"; }
+
+                Rectangle {
+                    height: Layout.tag-h;
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 8px;
+                        Tag { label: "DUE FRI"; }
+                        Tag { label: "3 OPEN"; active: true; }
+                    }
+                }
+
+                Rectangle { height: 12px; }
+                SectionLabel { text: "DIVIDER — 1PX EDGE, FULL BLEED"; }
+                Divider { }
+
+                Rectangle { height: 12px; }
+                SectionLabel { text: "TEXTFIELD — REST · LABELLED · ERROR · DISABLED"; }
+
+                TextField {
+                    placeholder: "Placeholder, hover for dim border";
+                    text <=> root.field-plain;
+                }
+                TextField {
+                    label: "WITH A LABEL";
+                    text <=> root.field-labelled;
+                }
+                TextField {
+                    label: "ERROR — BORDER ONLY, NO RED TEXT";
+                    text <=> root.field-error;
+                    error: true;
+                }
+                TextField {
+                    label: "DISABLED";
+                    text: "Read only";
+                    enabled: false;
+                }
+
+                Rectangle { height: Layout.pad; }
+            }
+        }
+
+        ScrollBar {
+            x: parent.width - Layout.pad - Layout.scroll-gutter;
+            y: Layout.pad;
+            height: body.height;
+            view-height: body.height;
+            viewport-height: body.viewport-height;
+            viewport-y <=> body.viewport-y;
+        }
+    }
+}

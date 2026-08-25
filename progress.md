@@ -42,29 +42,30 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-02` — home: a create control per type.** ([TASKS.md](TASKS.md), section Wa.)
-`NEW NOTE` becomes one create control per **built** type, each carrying its own §5.6 glyph.
-The list side needs no work — `KindGlyph` in `home.slint` already picks the right glyph by
-kind, and `canvas-storage::default_size` already returns the right default size per type.
-The runtime is ready too: `App::create_widget(app, kind)` exists as of SW-01 and
-`create_note` is a one-line wrapper over it. **Only expose a control for a type that can
-actually open a window**, which today is the sticky note alone — a button that prints
-"no window yet" to the console is worse than no button. So SW-02 is really "build the
-control strip, wired to the type table" and it fills up as SW-04 onward land.
+**`SW-04` — `TodoListDoc` in `canvas-doc`.** ([TASKS.md](TASKS.md), section Wb.) §11.2's
+array-of-maps pattern is **already verified compiling against yrs 0.19.2** — use it as
+written rather than re-deriving it. `{id, text, done}` only; do **not** build `due` or
+`assignee` speculatively. **Trap 1 applies**: yrs indexes by UTF-8 byte offset, so any
+text indexing inside an item has to walk to a `char_boundary`. Mirror `StickyNoteDoc`'s
+test set — concurrent add/toggle converging, snapshot round-trip, garbage bytes rejected
+without a panic.
 
-Then `SW-03` (the four missing §6 components — `Checkbox`, `Tag`, `Divider`, `TextField`,
-and note that `Checkbox` is radius **2px**, not 8px, with **no tick glyph**), then Todo at
-`SW-04`.
+Then `SW-05` (the Todo window itself, `340×360`; **counts are computed in Rust and passed
+in as `in property<int>`** — a Slint binding cannot run an imperative loop, §13.6), and
+then back to **`SW-02`**, which was skipped on purpose: a create-control-per-type strip is
+pointless while the sticky note is the only type with a window, and SW-05 is what gives it
+a second one.
 
-**SW-01 was a rename and re-shape of every note code path, and nothing about a note was
-meant to change.** So the whole **Note window** and **Home window** block of the
-VERIFICATION QUEUE is now doubling as SW-01's regression check. Anything that behaves
-differently there is a regression, not a feature.
+**Two commands worth knowing about that did not exist this morning:**
+`cargo run -p canvas-app -- --gallery` opens the §6 component gallery (SW-03), and
+`cargo run -p canvas-app --example insert_todo` puts a non-note row in the database so
+SW-01's dispatch can be exercised (`--remove` takes it out again).
 
-**The VERIFICATION QUEUE is still the largest block of value the user can unlock** —
-undo/redo (S1-43), reduced motion (S1-44), the home scrollbar (S1-47) and the SW-01
-regression check sit on top of the palette, the global hotkey, the open/close animation,
-the screen clamp and the drag feel. All written, all clippy-clean, none watched working.
+**The VERIFICATION QUEUE is still the largest block of value the user can unlock**, and it
+now has its own section per task: undo/redo (S1-43), reduced motion (S1-44), the home
+scrollbar (S1-47), the SW-01 regression check, and the four components in `--gallery`
+(SW-03) — on top of the palette, the global hotkey, the open/close animation, the screen
+clamp and the drag feel. All written, all clippy-clean, none watched working.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -137,6 +138,8 @@ Canvas/
 ```bash
 cargo run -p canvas-app              # run it
 cargo run -p canvas-app -- --dump    # print every note's text/position/state from disk
+cargo run -p canvas-app -- --gallery # the section 6 component gallery (dev only)
+cargo run -p canvas-app --example insert_todo   # a non-note row; --remove undoes it
 cargo test --workspace               # 30 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
@@ -245,6 +248,64 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-25 — SW-03: the four missing §6 components, and a gallery to look at them in
+
+- 🟡 **`Checkbox`, `Tag`, `Divider` and `TextField` in `theme/controls.slint`.**
+  Clippy-clean, 41 tests pass, and `--gallery` opens and stays up — but **nothing in it
+  has been looked at**, and every one of these is a by-eye component. In the VERIFICATION
+  QUEUE, item by item against §6's own tables.
+- ✅ **`cargo run -p canvas-app -- --gallery` opens a window and survives** — verified
+  2026-08-25 by launching the built binary and confirming the process was still alive
+  after five seconds with nothing on stderr.
+
+**A `TouchArea` forwards pointer events to its own children. Trap 6 does not apply to a
+parent wrapping its child.** This is worth having straight, because it decides how every
+remaining widget in Stage W builds a hoverable input. `TextField` needs a `dim` border on
+hover (§6.6) and hover only exists on a `TouchArea` — but putting one over a `TextInput`
+looked like exactly the overlap §13.3 warns about. Reading
+`i-slint-core-1.17.1/items/input_items.rs`, `TouchArea::input_event_filter_before_children`
+returns **`ForwardAndInterceptGrab`**: it records hover and the pointer position, then
+forwards the event down, claiming the grab only if no child takes it. Trap 6 is about two
+**sibling** areas covering the same region, where §13.3's ordering bug lives. So the
+`TextInput` sits *inside* the hover `TouchArea` and keeps its own click-to-place-caret.
+**That specific behaviour is the first thing to check in the queue** — if the caret only
+ever lands at the end of the text, this reasoning was wrong and the fix is a ring of
+disjoint areas around the frame instead.
+
+**Note `enabled: false` on a `TouchArea` also clears `has_hover`** (same file, the
+`!self.enabled()` branch sets it false and returns `ForwardAndIgnore`), so a disabled
+field cannot show a hover border. That is correct behaviour here and it is why
+`TextField`'s disabled state fades the whole control instead.
+
+**The DoD said "rendered against its §6 table by eye" and there was nowhere to look**, so
+`--gallery` is part of this task rather than scope creep. It is a dev-only window — the
+same class of thing as `--dump` and the Ctrl+G state cycler, not product UI — and it shows
+all four components in every state §6 lists, including states no real widget will reach for
+a while: `Tag` active, `TextField` error, `TextField` disabled. Waiting for SW-05 to
+exercise them would have verified about half the surface.
+
+**Every number came from §6.** `checkbox-size` 16, `checkbox-gap` 12, `checkbox-row-h` 22,
+`tag-h` 20, `tag-pad-x` 10, `field-h` 40, `field-pad-x` 12, `field-gap` 8 — all stated in
+§6.4–§6.6, now in `theme/layout.slint` rather than inlined (rule 7). Two things that read
+as mistakes and are not: the checkbox radius is **2px**, because 8px on a 16×16 box is a
+disc; and there is **no tick glyph**, because the fill going white *is* the state, which is
+the same language the dot cells speak.
+
+**One deliberate departure from §6.4's sample code in CLAUDE.md.** Its strikethrough spans
+`parent.width - 28px` — the whole rest of the row, well past the end of the text. Ours
+spans `min(label-text.preferred-width, label-text.width)`, so it stops where the text
+stops. §6.4 says the *label* is struck through, and a rule running into empty space reads
+as a divider, not a strike.
+
+**`SW-02` was skipped rather than blocked.** Its DoD is "each type creatable from home …
+opens its own window", and the sticky note is still the only type with a window. Building
+the control strip now would add one button that already exists plus buttons that print
+"no window yet". Its runtime half already landed with SW-01 (`App::create_widget(kind)`).
+It comes back after SW-05.
 
 ### 2026-08-25 — SW-01: the runtime stops being a sticky-note runtime
 
