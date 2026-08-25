@@ -1,8 +1,9 @@
 > ## ⚠ READ THIS BEFORE ANYTHING ELSE
 >
-> **This spec is the original brief, not the current state of the build.** Eleven of its
+> **This spec is the original brief, not the current state of the build.** Thirteen of its
 > decisions have been deliberately overridden by the user after seeing the app run,
-> including the **order the stages are built in** and the **removal of rich text**.
+> including the **order the stages are built in**, the **removal of rich text**, and the
+> **visible scrollbar in the note body**. The full table is in `progress.md`.
 > Following this document literally will undo working, agreed-on behaviour.
 >
 > ### If the user just said "go" (or anything equally short)

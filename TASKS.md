@@ -5,9 +5,11 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-27` — tray icon and app lifetime
+**Current task:** `S1-28` — first-launch empty state
 **Stage:** 1 — Sticky note + app shell
-**Done:** 18 of 52 (5 tasks dropped, 2 added, see below)
+**Done:** 18 of 53 (5 tasks dropped, 3 added, see below)
+**Awaiting your eyes:** `S1-27` (tray) and `S1-46` (body scrollbar) are written and running
+but unwatched — see the verification queue below
 
 **Told "go" and nothing else?** Read the 🟢 GO block at the top of
 [progress.md](progress.md) — it names the exact next action and what to ask the user
@@ -68,7 +70,8 @@ working.** It was all built in one session without a click-through. Run `cargo r
 canvas-app` and go through this list; tick the task where it passes, open a new numbered
 task where it does not.
 
-Doing this before S1-27 matters because later tasks build directly on top of it.
+S1-27 and S1-46 have since been written and now sit in this queue too. Everything after
+S1-28 builds directly on this list, so it is worth clearing before going further.
 
 **Note window**
 - [ ] Drag the header — window follows 1:1, no drift, no inertia → **S1-07**
@@ -84,6 +87,8 @@ Doing this before S1-27 matters because later tasks build directly on top of it.
 - [ ] Click `x` — note closes but stays in the home list → **S1-21**
 - [ ] Pin a note, open a browser over it — note stays behind. Click it, type, click away;
       it settles back to the desktop layer → **S1-22**
+- [ ] Type past the bottom of a note — a 4px thumb appears at the body's right edge,
+      tracks the wheel, and drags to scroll. No thumb when the text fits → **S1-46**
 - [ ] Ctrl+G in the body — cycles all 7 strip states, title names each one → **S1-04**
 - [ ] Move and resize a note, restart the app — it reopens exactly where it was → **S1-18**
 
@@ -94,6 +99,14 @@ Doing this before S1-27 matters because later tasks build directly on top of it.
 - [ ] Empty state shows on a fresh database (delete `%APPDATA%/Canvas`) → **S1-28**
 - [ ] Open three notes at once — all independently draggable and editable → confirms **S1-20**
 - [ ] Home `x` closes home and leaves notes running
+
+**Tray** → **S1-27**
+- [ ] A Canvas icon (five dots) sits in the notification area at launch
+- [ ] Close home with two notes open — both stay on screen and editable
+- [ ] Left-click the tray icon — home comes back with the right list
+- [ ] Close home AND every note — Canvas stays running, tray icon still there
+- [ ] Right-click the tray — `New note` creates and opens one
+- [ ] `Quit Canvas` closes everything and the process actually exits
 
 **Check state on disk at any point:** `cargo run -p canvas-app -- --dump`
 
@@ -410,6 +423,12 @@ and `raw-window-handle-06` features (inside it — build flags only).
   binary size in S0-2.
   *DoD:* close home with two notes open — both stay on screen and editable. Reopen home
   from the tray; the list is correct. Quit from the tray closes everything cleanly.
+  🟡 **Built 2026-08-25, unwatched.** `ui/tray.slint` (`CanvasTray inherits SystemTrayIcon`),
+  `assets/icons/tray.png` (the five-cell glyph strip, 64×64 white on transparent), and
+  `App::install_tray` / `sync_tray` / `show_home` / `quit` in `app.rs`. `maybe_quit` now
+  returns early whenever a tray exists, so the tray is the only way out; without one
+  (a Linux desktop with no StatusNotifier host) the old last-window-quits rule still
+  applies. Tick it against the **Tray** block in the verification queue.
 
 - [ ] **S1-28 · First-launch empty state** — `S`
   Needs: S1-24. Home with zero notes: `NOTHING HERE YET` plus a line pointing at the
@@ -547,6 +566,21 @@ exist yet (rule 3).
   as deferred, not ticked. Anything else that isn't satisfiable becomes a new numbered
   task here rather than a generous tick.
   *Refs:* §14 Stage 1 DoD, §1 (the five rules)
+
+### 1k — added after the fact
+
+- [ ] **S1-46 · Visible scrollbar in the note body** — `S`
+  Needs: S1-09. **Overrides §7.3**, which says the body scrolls with no visible scrollbar.
+  The user asked for one directly: the wheel worked but gave no sense of position or
+  length. `ScrollBar` in `theme/controls.slint` — a 4px thumb, `dim` at rest stepping to
+  `text` on hover/press, radius 2px, **no track drawn**, opacity 0 when the text fits.
+  It sits in an 8px gutter the body reserves permanently, so the `TextInput` and the
+  thumb's `TouchArea` never share a region (§13.3) and the gutter appearing cannot
+  re-wrap the text into needing it. Dragging the thumb maps 1:1 onto `viewport-y`, which
+  is two-way bound to the `Flickable`, so wheel and drag stay in step.
+  *DoD:* the thumb appears only on overflow, tracks the wheel, drags to scroll, and
+  reaches both ends. Reuse it for every scrolling widget in Stage W rather than
+  rebuilding one per type.
 
 ---
 

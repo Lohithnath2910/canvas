@@ -3,8 +3,8 @@ mod imp {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, SetWindowPos, HWND_BOTTOM, HWND_NOTOPMOST, SWP_NOACTIVATE,
-        SWP_NOMOVE, SWP_NOSIZE,
+        GetForegroundWindow, SetWindowPos, HWND_BOTTOM, HWND_NOTOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOSIZE,
     };
 
     fn hwnd_of(window: &slint::Window) -> Option<HWND> {
@@ -45,7 +45,6 @@ mod imp {
             place(hwnd, HWND_BOTTOM);
         }
     }
-
 }
 
 #[cfg(not(windows))]

@@ -149,13 +149,18 @@ mod tests {
     fn diff_is_minimal_for_an_append() {
         let doc = StickyNoteDoc::new();
         doc.set_text("the quick brown fox jumps over the lazy dog");
-        let update = doc.set_text("the quick brown fox jumps over the lazy dogs").unwrap();
+        let update = doc
+            .set_text("the quick brown fox jumps over the lazy dogs")
+            .unwrap();
         assert!(
             update.len() < 40,
             "append produced a {}-byte update; it should encode one char, not the whole string",
             update.len()
         );
-        assert_eq!(doc.get_text(), "the quick brown fox jumps over the lazy dogs");
+        assert_eq!(
+            doc.get_text(),
+            "the quick brown fox jumps over the lazy dogs"
+        );
     }
 
     #[test]
@@ -163,7 +168,11 @@ mod tests {
         let doc = StickyNoteDoc::new();
         doc.set_text("aaaaaaaaaaXaaaaaaaaaa");
         let update = doc.set_text("aaaaaaaaaaYaaaaaaaaaa").unwrap();
-        assert!(update.len() < 45, "middle edit produced {} bytes", update.len());
+        assert!(
+            update.len() < 45,
+            "middle edit produced {} bytes",
+            update.len()
+        );
         assert_eq!(doc.get_text(), "aaaaaaaaaaYaaaaaaaaaa");
     }
 

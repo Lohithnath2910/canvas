@@ -326,7 +326,9 @@ impl Store {
     pub fn next_z_order(&self) -> Result<i64> {
         let max: Option<i64> = self
             .conn
-            .query_row("SELECT MAX(z_order) FROM window_positions", [], |r| r.get(0))
+            .query_row("SELECT MAX(z_order) FROM window_positions", [], |r| {
+                r.get(0)
+            })
             .optional()?
             .flatten();
         Ok(max.unwrap_or(0) + 1)
@@ -640,7 +642,12 @@ mod tests {
         let s = store();
         let (a, _) = s.create_widget(KIND_STICKY_NOTE).unwrap();
         let (b, _) = s.create_widget(KIND_TODO).unwrap();
-        let ids: Vec<String> = s.list_widgets().unwrap().into_iter().map(|w| w.id).collect();
+        let ids: Vec<String> = s
+            .list_widgets()
+            .unwrap()
+            .into_iter()
+            .map(|w| w.id)
+            .collect();
         assert_eq!(ids, vec![a.id, b.id]);
     }
 

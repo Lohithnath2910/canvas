@@ -16,6 +16,7 @@ slint = { version = "1.17.1", default-features = false, features = [
     "backend-winit",
     "renderer-software",
     "raw-window-handle-06",
+    "system-tray",
 ] }
 slint-build = "1.17.1"
 

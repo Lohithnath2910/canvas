@@ -7,7 +7,9 @@ use slint::ComponentHandle;
 
 use canvas_doc::StickyNoteDoc;
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
-use canvas_ui::{platform_system_sans, HomeWindow, NoteRow, StickyNoteWindow, Typography};
+use canvas_ui::{
+    platform_system_sans, CanvasTray, HomeWindow, NoteRow, StickyNoteWindow, Typography,
+};
 
 const PLATE_MARGIN: f32 = 24.0;
 const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
@@ -26,6 +28,7 @@ pub struct App {
     store: Store,
     notes: HashMap<String, Note>,
     home: Option<HomeWindow>,
+    tray: Option<CanvasTray>,
 }
 
 pub type SharedApp = Rc<RefCell<App>>;
@@ -40,6 +43,7 @@ impl App {
             store,
             notes: HashMap::new(),
             home: None,
+            tray: None,
         }));
 
         let to_open: Vec<String> = {
@@ -65,6 +69,7 @@ impl App {
         }
 
         App::open_home(&app)?;
+        App::install_tray(&app);
         App::start_flush_timer(&app);
         Ok(app)
     }
@@ -131,6 +136,7 @@ impl App {
                     let _ = home.hide();
                 }
                 App::flush_all(&app);
+                App::sync_tray(&app);
                 crate::maybe_quit(&app);
             });
         }
@@ -156,6 +162,7 @@ impl App {
             home.window().on_close_requested(move || {
                 if let Some(app) = weak.upgrade() {
                     App::flush_all(&app);
+                    App::sync_tray(&app);
                     crate::maybe_quit(&app);
                 }
                 slint::CloseRequestResponse::HideWindow
@@ -167,6 +174,7 @@ impl App {
         home.show()?;
         let scale = home.window().scale_factor();
         home.set_resize_border(home.get_resize_border() * scale);
+        App::sync_tray(app);
         Ok(())
     }
 
@@ -291,7 +299,9 @@ impl App {
             for update in note.pending_updates.drain(..) {
                 let _ = a.store.append_revision(id, &update);
             }
-            let _ = a.store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
+            let _ = a
+                .store
+                .save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
             let _ = a.store.save_placement(id, &note.placement);
         }
         let _ = a.store.set_open(id, false);
@@ -325,8 +335,7 @@ impl App {
                     for update in note.pending_updates.drain(..) {
                         let _ = store.append_revision(id, &update);
                     }
-                    let _ =
-                        store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
+                    let _ = store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
                     let _ = store.touch(id);
                     note.text_dirty = false;
                 }
@@ -523,7 +532,10 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
                 return;
             };
             if let Some(note) = a.notes.get_mut(&id) {
-                let size = window.window().size().to_logical(window.window().scale_factor());
+                let size = window
+                    .window()
+                    .size()
+                    .to_logical(window.window().scale_factor());
                 let w = (size.width - 2.0 * PLATE_MARGIN).round() as i32;
                 let h = (size.height - 2.0 * PLATE_MARGIN).round() as i32;
                 if w != note.placement.width || h != note.placement.height {
@@ -582,5 +594,102 @@ impl App {
             .as_ref()
             .map(|h| h.window().is_visible())
             .unwrap_or(false)
+    }
+}
+
+impl App {
+    pub fn install_tray(app: &SharedApp) {
+        let tray = match CanvasTray::new() {
+            Ok(tray) => tray,
+            Err(e) => {
+                eprintln!(
+                    "canvas: no system tray available ({e}); quitting when the last window closes"
+                );
+                return;
+            }
+        };
+
+        {
+            let weak = Rc::downgrade(app);
+            tray.on_open_home(move || {
+                if let Some(app) = weak.upgrade() {
+                    App::show_home(&app);
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(app);
+            tray.on_new_note(move || {
+                let Some(app) = weak.upgrade() else {
+                    return;
+                };
+                if let Err(e) = App::create_note(&app) {
+                    eprintln!("canvas: create failed: {e}");
+                }
+                App::refresh_home(&app);
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(app);
+            tray.on_quit_app(move || {
+                if let Some(app) = weak.upgrade() {
+                    App::quit(&app);
+                }
+            });
+        }
+
+        if let Err(e) = tray.show() {
+            eprintln!("canvas: tray icon failed to show ({e})");
+            return;
+        }
+
+        app.borrow_mut().tray = Some(tray);
+        App::sync_tray(app);
+    }
+
+    pub fn tray_present(app: &SharedApp) -> bool {
+        app.borrow().tray.is_some()
+    }
+
+    pub fn sync_tray(app: &SharedApp) {
+        let Ok(a) = app.try_borrow() else {
+            return;
+        };
+        let visible = a
+            .home
+            .as_ref()
+            .map(|h| h.window().is_visible())
+            .unwrap_or(false);
+        if let Some(tray) = &a.tray {
+            tray.set_home_open(visible);
+        }
+    }
+
+    pub fn show_home(app: &SharedApp) {
+        if let Err(e) = App::open_home(app) {
+            eprintln!("canvas: home failed to open: {e}");
+        }
+        App::refresh_home(app);
+        App::sync_tray(app);
+    }
+
+    pub fn quit(app: &SharedApp) {
+        App::flush_all(app);
+        {
+            let mut a = app.borrow_mut();
+            for note in a.notes.values() {
+                let _ = note.window.hide();
+            }
+            if let Some(home) = &a.home {
+                let _ = home.hide();
+            }
+            if let Some(tray) = &a.tray {
+                let _ = tray.hide();
+            }
+            a.tray = None;
+        }
+        let _ = slint::quit_event_loop();
     }
 }

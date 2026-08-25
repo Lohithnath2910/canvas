@@ -9,15 +9,18 @@
 *If you have just been told "go", "continue", or anything equally short, start here.
 This block is rewritten at the end of every unit of work, so it is always current.*
 
-**Next code task: `S1-27` — tray icon and app lifetime.** ([TASKS.md](TASKS.md), section 1h.)
-Canvas keeps running when home is closed; the tray icon reopens home; quit is explicit and
-from the tray only. Needs Slint's `system-tray` feature, which was disabled in S0-2 for
-binary size — re-enable it. This is next because closing home with notes open currently
-strands the app with no way back to it.
+**Next code task: `S1-28` — first-launch empty state.** ([TASKS.md](TASKS.md), section 1h.)
+Home with zero notes shows `NOTHING HERE YET` plus a line pointing at the create control,
+centred, matching the note's own empty state (§8). Small. `home.slint` already has the
+rows list and the `NEW NOTE` control to hang it off; delete `%APPDATA%/Canvas` to see the
+empty case.
 
 **Ask the user, in the same message you start work — do not wait for an answer:**
 
-1. **Confirm the resize grab zone (S1-06).** Rebuilt twice on 2026-08-25 and still never
+1. **The tray (S1-27) and the body scrollbar (S1-46)** — both written on 2026-08-25 and
+   neither watched working. The `Tray` block and the scrollbar line in the VERIFICATION
+   QUEUE at the top of [TASKS.md](TASKS.md) say exactly what to click.
+2. **Confirm the resize grab zone (S1-06).** Rebuilt twice on 2026-08-25 and still never
    watched working. The user's second report was that the zone starts *outside* the note
    so the cursor has to sit in empty space; `Layout.resize-border` went 30px → 36px in
    response, which puts 12px of it inside the visible plate instead of 6px. Check: the
@@ -25,17 +28,17 @@ strands the app with no way back to it.
    note; live resizing is smooth rather than only updating on release; and the window
    still responds to clicks and drags afterwards. If the feel is still off, the number is
    the only thing to change — `Layout.resize-border` in `theme/layout.slint`, one line.
-2. **The rest of the VERIFICATION QUEUE** at the top of [TASKS.md](TASKS.md) — about
-   17 behaviours that are written and compiling but have never been watched work.
+3. **The rest of the VERIFICATION QUEUE** — about 23 behaviours now, all written and
+   compiling, none watched.
 
-**Do not stall waiting on either.** Build S1-27 while they check.
+**Do not stall waiting on any of it.** Build S1-28 while they check.
 
 **Two open questions block work that is coming up soon**, and both should be asked once
 the current unit is reported rather than saved for later: what pin should do beyond the
-desktop layer (decide by S1-27), and — before Stage W starts — whether the Spreadsheet
-supports formulas and whether its rows and columns insert mid-sheet. That second one
-decides the CRDT shape and cannot be retrofitted. All of them are in **Open questions**
-at the bottom of [TASKS.md](TASKS.md).
+desktop layer, and — before Stage W starts — whether the Spreadsheet supports formulas and
+whether its rows and columns insert mid-sheet. That second one decides the CRDT shape and
+cannot be retrofitted. All of them are in **Open questions** at the bottom of
+[TASKS.md](TASKS.md).
 
 **The rule that keeps this working:** finish a task → tick its box in `TASKS.md` → move
 the **Current task** line → rewrite this GO block → append a dated entry below → commit
@@ -120,6 +123,7 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 | §7.2/§7.7 rich text in the note body | **Dropped. Plain text, one face.** | Silkscreen has no bold or italic and the user does not want them |
 | §14 stage order: sync (2–3) before widgets (4–5) | **All widget types first, backend and sync after** | User: get every widget working single-player before multiplayer |
 | §10 lists five widget types | **Plus a Spreadsheet** — not in the spec at all | User asked for it 2026-08-25; no artboard, no §10 section, so it carries real open questions |
+| §7.3 "no visible scrollbar track" | **A visible scrollbar in the note body** — thumb only, no track | User asked for one directly; wheel scrolling alone gave no sense of position |
 
 ### Traps already hit — do not repeat these
 
@@ -154,8 +158,10 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 ### Known gaps
 
-- **Closing home while notes are open leaves Canvas running with no way back to it.**
-  This is what S1-27 (tray icon) fixes, and it is why that task is next.
+- 🟡 **A tray icon now owns the app lifetime** (S1-27) — home can be closed without
+  stranding the app, and quit is a tray menu entry. Written 2026-08-25, **not yet watched
+  working**; if the icon turns out not to appear, `maybe_quit` in `main.rs` is the one
+  place that decides whether the app can still be quit by closing its last window.
 - `canvas-sync` is an empty stub. No networking exists, so the strip's syncing / offline
   / peers / error states are only reachable through the Ctrl+G dev cycler.
 - **No rich text, and there will not be any** — dropped 2026-08-25. The body is plain text
@@ -686,3 +692,65 @@ Three issues raised after using the app. All three were real.
   Resizing now works, so the window can be widened — which is what the user asked for
   rather than a type change. Double-clicking the header shows the full title in an
   editable field regardless of window width.
+
+### 2026-08-25 — Body scrollbar (S1-46) and the tray icon (S1-27)
+
+**A visible scrollbar in the note body — this overrides §7.3.**
+The user asked for one directly: wheel scrolling already worked, but with nothing drawn
+there was no sense of how long the note was or where in it you were. §7.3's "no visible
+scrollbar track" is now row 13 of the override table.
+
+- 🟡 `ScrollBar` in `theme/controls.slint`, built as a reusable component rather than
+  inline in the note, because every Stage W widget that scrolls will want the same one.
+  A 4px thumb, radius 2px (`Layout.radius-checkbox` — the same answer §5.4 already gives
+  for the checkbox, since 8px on a 4px bar is a capsule), `dim` at rest stepping to `text`
+  on hover or press over `Motion.hover`. **No track is drawn** — that half of §7.3 stands.
+  Opacity goes to 0 when the content fits, so a short note looks exactly as it did.
+- 🟡 The thumb is draggable, not just an indicator. `viewport-y` is two-way bound
+  (`<=>`) to the `Flickable`'s own, so the wheel moves the thumb and the thumb moves the
+  wheel position with no second source of truth. The drag maps travel to overflow through
+  `overflow / travel`, guarded so a zero-length track cannot divide by zero.
+- **Why the gutter is permanent, not conditional.** The bar lives in an 8px gutter that
+  the body reserves whether or not it is scrolling. Two reasons, both real: a `TouchArea`
+  over the `TextInput` would be the exact overlap §13.3 says is unreliable, and a gutter
+  that appears only on overflow narrows the text, which can *create* the overflow that
+  justifies the gutter — the classic reflow oscillation. Reserving it always costs 8px of
+  body width and settles both.
+- New numbers, all off the existing 8px scale rather than invented: `scroll-gutter: 8px`,
+  `scroll-thumb-w: 4px`, `scroll-thumb-min: 24px` in `theme/layout.slint`.
+
+**Tray icon and app lifetime (S1-27).**
+
+- ✅ Slint 1.17.1 has a real `SystemTrayIcon` element behind its `system-tray` feature —
+  confirmed by reading `i-slint-compiler-1.17.1/builtins.slint` and
+  `i-slint-core-1.17.1/items/system_tray/windows.rs`, which is a `Shell_NotifyIconW`
+  wrapper. The feature is re-enabled in the workspace `Cargo.toml`. It pulls in `ksni`
+  (the Linux D-Bus tray) transitively; that is cfg-gated to unix and never builds here.
+- 🟡 `ui/tray.slint` — `CanvasTray inherits SystemTrayIcon`. **A `SystemTrayIcon` is a
+  top-level component like `Window`, not something you put inside one**, and it must have
+  exactly one `Menu` child, not inside an `if` or a `for`. Menu: `Open Canvas` (disabled
+  and relabelled `Canvas is open` while home is up), `New note`, separator, `Quit Canvas`.
+- 🟡 **The built-in `clicked` callback is not exposed to Rust unless you bind it in the
+  `.slint` file.** `tray.on_clicked(...)` does not compile — the generated component has
+  no such method. Bind `clicked => { root.open-home(); }` inside `CanvasTray` and go
+  through your own callback instead. Cost one compile error to find.
+- 🟡 `assets/icons/tray.png` — 64×64, five 10px white squares with 3px gaps on a
+  transparent ground: the glyph strip, which is the one mark this product actually has.
+  White reads on the default dark Windows 11 taskbar and will read poorly on a light one;
+  worth a second look if the user runs light mode.
+- 🟡 `App::install_tray` / `sync_tray` / `show_home` / `quit` in `app.rs`, plus a
+  `tray: Option<CanvasTray>` on `App`. **`maybe_quit` now returns early whenever a tray
+  exists** — that single check is what makes quit tray-only. If the tray fails to
+  construct (a Linux desktop with no StatusNotifier host), it logs and falls back to the
+  old rule where closing the last window quits, so the app can never become unquittable.
+- ✅ Launched and left running for 25s: `cargo run -p canvas-app` starts clean, prints
+  only `canvas: renderer = winit-software`, and logs **neither** a tray failure nor an
+  image-decode error — so `CanvasTray::new()` and `tray.show()` both succeeded and the
+  embedded PNG decoded. That is evidence the icon was *registered*, not that it is
+  *visible* in the notification area (Windows can put a new icon in the overflow tray).
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo fmt --all` applied, 28 tests
+  still pass.
+
+**Neither task is ticked.** Both are behaviour I have not watched, per ground rule 2.
+`TASKS.md`'s verification queue has a new **Tray** block and a scrollbar line with exactly
+what to click.

@@ -5,7 +5,7 @@ import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPalette, IconPin, IconTrash, IconX } from "theme/icons.slint";
-import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
+import { IconButton, Button, ButtonVariant, ScrollBar } from "theme/controls.slint";
 
 export { WidgetState }
 
@@ -122,10 +122,10 @@ export component StickyNoteWindow inherits Window {
                 wrap: no-wrap;
             }
 
-            Flickable {
+            body-scroll := Flickable {
                 x: 0;
                 y: 0;
-                width: 100%;
+                width: parent.width - Layout.scroll-gutter;
                 height: 100%;
                 viewport-height: max(body-input.preferred-height, self.height);
 
@@ -154,6 +154,15 @@ export component StickyNoteWindow inherits Window {
                         return reject;
                     }
                 }
+            }
+
+            ScrollBar {
+                x: parent.width - Layout.scroll-gutter;
+                y: 0;
+                height: 100%;
+                view-height: body-scroll.height;
+                viewport-height: body-scroll.viewport-height;
+                viewport-y <=> body-scroll.viewport-y;
             }
         }
 

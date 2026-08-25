@@ -1,0 +1,30 @@
+export component CanvasTray inherits SystemTrayIcon {
+    in property <bool> home-open: false;
+
+    callback open-home();
+    callback new-note();
+    callback quit-app();
+
+    icon: @image-url("../assets/icons/tray.png");
+    tooltip: "Canvas";
+    title: "Canvas";
+
+    clicked => { root.open-home(); }
+
+    Menu {
+        MenuItem {
+            title: root.home-open ? "Canvas is open" : "Open Canvas";
+            enabled: !root.home-open;
+            activated => { root.open-home(); }
+        }
+        MenuItem {
+            title: "New note";
+            activated => { root.new-note(); }
+        }
+        MenuSeparator { }
+        MenuItem {
+            title: "Quit Canvas";
+            activated => { root.quit-app(); }
+        }
+    }
+}
