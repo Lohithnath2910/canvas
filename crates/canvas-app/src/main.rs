@@ -5,6 +5,7 @@ use mimalloc::MiMalloc;
 mod app;
 mod desktop_layer;
 mod hotkey;
+mod reduced_motion;
 mod screen;
 
 use app::{App, SharedApp};

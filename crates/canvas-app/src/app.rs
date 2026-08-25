@@ -8,7 +8,7 @@ use slint::ComponentHandle;
 use canvas_doc::{StickyNoteDoc, UndoHistory};
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
-    platform_system_sans, CanvasTray, HomeWindow, NoteRow, PaletteRow, PaletteWindow,
+    platform_system_sans, CanvasTray, HomeWindow, Motion, NoteRow, PaletteRow, PaletteWindow,
     StickyNoteWindow, Typography,
 };
 
@@ -155,6 +155,7 @@ pub struct App {
     notes: HashMap<String, Note>,
     home: Option<HomeWindow>,
     palette: Option<PaletteWindow>,
+    reduced_motion: bool,
     tray: Option<CanvasTray>,
 }
 
@@ -166,11 +167,15 @@ impl App {
         std::fs::create_dir_all(&dir)?;
         let store = Store::open(&dir.join("canvas_local.db"))?;
 
+        let reduced_motion = crate::reduced_motion::wanted();
+        eprintln!("canvas: reduced motion = {reduced_motion}");
+
         let app: SharedApp = Rc::new(RefCell::new(App {
             store,
             notes: HashMap::new(),
             home: None,
             palette: None,
+            reduced_motion,
             tray: None,
         }));
 
@@ -215,6 +220,8 @@ impl App {
         let home = HomeWindow::new()?;
         home.global::<Typography>()
             .set_system_sans(platform_system_sans().into());
+        home.global::<Motion>()
+            .set_reduced(app.borrow().reduced_motion);
 
         {
             let weak = Rc::downgrade(app);
@@ -401,6 +408,9 @@ impl App {
         window
             .global::<Typography>()
             .set_system_sans(platform_system_sans().into());
+        window
+            .global::<Motion>()
+            .set_reduced(app.borrow().reduced_motion);
         window.set_note_title(title.into());
         window.set_note_text(doc.get_text().into());
         window.set_pinned(placement.pinned);
@@ -511,6 +521,23 @@ impl App {
         app.borrow().notes.len()
     }
 
+    fn refresh_reduced_motion(a: &mut App) {
+        let wanted = crate::reduced_motion::wanted();
+        if wanted == a.reduced_motion {
+            return;
+        }
+        a.reduced_motion = wanted;
+        if let Some(home) = a.home.as_ref() {
+            home.global::<Motion>().set_reduced(wanted);
+        }
+        if let Some(palette) = a.palette.as_ref() {
+            palette.global::<Motion>().set_reduced(wanted);
+        }
+        for note in a.notes.values() {
+            note.window.global::<Motion>().set_reduced(wanted);
+        }
+    }
+
     fn start_flush_timer(app: &SharedApp) {
         let weak = Rc::downgrade(app);
         let timer = Box::leak(Box::new(slint::Timer::default()));
@@ -521,6 +548,7 @@ impl App {
             let Ok(mut a) = app.try_borrow_mut() else {
                 return;
             };
+            App::refresh_reduced_motion(&mut a);
             let App { store, notes, .. } = &mut *a;
             for (id, note) in notes.iter_mut() {
                 if note.text_dirty {
@@ -1002,6 +1030,9 @@ impl App {
                 palette
                     .global::<Typography>()
                     .set_system_sans(platform_system_sans().into());
+                palette
+                    .global::<Motion>()
+                    .set_reduced(app.borrow().reduced_motion);
                 {
                     let weak = Rc::downgrade(app);
                     palette.on_dismissed(move || {

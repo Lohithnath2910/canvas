@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-44` — reduced motion
+**Current task:** `S1-47` — the same scrollbar on the home list
 **Stage:** 1 — Sticky note + app shell
 **Done:** 23 ticked, 46 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 41 tests pass.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -207,6 +207,21 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
 - [ ] 🟡 An undo is itself recorded as a forward step on disk. So after a **restart**,
       Ctrl+Y will not redo an undo made in the previous session — Ctrl+Z will, because it
       undoes the undo. Deliberate, not a bug
+
+
+**Reduced motion** → **S1-44**
+- [ ] Launch and read the console line `canvas: reduced motion = <bool>`. On a default
+      Windows box it says `false`
+- [ ] Turn **Settings → Accessibility → Visual effects → Animation effects** OFF and watch
+      the *already running* app: within half a second the next `NEW NOTE` must appear with
+      a **flat 100ms fade and no 6px rise**, and dragging a note must not deepen its shadow
+      over time — the shadow changes instantly or not at all
+- [ ] With it still off, Ctrl+G a note to the `syncing` state — the lit dot must **stop
+      sweeping and hold**, not fade or crawl
+- [ ] Turn the setting back on — the rise and the shadow ramp come back without a relaunch
+- [ ] Faster path if you would rather not touch Windows settings:
+      `$env:CANVAS_REDUCED_MOTION="1"; cargo run -p canvas-app` forces it on, `"0"` forces
+      it off. This overrides the OS and is for testing only
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -730,7 +745,20 @@ exist yet (rule 3).
 - [ ] **S1-44 · Reduced motion** — `M`
   Needs: S1-29. All travel, stepping, and shadow motion off; a 100ms crossfade replaces
   them; dots hold their final state. **Required for sign-off**, not a deferred nice-to-have.
+  **Done 2026-08-25.** The theme half was already right — `Motion.reduced` collapses
+  `open` 160→100ms, `open-rise` 6→0px, `drag-shadow` 100→0ms and `presence` 80→0ms, and
+  the glyph strip's sweep `Timer` is gated on `!Motion.reduced` so the dots hold. What was
+  missing was **reading the OS setting**: `reduced_motion.rs` calls
+  `SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION)` — TRUE means animations are
+  *enabled*, so reduced motion is its inverse. `App` caches it, sets
+  `Motion.reduced` on every window at creation, and re-reads it inside the existing 500ms
+  flush timer so a mid-session toggle of the Windows setting reaches live windows without
+  a relaunch. `CANVAS_REDUCED_MOTION=1|0` overrides it for testing, and the boot line
+  `canvas: reduced motion = <bool>` says which way it went.
   *DoD:* with the OS reduced-motion setting on, no widget travels, steps, or shifts shadow.
+  ✅ the setting is read correctly — confirmed 2026-08-25 by running the app on a default
+  machine (`false`, animations on) and under the override (`true`). 🟡 **that the windows
+  visibly stop travelling still needs eyes** — in the verification queue.
   *Refs:* §5.5
 
 - [ ] **S1-45 · Stage 1 sign-off audit** — `M`

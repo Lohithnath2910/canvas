@@ -42,24 +42,26 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-44` — reduced motion.** ([TASKS.md](TASKS.md), section 1k.) `Motion.reduced` already
-exists in `theme/motion.slint` and every duration in the theme already collapses off it —
-what is missing is **reading the OS setting and setting the flag**. On Windows that is
-`SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION)`; `windows-sys` is already a signed-off
-dependency, so this needs a feature at most, not a new crate. Check `Motion.reduced` is
-actually threaded through *every* animation, including the open/close fade (S1-29) and the
-drag shadow, not just the ones written before the flag existed. **Required for sign-off**,
-not optional.
+**`S1-47` — the same scrollbar on the home list.** ([TASKS.md](TASKS.md), section 1k.)
+`ScrollBar` already exists in `theme/controls.slint` and is proven in the note body
+(S1-46, confirmed by the user). Home's rows `Flickable` still scrolls bare. The one real
+decision in it: home's rows are full-bleed and carry a delete icon at their right edge, so
+reserving the same permanent 8px gutter moves every row's icon inward. Make that call
+deliberately and say so — the icons currently line up with the note window's header
+cluster.
 
-Then `S1-45` (the Stage 1 sign-off audit, which **needs the verification queue walked
-first**), `S1-47` (the same scrollbar on the home list) and `S1-48` (palette search over
-note bodies — that one is **blocked on open question 5**, a schema change). S1-36 and
-S1-37 need a peer and stay deferred to 1j.
+**`S1-45`, the Stage 1 sign-off audit, is the next task by number and is skipped because
+it is blocked on the user.** It cannot be finished honestly until the VERIFICATION QUEUE
+in [TASKS.md](TASKS.md) has been walked, and the queue is now long: undo/redo, reduced
+motion, the palette, the global hotkey, the open/close animation, the screen clamp and the
+drag feel are all written and clippy-clean but none of them has been watched working.
 
-**The verification queue has grown and still has not been walked.** S1-43's undo/redo has
-joined the palette, the open/close animation, the screen clamp, the global hotkey and the
-drag feel. None of it has been watched working. Walking it is the highest-value thing the
-user can do, and S1-45 cannot honestly finish until it is done.
+After S1-47 the only Stage 1 task left is `S1-48` (palette search over note bodies), and
+**that one is blocked on open question 5** — it needs either a `text` column on `widgets`
+or FTS5, and rule 6 says do not change the schema without asking. S1-36 and S1-37 need a
+peer and stay deferred to 1j. So the backlog runs into the user shortly after S1-47, and
+the next real move after that is **Stage W**, starting at `SW-01` — generalising the
+runtime so it can open a widget that is not a sticky note.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -231,6 +233,52 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-25 — S1-44: reduced motion now reads the OS setting
+
+- ✅ **The OS setting is read, and the polarity is right** — verified by running the built
+  app twice and reading its own boot line. On this machine, with Windows animations at
+  their default (on), it prints `canvas: reduced motion = false`; with
+  `CANVAS_REDUCED_MOTION=1` it prints `true`.
+- 🟡 **That the windows visibly stop travelling has not been watched.** In the
+  VERIFICATION QUEUE, with the exact settings path to toggle.
+
+**Most of this task was already done and the GO block was right about which half.**
+`Motion.reduced` has existed in `theme/motion.slint` since the theme was built, and every
+duration that needs to collapse already derives from it: `open` 160→100ms, `open-rise`
+6→0px, `drag-shadow` 100→0ms, `presence` 80→0ms, and the glyph strip's sweep `Timer` is
+gated on `!Motion.reduced` so the dots hold where they are. Nothing in the theme needed
+changing. What did not exist was anything that ever set the flag to `true`.
+
+**`SPI_GETCLIENTAREAANIMATION` answers the opposite question to the one you want.** It
+returns TRUE when animations are **enabled**, so reduced motion is its inverse — get that
+backwards and the app animates exactly when it should not, on a machine whose owner
+specifically asked it not to. `reduced_motion::wanted()` returns
+`ok != 0 && animations == 0`, and it is deliberately conservative: if the call fails it
+reports `false` rather than silently killing every animation on a machine that never asked.
+
+**A Slint global is per window, not per process.** `Motion` is instantiated once per
+component tree, the same way `Typography` is — so setting `Motion.reduced` in one place
+does nothing for the other windows. It is set at every one of the three creation sites
+(home, note, palette), next to the existing `Typography` call.
+
+**A mid-session toggle works without a relaunch**, which matters because that is how
+anyone will actually test it: `refresh_reduced_motion` re-reads the setting inside the
+500ms flush timer that already runs, and pushes it to home, the palette and every live
+note only when the value has actually changed. `SystemParametersInfoW` for this parameter
+is a cached read, so it costs nothing at that rate, and it is not on the keystroke path.
+
+**`CANVAS_REDUCED_MOTION=1|0` overrides the OS**, which is what made the polarity check
+above possible without touching the user's own accessibility settings. It is a testing
+hook, not a preference — there is no settings screen yet to make it one.
+
+**One thing reduced motion does not reach: `Flickable`'s own flick inertia.** Slint
+animates a flick internally and does not expose a duration, so a hard flick in the note
+body still glides. A wheel scroll is stepped and unaffected. Worth knowing before the
+S1-45 audit calls it a miss.
 
 ### 2026-08-25 — S1-43: undo/redo, rebuilt from `revision_history`
 
