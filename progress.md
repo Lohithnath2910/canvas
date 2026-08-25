@@ -79,6 +79,7 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 | §11.1 whole-string replace per keystroke | **Real prefix/suffix diffing** | Spec's own comment says to do this |
 | §7.2/§7.7 rich text in the note body | **Dropped. Plain text, one face.** | Silkscreen has no bold or italic and the user does not want them |
 | §14 stage order: sync (2–3) before widgets (4–5) | **All widget types first, backend and sync after** | User: get every widget working single-player before multiplayer |
+| §10 lists five widget types | **Plus a Spreadsheet** — not in the spec at all | User asked for it 2026-08-25; no artboard, no §10 section, so it carries real open questions |
 
 ### Traps already hit — do not repeat these
 
@@ -90,16 +91,25 @@ The user made these after seeing the app run. They win over CLAUDE.md.
    `HorizontalLayout` in a `Rectangle` to stop a *layout* parent stretching it — that is
    not sufficient. The glyph strip rendered 23×32 instead of 23×3 and parked itself in
    the plate's corner. Give it an explicit width AND height.
-3. **`resize-border-width` cannot work here.** It puts the grab zone at the *window*
-   edge, which is 24px out in the transparent `plate-margin`. Resize is done with eight
-   grips on the plate perimeter that hand the drag to Windows via `WM_NCLBUTTONDOWN`.
-4. **Never `std-widgets` `TextEdit`.** The compiler defaults to the `fluent` style and
+3. **`resize-border-width` DOES work here — the earlier entry saying otherwise was
+   wrong.** It puts the grab band at the *window* edge, and the window edge is 24px out in
+   the transparent `plate-margin`, so at the 6px it was set to the band sat entirely in
+   empty space. The fix is one number: `Layout.resize-border` is 30px = the 24px margin
+   plus 6px, so the band spans the whole invisible margin and ends 6px inside the visible
+   plate edge — exactly the grab area the eight grips were drawing by hand.
+4. **NEVER call `SendMessageW(WM_NCLBUTTONDOWN)` from a Slint callback.** It is a
+   *blocking* call: Windows runs its entire modal resize loop inside it, and that loop is
+   nested inside the Slint event loop that dispatched the callback. Two symptoms, one
+   cause — the UI cannot repaint for the whole drag (so the size only appears to change
+   when you let go), and the modal loop swallows the mouse-up, leaving the `TouchArea`
+   latched pressed forever, which is what made the window ignore every later click.
+5. **Never `std-widgets` `TextEdit`.** The compiler defaults to the `fluent` style and
    Fluent's `TextEdit` bakes in a blue focus bar with no way to override it. Bare
    `TextInput` in a `Flickable` everywhere.
-5. **Two `TouchArea`s must never share a screen region** (§13.3, an open Slint bug).
+6. **Two `TouchArea`s must never share a screen region** (§13.3, an open Slint bug).
    The header is partitioned by absolute position. The title is editable via
    `double-clicked` on the *existing* drag area for exactly this reason.
-6. **Disk writes must not happen on the keystroke path.** Updates buffer in
+7. **Disk writes must not happen on the keystroke path.** Updates buffer in
    `Note::pending_updates` and are flushed by a 500ms timer, and on close/delete/quit.
 
 ### Known gaps
@@ -167,6 +177,71 @@ changed in this pass — this is a planning entry only.
 `widget-types.png` covers Todo, Shared Document, Kanban and Calendar only; §10.5 is a
 single paragraph. Tool dock contents, the shape set and the stroke style are all
 unspecified. Logged as open question 4.
+
+### 2026-08-25 — Resize rebuilt on the native path; easing warning gone
+
+**The resize bug the user reported was two symptoms of one cause, and my own.**
+Reported: resize "works, but not smooth — I drag and after some time I see it affected the
+size", and then "once I try to resize I can't click or drag anything, some sort of very
+weird bug."
+
+- ❌ **Cause:** `begin_native_resize` called `SendMessageW(hwnd, WM_NCLBUTTONDOWN, ...)`
+  from inside a Slint `pointer-event` callback. `SendMessageW` **blocks** — Windows runs
+  its whole modal resize loop inside that call, nested inside the Slint event loop that
+  dispatched the callback. So the UI could not repaint for the duration of the drag (hence
+  "not smooth"), and the modal loop consumed the mouse-up, so the grip's `TouchArea` never
+  saw `PointerEventKind.up` and stayed latched pressed — which is what made the window
+  ignore every subsequent click and drag.
+- ✅ **Fixed by deleting the mechanism, not patching it.** `resize-border-width` was
+  already set on both windows — at **6px**, which is why the earlier log entry concluded it
+  "cannot work here". It was not wrong about the symptom: the band sits at the *window*
+  edge, and the window edge is 24px out in the transparent `plate-margin`, so a 6px band
+  lands entirely in empty space. **The fix was the number, not the mechanism** —
+  `Layout.resize-border` is now 30px (24px margin + 6px), so the band covers the whole
+  invisible margin and ends 6px inside the visible plate edge, which is precisely the grab
+  area the eight grips were reproducing by hand.
+- ✅ **Deleted:** `theme/chrome.slint` entirely (`ResizeGrips`, `HitCode`, 8 `Grip`
+  `TouchArea`s), the `resize-begin` callback on both windows, both `on_resize_begin`
+  handlers in `app.rs`, and `begin_native_resize` plus its `ReleaseCapture` /
+  `SendMessageW` / `WM_NCLBUTTONDOWN` imports from `desktop_layer.rs`. Resize is now
+  winit's own hit-test path, with no Canvas code in it at all.
+- 🟡 **NOT yet watched working.** It compiles, clippy is clean, and the app launches — none
+  of which is evidence, per ground rule 2. **The user has to confirm three things:** that
+  the visible plate edge and corners still grab, that live resizing is now smooth, and that
+  the window still responds to clicks and drags afterwards. S1-06 stays unticked until then.
+  If the transparent margin turns out not to be hit-testable, the fallback is a
+  `WM_NCHITTEST` window subclass returning `HTLEFT`/`HTTOPLEFT`/etc — still native, still
+  non-blocking, just more code.
+
+**Compiler warning the user asked about — fixed.**
+- ❌ `out property <easing> standard` on the exported `Motion` global made Slint warn
+  *"Properties of type easing are not supported yet for public API"* on every build.
+  Harmless (it only means Rust cannot read that property), but noisy.
+- ✅ Making it private is not an option — Slint requires `in`/`out`/`in-out` on a global
+  property for *any* other .slint file to read it, so private breaks all four call sites.
+  Instead the curve moved to its own `Ease` global in the same file, which `main.slint`
+  does **not** re-export. Slint only generates public API for globals exported from the
+  entry file, so `Ease` is invisible to Rust and the warning is gone, while `Motion` stays
+  exported because S1-44 will need to set `Motion.reduced` from Rust. Still one easing
+  token, still one place to change it (§5.5).
+- ✅ Also fixed a pre-existing clippy warning in `app.rs:118` (`unnecessary to_string`)
+  that had crept in with the home window work. `cargo clippy --workspace --all-targets`
+  is clean again.
+
+**Backlog: the Spreadsheet was added to Stage W (SW-13, SW-14).**
+- The user asked for "an excel sheet kinda widget". It is **not in CLAUDE.md anywhere** —
+  no §10 subsection, and `widget-types.png` does not cover it — so unlike the other five
+  types there is no design to build against.
+- What the existing language already settles without inventing a token: grid lines are 1px
+  `edge`, headers are interface-face-11 `dim`, cells are body-face-14, and **the selected
+  cell is a 1px `text` outline with no fill** — the same answer §10.3 already gives for the
+  Kanban drop target, since rules 1 and 2 leave no accent colour to select with.
+- What genuinely cannot be guessed, now logged as open questions 5, 6 and 7: whether
+  formulas are in scope (a parser, a dependency graph, and a rule that formula *source* is
+  synced while the computed value is derived locally — never synced, or two peers can
+  disagree about a cell neither typed), whether rows and columns can be inserted mid-sheet
+  (which decides the CRDT shape and cannot be retrofitted), and what its default size is.
+- Stage W is now six types and 15 tasks. Nothing was started — this is backlog only.
 
 ## Standing update rule
 

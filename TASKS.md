@@ -7,7 +7,7 @@ first unticked box.
 **Last updated:** 2026-08-25
 **Current task:** `S1-27` — tray icon and app lifetime
 **Stage:** 1 — Sticky note + app shell
-**Done:** 18 of 50 (5 tasks dropped, see below)
+**Done:** 18 of 52 (5 tasks dropped, 2 added, see below)
 
 ## ⚠ BUILD ORDER OVERRIDDEN — 2026-08-25
 
@@ -22,8 +22,9 @@ The user reordered the roadmap after reviewing what was left:
 1. **Finish Stage 1** — everything that does not need a second machine. Tray, palette,
    off-screen clamping, animation, reduced motion, and the whole verification queue.
 2. **Stage W — every widget type**, single-player and fully working: Todo, Kanban,
-   Calendar, Shared Document, Whiteboard. This is the old Stages 4 and 5, moved ahead
-   of the backend.
+   Calendar, Shared Document, Whiteboard, and a **Spreadsheet** the user added on
+   2026-08-25. This is the old Stages 4 and 5, moved ahead of the backend, plus one type
+   that is not in the spec at all.
 3. **Stage 2 — backend skeleton**, then **Stage 3 — hardened sync**, then the two
    deferred Stage 1 tasks (S1-36, S1-37) that genuinely need a peer.
 
@@ -550,7 +551,7 @@ work correctly on one machine before any multiplayer work starts.
 
 Broken down now rather than left coarse, because it is the next stage to be reached.
 
-Stage DoD: all five widget types create, open, edit, close, delete and persist from home ·
+Stage DoD: all six widget types create, open, edit, close, delete and persist from home ·
 each within the 5–15 MB per-widget budget · every type wears the same 32px header and
 glyph strip (rule 3) · no second accent colour anywhere (rules 1 and 2).
 
@@ -669,11 +670,50 @@ because the app is currently hardcoded to a single type.
   *DoD:* draw, pan, zoom, erase; strokes survive a restart. Anything §10.5 does not answer
   becomes an open question below, not a guess.
 
-### Wg — sign-off
+### Wg — Spreadsheet
 
-- [ ] **SW-13 · Stage W sign-off audit** — `M`
-  Needs: SW-12. Walk all five types against `handoff/screenshots/widget-types.png` side by
-  side. Re-measure per-widget RSS for each type (5–15 MB each) and app total (< 50 MB).
+**Requested by the user 2026-08-25**, after the widget list was reviewed. It is **not in
+CLAUDE.md at all** — there is no §10 subsection and no artboard for it, so it carries more
+unanswered design questions than any other type here. Open questions 5 and 6 below must be
+answered before SW-13 starts.
+
+- [ ] **SW-13 · `SheetDoc`** — `L`
+  Needs: SW-04. **The data shape is an open question — do not guess it** (§4.1: ask on
+  anything touching a CRDT data shape). The likely answer is a **sparse map keyed by cell
+  address**, not an array of row arrays: a nested-array grid has the same concurrent-move
+  failure mode as Kanban's columns, and inserting a row or column mid-sheet would rewrite
+  every key below it. If row and column insertion is in scope, both axes need
+  **fractional indices**, exactly as SW-09 does for cards.
+  *DoD:* unit tests — two docs editing different cells converge; two docs editing the
+  **same** cell converge without either edit being silently dropped.
+
+- [ ] **SW-14 · Spreadsheet widget window** — `L`
+  Needs: SW-03, SW-13. Grid of cells with row and column headers.
+  What the design language already settles, without needing a new token:
+  - Grid lines are 1px `edge` hairlines (§6.7's divider rule — the gap positions them).
+  - Row/column headers are interface face 11 UPPERCASE `dim`, like every other metadata
+    label in the product.
+  - Cell contents are body face 14/22.
+  - **The selected cell is a 1px `text` outline — no fill, no tint**, the same decision
+    §10.3 already makes for the Kanban drop target. There is no accent colour to select
+    with (rules 1 and 2), and `signal` red is spoken for.
+  - The editing cell reuses `TextField`'s focus treatment from SW-03.
+  - Scrolling uses a `Flickable` with **no visible scrollbar track**, per §7.3.
+  **Cell hit-testing must use one `TouchArea` over the grid that resolves the cell from
+  `mouse-x`/`mouse-y`, not one `TouchArea` per cell** — per-cell areas would be
+  thousands of overlapping regions, which is the §13.3 failure mode at scale, and a
+  per-cell allocation the 5–15 MB budget will not absorb.
+  *DoD:* type into cells, navigate with arrows/Tab/Enter, resize the window, restart —
+  contents and grid geometry intact. Formula support is **out of scope** unless open
+  question 5 says otherwise.
+
+### Wh — sign-off
+
+- [ ] **SW-15 · Stage W sign-off audit** — `M`
+  Needs: SW-14. Walk all six types against `handoff/screenshots/widget-types.png` side by
+  side — noting the artboard covers four of them, and that the Whiteboard and Spreadsheet
+  have no reference to check against beyond the five rules.
+  Re-measure per-widget RSS for each type (5–15 MB each) and app total (< 50 MB).
   Re-check the five rules across every new surface — especially that `signal` red still
   appears in exactly **two** places in the whole product, and that no dot cell fades.
   *DoD:* every Stage W DoD bullet truthfully satisfiable; anything that is not becomes a
@@ -733,7 +773,21 @@ protocol, the storage schema, or a design token not already specified.
    **no artboard for it** — `widget-types.png` covers Todo, Shared Document, Kanban and
    Calendar only. Tool dock contents, shape set, and the stroke style are all unspecified.
    *Blocks:* SW-12. Ask before starting it, do not invent a tool palette.
-5. **Do the other widget types need their own header controls?** The note has four
+5. **Does the Spreadsheet support formulas?** A spreadsheet that only holds literal values
+   is a table; one that evaluates `=SUM(A1:A9)` needs a parser, a dependency graph and a
+   recalculation order, and that is a larger piece of engineering than any other widget in
+   Stage W. It also has a CRDT consequence: a formula cell stores its *source*, and the
+   computed value must be derived locally, never synced as a value — otherwise two peers
+   can disagree about a cell neither of them typed. *Blocks:* SW-13. **Ask before starting.**
+6. **Can Spreadsheet rows and columns be inserted and deleted mid-sheet, or is the grid a
+   fixed size?** Fixed size makes the CRDT a flat map keyed by cell address, which is
+   simple. Insertion needs fractional indices on **both** axes and is substantially more
+   work. *Blocks:* SW-13, and it decides the data shape, so it cannot be deferred and
+   retrofitted later.
+7. **Is the Spreadsheet's default size 640×400 like the Kanban, or wider?** No spec value
+   exists — `canvas-storage`'s `default_size` needs a real number for a new `KIND_SHEET`,
+   and §12 says size by type at creation. *Blocks:* SW-14.
+8. **Do the other widget types need their own header controls?** The note has four
    (colour · pin · delete · close). Colour-as-grey-tone makes sense on a note; whether a
    Kanban or Calendar wants it is undecided. *Blocks:* SW-05 onward — decide once, apply
    to all types, rather than per widget.

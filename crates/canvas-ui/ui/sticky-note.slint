@@ -6,7 +6,6 @@ import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPalette, IconPin, IconTrash, IconX } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
-import { ResizeGrips } from "theme/chrome.slint";
 
 export { WidgetState }
 
@@ -28,14 +27,13 @@ export component StickyNoteWindow inherits Window {
     callback delete-confirmed();
     callback title-edited(string);
     callback close-requested();
-    callback resize-begin(int);
 
     preferred-width: Layout.note-w + 2 * Layout.plate-margin;
     preferred-height: Layout.note-h + 2 * Layout.plate-margin;
     min-width: Layout.note-min-w + 2 * Layout.plate-margin;
     min-height: Layout.note-min-h + 2 * Layout.plate-margin;
     no-frame: true;
-    resize-border-width: 6px;
+    resize-border-width: Layout.resize-border;
     background: transparent;
     title: "Canvas";
 
@@ -367,14 +365,6 @@ export component StickyNoteWindow inherits Window {
                 }
             }
         }
-    }
-
-    ResizeGrips {
-        x: Layout.plate-margin;
-        y: Layout.plate-margin;
-        width: parent.width - 2 * Layout.plate-margin;
-        height: parent.height - 2 * Layout.plate-margin;
-        begin(h) => { root.resize-begin(h); }
     }
 
     init => { body-input.focus(); }

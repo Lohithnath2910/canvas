@@ -115,17 +115,8 @@ impl App {
             let weak = Rc::downgrade(app);
             home.on_delete_row(move |id| {
                 if let Some(app) = weak.upgrade() {
-                    App::delete_note(&app, &id.to_string());
+                    App::delete_note(&app, id.as_ref());
                     App::refresh_home(&app);
-                }
-            });
-        }
-
-        {
-            let handle = home.as_weak();
-            home.on_resize_begin(move |hit| {
-                if let Some(home) = handle.upgrade() {
-                    crate::desktop_layer::begin_native_resize(home.window(), hit);
                 }
             });
         }
@@ -443,15 +434,6 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
             if let Some(note) = a.notes.get_mut(&id) {
                 note.placement.pinned = pinned;
                 note.placement_dirty = true;
-            }
-        });
-    }
-
-    {
-        let handle = window.as_weak();
-        window.on_resize_begin(move |hit| {
-            if let Some(window) = handle.upgrade() {
-                crate::desktop_layer::begin_native_resize(window.window(), hit);
             }
         });
     }

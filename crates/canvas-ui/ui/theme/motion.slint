@@ -1,8 +1,10 @@
 
+export global Ease {
+    out property <easing> standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
 export global Motion {
     in-out property <bool> reduced: false;
-
-    out property <easing> standard: cubic-bezier(0.2, 0, 0, 1);
 
     out property <duration> open: root.reduced ? 100ms : 160ms;
 

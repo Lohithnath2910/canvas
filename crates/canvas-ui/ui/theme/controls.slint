@@ -1,7 +1,7 @@
 
 import { Palette } from "palette.slint";
 import { Typography } from "typography.slint";
-import { Motion } from "motion.slint";
+import { Motion, Ease } from "motion.slint";
 import { Layout } from "layout.slint";
 
 export component IconButton inherits Rectangle {
@@ -58,7 +58,7 @@ export component IconButton inherits Rectangle {
         width: Layout.icon-size;
         height: Layout.icon-size;
         opacity: (root.revealed || focus.has-focus) ? 1.0 : 0.0;
-        animate opacity { duration: Motion.hover; easing: Motion.standard; }
+        animate opacity { duration: Motion.hover; easing: Ease.standard; }
         @children
     }
 }
@@ -98,7 +98,7 @@ export component Button inherits Rectangle {
 
     opacity: root.enabled ? 1.0 : 0.40;
 
-    animate background { duration: Motion.press; easing: Motion.standard; }
+    animate background { duration: Motion.press; easing: Ease.standard; }
 
     text-label := Text {
         x: 16px;

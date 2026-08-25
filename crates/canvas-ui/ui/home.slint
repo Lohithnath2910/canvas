@@ -1,11 +1,10 @@
 import { Palette } from "theme/palette.slint";
 import { Typography } from "theme/typography.slint";
-import { Motion } from "theme/motion.slint";
+import { Motion, Ease } from "theme/motion.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconTrash, IconPlus, IconNote, IconCheck, IconColumns, IconCalendar, IconDoc, IconX } from "theme/icons.slint";
-import { ResizeGrips } from "theme/chrome.slint";
 import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
 
 export struct NoteRow {
@@ -41,7 +40,7 @@ component Row inherits Rectangle {
     background: (touch.has-hover || focus.has-focus)
         ? Palette.elev-raised
         : Colors.transparent;
-    animate background { duration: Motion.hover; easing: Motion.standard; }
+    animate background { duration: Motion.hover; easing: Ease.standard; }
 
     focus := FocusScope {
         width: 100%;
@@ -149,14 +148,13 @@ export component HomeWindow inherits Window {
     callback window-moved(length, length);
     callback quit-requested();
     callback close-requested();
-    callback resize-begin(int);
 
     preferred-width: 420px + 2 * Layout.plate-margin;
     preferred-height: 520px + 2 * Layout.plate-margin;
     min-width: 340px + 2 * Layout.plate-margin;
     min-height: 300px + 2 * Layout.plate-margin;
     no-frame: true;
-    resize-border-width: 6px;
+    resize-border-width: Layout.resize-border;
     background: transparent;
     title: "Canvas";
 
@@ -365,14 +363,6 @@ export component HomeWindow inherits Window {
                 }
             }
         }
-    }
-
-    ResizeGrips {
-        x: Layout.plate-margin;
-        y: Layout.plate-margin;
-        width: parent.width - 2 * Layout.plate-margin;
-        height: parent.height - 2 * Layout.plate-margin;
-        begin(h) => { root.resize-begin(h); }
     }
 
     FocusScope {

@@ -1,6 +1,6 @@
 
 import { Palette } from "palette.slint";
-import { Motion } from "motion.slint";
+import { Motion, Ease } from "motion.slint";
 
 export component Panel inherits Rectangle {
     in property <length> corner-radius: 20px;
@@ -25,7 +25,7 @@ export component Panel inherits Rectangle {
 
     animate drop-shadow-offset-y, drop-shadow-blur, drop-shadow-color {
         duration: Motion.drag-shadow;
-        easing: Motion.standard;
+        easing: Ease.standard;
     }
 
     @children
