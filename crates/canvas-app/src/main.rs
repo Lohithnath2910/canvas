@@ -7,6 +7,7 @@ mod desktop_layer;
 mod hotkey;
 mod reduced_motion;
 mod screen;
+mod widget;
 
 use app::{App, SharedApp};
 

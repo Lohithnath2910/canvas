@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `SW-01` — generalise the runtime (S1-48 is skipped, blocked on open question 9)
-**Stage:** 1 — Sticky note + app shell
+**Current task:** `SW-02` — home: a create control per type
+**Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
 **Done:** 23 ticked, 46 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 41 tests pass.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -233,6 +233,21 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
 - [ ] Faster path if you would rather not touch Windows settings:
       `$env:CANVAS_REDUCED_MOTION="1"; cargo run -p canvas-app` forces it on, `"0"` forces
       it off. This overrides the OS and is for testing only
+
+
+**The runtime after SW-01** → **SW-01**
+- [ ] Everything in the **Note window** and **Home window** blocks above still behaves the
+      same. SW-01 renamed `App.notes` to `App.widgets` and moved the window and document
+      behind enums — **nothing about a sticky note was meant to change**, so any difference
+      you notice here is a regression, not a feature
+- [ ] `cargo run -p canvas-app --example insert_todo`, then launch: the console says
+      `is a "todo" widget and that type has no document yet (Stage W)` instead of the row
+      being silently dropped, and the row shows in home with the `check` glyph. Clicking it
+      prints the same line rather than doing nothing. `--example insert_todo --remove`
+      deletes it again
+- [ ] Ctrl+K and type a note's title — the result row's 24px glyph is the **note** glyph.
+      SW-01 made the palette pick its glyph by widget type instead of hardcoding `note`,
+      so this is the line that proves the mapping still resolves → **S1-34**
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -900,9 +915,21 @@ because the app is currently hardcoded to a single type.
   type-dispatched: one live-widget registry that can hold any window/doc pair, spawned by
   `widget_type`. Keep the flush timer, the placement tracking and the pending-update
   buffer shared — they are type-agnostic already and must not be duplicated per type.
+  **Done 2026-08-25.** New `widget.rs`: `WidgetDoc` and `WidgetWindow` are enums with one
+  arm each today, and `LiveWidget` holds the shared state — placement, pending updates,
+  the two dirty flags, the undo history and the poll timer — **once**, not per type.
+  Enums rather than trait objects because `slint::ComponentHandle` has an associated type
+  and is not object-safe; adding a type is one arm per `match`, and the compiler then
+  names every site that needs it. `App.notes` became `App.widgets`, `open_note` became
+  `open_widget`, and boot no longer filters by kind.
   *DoD:* a row of a non-note type in the database opens its own window at boot instead of
   being silently skipped. Verified with a hand-inserted row before any real second type
-  exists.
+  exists. ✅ **the silent skip is gone** — confirmed 2026-08-25 by
+  `cargo run -p canvas-app --example insert_todo` and reading the boot log:
+  `canvas: <id> is a "todo" widget and that type has no document yet (Stage W)`.
+  🟡 **"opens its own window" cannot be finished here** — there is no second window type
+  to open until **SW-04**. Re-check this line then; the dispatch it needs is in place.
+  `--example insert_todo --remove` cleans the row up again.
 
 - [ ] **SW-02 · Home: a create control per type** — `M`
   Needs: SW-01. `NEW NOTE` becomes a create control per built type, each using its own

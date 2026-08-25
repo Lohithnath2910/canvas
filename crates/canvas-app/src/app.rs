@@ -6,6 +6,8 @@ use std::time::Duration;
 use slint::ComponentHandle;
 
 use canvas_doc::{StickyNoteDoc, UndoHistory};
+
+use crate::widget::{LiveWidget, WidgetDoc, WidgetWindow};
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
     platform_system_sans, CanvasTray, HomeWindow, Motion, NoteRow, PaletteRow, PaletteWindow,
@@ -139,20 +141,9 @@ fn play_close<T: Fadeable>(window: T, done: impl FnOnce() + 'static) {
     });
 }
 
-struct Note {
-    window: StickyNoteWindow,
-    doc: StickyNoteDoc,
-    placement: WindowPlacement,
-    history: UndoHistory,
-    pending_updates: Vec<Vec<u8>>,
-    text_dirty: bool,
-    placement_dirty: bool,
-    pin_timer: Option<slint::Timer>,
-}
-
 pub struct App {
     store: Store,
-    notes: HashMap<String, Note>,
+    widgets: HashMap<String, LiveWidget>,
     home: Option<HomeWindow>,
     palette: Option<PaletteWindow>,
     reduced_motion: bool,
@@ -172,7 +163,7 @@ impl App {
 
         let app: SharedApp = Rc::new(RefCell::new(App {
             store,
-            notes: HashMap::new(),
+            widgets: HashMap::new(),
             home: None,
             palette: None,
             reduced_motion,
@@ -184,7 +175,6 @@ impl App {
             a.store
                 .list_widgets()?
                 .into_iter()
-                .filter(|w| w.widget_type == KIND_STICKY_NOTE)
                 .filter(|w| {
                     a.store
                         .get_placement(&w.id)
@@ -198,7 +188,7 @@ impl App {
         };
 
         for id in to_open {
-            App::open_note(&app, &id)?;
+            App::open_widget(&app, &id)?;
         }
 
         App::open_home(&app)?;
@@ -242,12 +232,12 @@ impl App {
                     return;
                 };
                 let id = id.to_string();
-                let is_open = app.borrow().notes.contains_key(&id);
+                let is_open = app.borrow().widgets.contains_key(&id);
                 if is_open {
-                    App::close_note(&app, &id);
+                    App::close_widget(&app, &id);
                 } else {
                     let _ = app.borrow().store.set_open(&id, true);
-                    if let Err(e) = App::open_note(&app, &id) {
+                    if let Err(e) = App::open_widget(&app, &id) {
                         eprintln!("canvas: open failed: {e}");
                     }
                 }
@@ -259,7 +249,7 @@ impl App {
             let weak = Rc::downgrade(app);
             home.on_delete_row(move |id| {
                 if let Some(app) = weak.upgrade() {
-                    App::delete_note(&app, id.as_ref());
+                    App::delete_widget(&app, id.as_ref());
                     App::refresh_home(&app);
                 }
             });
@@ -336,9 +326,9 @@ impl App {
         let rows: Vec<NoteRow> = widgets
             .iter()
             .map(|w| {
-                let open = a.notes.contains_key(&w.id);
-                let preview = if let Some(note) = a.notes.get(&w.id) {
-                    note.doc.get_text()
+                let open = a.widgets.contains_key(&w.id);
+                let preview = if let Some(widget) = a.widgets.get(&w.id) {
+                    widget.doc.text()
                 } else {
                     a.store
                         .get_document(&w.id)
@@ -358,7 +348,7 @@ impl App {
             })
             .collect();
 
-        let open_count = a.notes.len() as i32;
+        let open_count = a.widgets.len() as i32;
         drop(a);
 
         let model: slint::VecModel<NoteRow> = slint::VecModel::from(rows);
@@ -367,127 +357,141 @@ impl App {
     }
 
     pub fn create_note(app: &SharedApp) -> Result<String, Box<dyn std::error::Error>> {
+        App::create_widget(app, KIND_STICKY_NOTE)
+    }
+
+    pub fn create_widget(
+        app: &SharedApp,
+        kind: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let id = {
             let a = app.borrow();
-            let (widget, _) = a.store.create_widget(KIND_STICKY_NOTE)?;
-            widget.id
+            let (row, _) = a.store.create_widget(kind)?;
+            row.id
         };
-        App::open_note(app, &id)?;
+        App::open_widget(app, &id)?;
         Ok(id)
     }
 
-    pub fn open_note(app: &SharedApp, id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let existing = app.borrow().notes.get(id).map(|n| n.window.clone_strong());
+    pub fn open_widget(app: &SharedApp, id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let existing = app.borrow().widgets.get(id).map(|w| w.window.clone());
         if let Some(window) = existing {
-            play_open(&window);
+            window.play_open();
             window.show()?;
-            clamp_window_onto_screen(window.window());
+            clamp_window_onto_screen(window.slint());
             return Ok(());
         }
 
-        let (title, placement, doc, history) = {
+        let (kind, title, placement, doc, history) = {
             let a = app.borrow();
-            let widget = a
+            let row = a
                 .store
                 .get_widget(id)?
                 .ok_or_else(|| format!("no widget {id}"))?;
             let placement = a
                 .store
                 .get_placement(id)?
-                .unwrap_or_else(|| WindowPlacement::default_for(&widget.widget_type));
-            let doc = match a.store.get_document(id)? {
-                Some(bytes) if !bytes.is_empty() => StickyNoteDoc::load(&bytes),
-                _ => StickyNoteDoc::new(),
+                .unwrap_or_else(|| WindowPlacement::default_for(&row.widget_type));
+            let snapshot = a.store.get_document(id)?;
+            let Some(doc) = WidgetDoc::load(&row.widget_type, snapshot.as_deref()) else {
+                drop(a);
+                eprintln!(
+                    "canvas: {id} is a {:?} widget and that type has no document yet (Stage W)",
+                    row.widget_type
+                );
+                return Ok(());
             };
             let revisions = a.store.revisions_with_time(id).unwrap_or_default();
-            let history = UndoHistory::from_revisions(&revisions, &doc.get_text());
-            (widget.title, placement, doc, history)
+            let history = UndoHistory::from_revisions(&revisions, &doc.text());
+            (row.widget_type, row.title, placement, doc, history)
         };
 
-        let window = StickyNoteWindow::new()?;
-        window
-            .global::<Typography>()
-            .set_system_sans(platform_system_sans().into());
-        window
-            .global::<Motion>()
-            .set_reduced(app.borrow().reduced_motion);
-        window.set_note_title(title.into());
-        window.set_note_text(doc.get_text().into());
-        window.set_pinned(placement.pinned);
-        window.set_tone(placement.tone as i32);
+        let reduced = app.borrow().reduced_motion;
+        let Some(built) = WidgetWindow::create(&kind, reduced) else {
+            eprintln!(
+                "canvas: {id} is a {kind:?} widget and that type has no window yet (Stage W)"
+            );
+            return Ok(());
+        };
+        let window = built?;
 
-        window.window().set_position(slint::LogicalPosition::new(
+        window.set_title(&title);
+        window.set_text(&doc.text());
+        window.apply_placement(&placement);
+
+        window.slint().set_position(slint::LogicalPosition::new(
             placement.x as f32 - PLATE_MARGIN,
             placement.y as f32 - PLATE_MARGIN,
         ));
-        window.window().set_size(slint::LogicalSize::new(
+        window.slint().set_size(slint::LogicalSize::new(
             placement.width as f32 + 2.0 * PLATE_MARGIN,
             placement.height as f32 + 2.0 * PLATE_MARGIN,
         ));
 
-        app.borrow_mut().notes.insert(
+        app.borrow_mut().widgets.insert(
             id.to_string(),
-            Note {
-                window: window.clone_strong(),
+            LiveWidget {
+                window: window.clone(),
                 doc,
                 history,
                 placement,
                 pending_updates: Vec::new(),
                 text_dirty: false,
                 placement_dirty: false,
-                pin_timer: None,
+                poll_timer: None,
             },
         );
 
-        let pin_timer = wire_note(app, id, &window);
-        if let Some(note) = app.borrow_mut().notes.get_mut(id) {
-            note.pin_timer = Some(pin_timer);
+        let poll_timer = match &window {
+            WidgetWindow::StickyNote(note) => wire_note(app, id, note),
+        };
+        if let Some(widget) = app.borrow_mut().widgets.get_mut(id) {
+            widget.poll_timer = Some(poll_timer);
         }
-        play_open(&window);
+        window.play_open();
         window.show()?;
-        let scale = window.window().scale_factor();
-        window.set_resize_border(window.get_resize_border() * scale);
+        let scale = window.slint().scale_factor();
+        window.scale_resize_border();
 
-        if let Some(moved) = clamp_window_onto_screen(window.window()) {
+        if let Some(moved) = clamp_window_onto_screen(window.slint()) {
             let logical = moved.to_logical(scale);
             let mut a = app.borrow_mut();
-            if let Some(note) = a.notes.get_mut(id) {
-                note.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
-                note.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
-                note.placement_dirty = true;
+            if let Some(widget) = a.widgets.get_mut(id) {
+                widget.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
+                widget.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
+                widget.placement_dirty = true;
             }
         }
         Ok(())
     }
-
-    pub fn close_note(app: &SharedApp, id: &str) {
+    pub fn close_widget(app: &SharedApp, id: &str) {
         let mut a = app.borrow_mut();
-        if let Some(mut note) = a.notes.remove(id) {
-            play_close(note.window, || {});
-            for update in note.pending_updates.drain(..) {
+        if let Some(mut widget) = a.widgets.remove(id) {
+            widget.window.play_close();
+            for update in widget.pending_updates.drain(..) {
                 let _ = a.store.append_revision(id, &update);
             }
             let _ = a
                 .store
-                .save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
-            let _ = a.store.save_placement(id, &note.placement);
+                .save_document(id, &widget.doc.snapshot(), &widget.doc.state_vector());
+            let _ = a.store.save_placement(id, &widget.placement);
         }
         let _ = a.store.set_open(id, false);
     }
 
-    pub fn delete_note(app: &SharedApp, id: &str) {
+    pub fn delete_widget(app: &SharedApp, id: &str) {
         let mut a = app.borrow_mut();
-        if let Some(note) = a.notes.remove(id) {
-            play_close(note.window, || {});
+        if let Some(widget) = a.widgets.remove(id) {
+            widget.window.play_close();
         }
         let _ = a.store.delete_widget(id);
     }
 
-    pub fn undo_note(app: &SharedApp, id: &str) {
+    pub fn undo_widget(app: &SharedApp, id: &str) {
         App::step_history(app, id, true);
     }
 
-    pub fn redo_note(app: &SharedApp, id: &str) {
+    pub fn redo_widget(app: &SharedApp, id: &str) {
         App::step_history(app, id, false);
     }
 
@@ -496,29 +500,29 @@ impl App {
             let Ok(mut a) = app.try_borrow_mut() else {
                 return;
             };
-            let Some(note) = a.notes.get_mut(id) else {
+            let Some(widget) = a.widgets.get_mut(id) else {
                 return;
             };
             let step = if backwards {
-                note.history.undo()
+                widget.history.undo()
             } else {
-                note.history.redo()
+                widget.history.redo()
             };
             let Some(target) = step.map(str::to_string) else {
                 return;
             };
-            if let Some(update) = note.doc.set_text(&target) {
-                note.pending_updates.push(update);
-                note.text_dirty = true;
+            if let Some(update) = widget.doc.set_text(&target) {
+                widget.pending_updates.push(update);
+                widget.text_dirty = true;
             }
-            (note.window.clone_strong(), target)
+            (widget.window.clone(), target)
         };
-        restored.0.set_note_text(restored.1.into());
+        restored.0.set_text(&restored.1);
         App::refresh_home(app);
     }
 
     pub fn open_count(app: &SharedApp) -> usize {
-        app.borrow().notes.len()
+        app.borrow().widgets.len()
     }
 
     fn refresh_reduced_motion(a: &mut App) {
@@ -533,8 +537,8 @@ impl App {
         if let Some(palette) = a.palette.as_ref() {
             palette.global::<Motion>().set_reduced(wanted);
         }
-        for note in a.notes.values() {
-            note.window.global::<Motion>().set_reduced(wanted);
+        for widget in a.widgets.values() {
+            widget.window.set_reduced_motion(wanted);
         }
     }
 
@@ -549,20 +553,21 @@ impl App {
                 return;
             };
             App::refresh_reduced_motion(&mut a);
-            let App { store, notes, .. } = &mut *a;
-            for (id, note) in notes.iter_mut() {
-                if note.text_dirty {
-                    for update in note.pending_updates.drain(..) {
+            let App { store, widgets, .. } = &mut *a;
+            for (id, widget) in widgets.iter_mut() {
+                if widget.text_dirty {
+                    for update in widget.pending_updates.drain(..) {
                         let _ = store.append_revision(id, &update);
                     }
-                    let _ = store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
+                    let _ =
+                        store.save_document(id, &widget.doc.snapshot(), &widget.doc.state_vector());
                     let _ = store.touch(id);
-                    note.history.checkpoint(&note.doc.get_text());
-                    note.text_dirty = false;
+                    widget.history.checkpoint(&widget.doc.text());
+                    widget.text_dirty = false;
                 }
-                if note.placement_dirty {
-                    let _ = store.save_placement(id, &note.placement);
-                    note.placement_dirty = false;
+                if widget.placement_dirty {
+                    let _ = store.save_placement(id, &widget.placement);
+                    widget.placement_dirty = false;
                 }
             }
         });
@@ -570,16 +575,16 @@ impl App {
 
     pub fn flush_all(app: &SharedApp) {
         let mut a = app.borrow_mut();
-        let App { store, notes, .. } = &mut *a;
-        for (id, note) in notes.iter_mut() {
-            for update in note.pending_updates.drain(..) {
+        let App { store, widgets, .. } = &mut *a;
+        for (id, widget) in widgets.iter_mut() {
+            for update in widget.pending_updates.drain(..) {
                 let _ = store.append_revision(id, &update);
             }
-            let _ = store.save_document(id, &note.doc.snapshot(), &note.doc.state_vector());
-            let _ = store.save_placement(id, &note.placement);
-            note.history.checkpoint(&note.doc.get_text());
-            note.text_dirty = false;
-            note.placement_dirty = false;
+            let _ = store.save_document(id, &widget.doc.snapshot(), &widget.doc.state_vector());
+            let _ = store.save_placement(id, &widget.placement);
+            widget.history.checkpoint(&widget.doc.text());
+            widget.text_dirty = false;
+            widget.placement_dirty = false;
         }
     }
 }
@@ -596,13 +601,13 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
                 return;
             };
             let mut a = app.borrow_mut();
-            let App { store, notes, .. } = &mut *a;
-            let Some(note) = notes.get_mut(&id) else {
+            let App { store, widgets, .. } = &mut *a;
+            let Some(widget) = widgets.get_mut(&id) else {
                 return;
             };
-            if let Some(update) = note.doc.set_text(&text) {
-                note.pending_updates.push(update);
-                note.text_dirty = true;
+            if let Some(update) = widget.doc.set_text(&text) {
+                widget.pending_updates.push(update);
+                widget.text_dirty = true;
             }
             let _ = store;
         });
@@ -632,8 +637,8 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
             let Ok(mut a) = app.try_borrow_mut() else {
                 return;
             };
-            if let Some(note) = a.notes.get_mut(&id) {
-                note.placement_dirty = true;
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement_dirty = true;
             }
         });
     }
@@ -657,10 +662,10 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
             let Ok(mut a) = app.try_borrow_mut() else {
                 return;
             };
-            if let Some(note) = a.notes.get_mut(&id) {
+            if let Some(widget) = a.widgets.get_mut(&id) {
                 let logical = next.to_logical(scale);
-                note.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
-                note.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
+                widget.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
+                widget.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
             }
         });
     }
@@ -673,9 +678,9 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
                 return;
             };
             let mut a = app.borrow_mut();
-            if let Some(note) = a.notes.get_mut(&id) {
-                note.placement.tone = tone as i64;
-                note.placement_dirty = true;
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement.tone = tone as i64;
+                widget.placement_dirty = true;
             }
         });
     }
@@ -692,9 +697,9 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
                 return;
             };
             let mut a = app.borrow_mut();
-            if let Some(note) = a.notes.get_mut(&id) {
-                note.placement.pinned = pinned;
-                note.placement_dirty = true;
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement.pinned = pinned;
+                widget.placement_dirty = true;
             }
         });
     }
@@ -728,7 +733,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
             let Some(app) = weak.upgrade() else {
                 return;
             };
-            App::close_note(&app, &id);
+            App::close_widget(&app, &id);
             App::refresh_home(&app);
             crate::maybe_quit(&app);
         });
@@ -748,7 +753,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
         let id = owned_id.clone();
         window.on_undo_requested(move || {
             if let Some(app) = weak.upgrade() {
-                App::undo_note(&app, &id);
+                App::undo_widget(&app, &id);
             }
         });
     }
@@ -758,7 +763,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
         let id = owned_id.clone();
         window.on_redo_requested(move || {
             if let Some(app) = weak.upgrade() {
-                App::redo_note(&app, &id);
+                App::redo_widget(&app, &id);
             }
         });
     }
@@ -770,7 +775,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
             let Some(app) = weak.upgrade() else {
                 return;
             };
-            App::delete_note(&app, &id);
+            App::delete_widget(&app, &id);
             App::refresh_home(&app);
             crate::maybe_quit(&app);
         });
@@ -781,7 +786,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
         let id = owned_id.clone();
         window.window().on_close_requested(move || {
             if let Some(app) = weak.upgrade() {
-                App::close_note(&app, &id);
+                App::close_widget(&app, &id);
                 App::refresh_home(&app);
                 crate::maybe_quit(&app);
             }
@@ -807,17 +812,17 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
             let Ok(mut a) = app.try_borrow_mut() else {
                 return;
             };
-            if let Some(note) = a.notes.get_mut(&id) {
+            if let Some(widget) = a.widgets.get_mut(&id) {
                 let size = window
                     .window()
                     .size()
                     .to_logical(window.window().scale_factor());
                 let w = (size.width - 2.0 * PLATE_MARGIN).round() as i32;
                 let h = (size.height - 2.0 * PLATE_MARGIN).round() as i32;
-                if w != note.placement.width || h != note.placement.height {
-                    note.placement.width = w;
-                    note.placement.height = h;
-                    note.placement_dirty = true;
+                if w != widget.placement.width || h != widget.placement.height {
+                    widget.placement.width = w;
+                    widget.placement.height = h;
+                    widget.placement_dirty = true;
                 }
             }
         });
@@ -1008,10 +1013,10 @@ impl App {
         if let Some(home) = &a.home {
             return home.window().scale_factor();
         }
-        a.notes
+        a.widgets
             .values()
             .next()
-            .map(|n| n.window.window().scale_factor())
+            .map(|w| w.window.slint().scale_factor())
             .unwrap_or(1.0)
     }
 
@@ -1098,12 +1103,12 @@ impl App {
                 .map(|w| PaletteRow {
                     id: w.id.clone().into(),
                     label: w.title.clone().into(),
-                    meta: if a.notes.contains_key(&w.id) {
+                    meta: if a.widgets.contains_key(&w.id) {
                         "OPEN".into()
                     } else {
                         slint::SharedString::new()
                     },
-                    icon: "note".into(),
+                    icon: w.widget_type.clone().into(),
                 })
                 .collect();
             drop(a);
@@ -1134,7 +1139,7 @@ impl App {
             _ => {
                 App::hide_palette(app);
                 let _ = app.borrow().store.set_open(id, true);
-                if let Err(e) = App::open_note(app, id) {
+                if let Err(e) = App::open_widget(app, id) {
                     eprintln!("canvas: open failed: {e}");
                 }
                 App::refresh_home(app);
@@ -1176,8 +1181,8 @@ impl App {
         App::flush_all(app);
         {
             let mut a = app.borrow_mut();
-            for note in a.notes.values() {
-                let _ = note.window.hide();
+            for widget in a.widgets.values() {
+                widget.window.hide();
             }
             if let Some(home) = &a.home {
                 let _ = home.hide();

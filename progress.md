@@ -42,28 +42,29 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage 1 has run out of tasks that can be done without the user.** `S1-45` (sign-off
-audit) needs the VERIFICATION QUEUE walked; `S1-48` needs open question 9 answered;
-`S1-36` and `S1-37` need a second machine. So the loop crosses into **Stage W**.
+**`SW-02` — home: a create control per type.** ([TASKS.md](TASKS.md), section Wa.)
+`NEW NOTE` becomes one create control per **built** type, each carrying its own §5.6 glyph.
+The list side needs no work — `KindGlyph` in `home.slint` already picks the right glyph by
+kind, and `canvas-storage::default_size` already returns the right default size per type.
+The runtime is ready too: `App::create_widget(app, kind)` exists as of SW-01 and
+`create_note` is a one-line wrapper over it. **Only expose a control for a type that can
+actually open a window**, which today is the sticky note alone — a button that prints
+"no window yet" to the console is worse than no button. So SW-02 is really "build the
+control strip, wired to the type table" and it fills up as SW-04 onward land.
 
-**`SW-01` — generalise the runtime to any widget type.** ([TASKS.md](TASKS.md), section
-Wa.) A large one, and everything else in Stage W is behind it. Today `App::boot` filters
-to `KIND_STICKY_NOTE` and `Note` is a concrete struct holding a `StickyNoteWindow` and a
-`StickyNoteDoc`; both have to become type-dispatched — one live-widget registry that can
-hold any window/doc pair, spawned by `widget_type`. **Keep the flush timer, the placement
-tracking, the pending-update buffer, the drag anchor and the undo history shared** — they
-are already type-agnostic and duplicating them per type is how this refactor goes wrong.
-*DoD:* a hand-inserted row of a non-note type opens its own window at boot instead of
-being silently skipped, before any real second type exists.
+Then `SW-03` (the four missing §6 components — `Checkbox`, `Tag`, `Divider`, `TextField`,
+and note that `Checkbox` is radius **2px**, not 8px, with **no tick glyph**), then Todo at
+`SW-04`.
 
-Then `SW-02` (a create control per type on home) and `SW-03` (the four missing §6
-components: `Checkbox`, `Tag`, `Divider`, `TextField`), then Todo at `SW-04`.
+**SW-01 was a rename and re-shape of every note code path, and nothing about a note was
+meant to change.** So the whole **Note window** and **Home window** block of the
+VERIFICATION QUEUE is now doubling as SW-01's regression check. Anything that behaves
+differently there is a regression, not a feature.
 
-**The VERIFICATION QUEUE is now the largest single block of value the user can unlock**,
-and it has grown again: undo/redo (S1-43), reduced motion (S1-44) and the home scrollbar
-(S1-47) have joined the palette, the global hotkey, the open/close animation, the screen
-clamp and the drag feel. All of it is written and clippy-clean; none of it has been watched
-working. `S1-45` cannot honestly close until it is walked.
+**The VERIFICATION QUEUE is still the largest block of value the user can unlock** —
+undo/redo (S1-43), reduced motion (S1-44), the home scrollbar (S1-47) and the SW-01
+regression check sit on top of the palette, the global hotkey, the open/close animation,
+the screen clamp and the drag feel. All written, all clippy-clean, none watched working.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -241,6 +242,55 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-25 — SW-01: the runtime stops being a sticky-note runtime
+
+- ✅ **A non-note row no longer vanishes at boot** — verified 2026-08-25 by
+  `cargo run -p canvas-app --example insert_todo` and reading the boot log:
+  `canvas: 0a7f7e83… is a "todo" widget and that type has no document yet (Stage W)`.
+  Before this, `App::boot` filtered the list to `KIND_STICKY_NOTE` and the row was dropped
+  without a word.
+- 🟡 **That sticky notes still behave identically has not been watched.** This is a rename
+  and a re-shape of every note code path; clippy is clean and all 41 tests pass, but
+  nothing about a note was *meant* to change, so the whole Note-window block of the
+  VERIFICATION QUEUE is now also SW-01's regression check.
+
+**Enums, not trait objects, and the reason matters for every type added after this.**
+The obvious shape is `Box<dyn WidgetWindow>`. It does not work: `slint::ComponentHandle`
+carries an associated `Inner` type, so it is not object-safe, and a hand-rolled object-safe
+trait would still need one impl per window type — the same code, with the compiler no
+longer able to tell you where the gaps are. `WidgetDoc` and `WidgetWindow` are therefore
+plain enums with one arm each today. Adding Todo is one arm per `match`, and the compiler
+names every site that has to learn about it. `WidgetWindow` gets a hand-written `Clone`
+because Slint handles clone through `clone_strong()`, not `Clone`.
+
+**The shared state is shared exactly once.** `LiveWidget` owns the placement, the pending
+update buffer, both dirty flags, the undo history and the poll timer, and none of that is
+inside the enums. So the 500ms flush timer, `flush_all`, the drag anchor, the screen clamp
+and S1-43's checkpointing keep working for **any** type without being written again per
+type — which was the specific thing the task said not to get wrong.
+
+**Two things generalised on the way past, both of which were hardcoded to notes:**
+
+- `App::boot` no longer filters `list_widgets()` by kind. Every open row is handed to
+  `open_widget`, which dispatches on `widget_type` and says plainly when a type has no doc
+  or no window yet instead of pretending nothing was there.
+- The palette's result rows used to hardcode `icon: "note"`. They now pass the row's real
+  `widget_type`, and `PaletteGlyph` in `palette.slint` maps all five kinds to their §5.6
+  glyph at 24px — the same mapping `KindGlyph` already does at 16px in `home.slint`.
+  **This renamed the icon key from `note` to `sticky_note`**, so if a palette result ever
+  shows a blank square, that mapping is where to look.
+
+**`create_note` is now a one-line wrapper over `create_widget(kind)`.** It is kept because
+the tray, the home button and the palette's `new-note` action all mean *a note*
+specifically — they are not generic create buttons yet. That is SW-02.
+
+**The DoD is half-met on purpose.** "A non-note row opens its own window" cannot finish
+until there is a second window type to open, which is SW-04. The dispatch that needs is in
+place and the silent skip — the part that was actually a bug — is gone and confirmed.
 
 ### 2026-08-25 — S1-47: the home list gets a scrollbar, and does not get a gutter
 
