@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `SW-04` — `TodoListDoc` in `canvas-doc` (SW-02 is skipped until a second type exists)
+**Current task:** `SW-05` — the Todo widget window
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 23 ticked, 46 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 41 tests pass.
+**Done:** 24 ticked, 45 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 57 tests pass.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -998,13 +998,25 @@ because the app is currently hardcoded to a single type.
 
 ### Wb — Todo
 
-- [ ] **SW-04 · `TodoListDoc` in `canvas-doc`** — `M`
+- [x] **SW-04 · `TodoListDoc` in `canvas-doc`** — `M`
   Needs: S0-2. §11.2's array-of-maps pattern, which is already verified-compiling against
   yrs 0.19.2 — use it as written. `{id, text, done}` only; **do not** build `due` or
   `assignee` speculatively. **Remember the trap:** yrs indexes by UTF-8 byte offset, so any
   text indexing inside an item must walk to a `char_boundary`.
+  **Done 2026-08-25** in `canvas-doc/src/todo.rs`, 16 tests. §11.2 used as written, with
+  three additions its sketch does not cover: `set_text` and `set_done` return `None` when
+  the value is unchanged (matching `StickyNoteDoc::set_text`, so a no-op never writes a
+  revision row), `counts()` returns `(open, done)` because §13.6 says a Slint binding
+  cannot loop, and `add_item` returns the new id alongside the update so the caller does
+  not have to re-scan the array to find what it just made. **Trap 1 does not bite here** —
+  an item's text is replaced wholesale via `map.insert`, never indexed into, so there is
+  no byte offset to get wrong. It becomes live the moment SW-05 does per-keystroke diffing
+  inside an item.
   *DoD:* unit tests matching `StickyNoteDoc`'s — two docs adding and toggling concurrently
   converge, snapshot round-trips, garbage bytes rejected without a panic.
+  ✅ all three, and more — `cargo test --workspace`, 57 tests pass. Convergence is covered
+  three ways: concurrent adds (nothing lost), a concurrent toggle against a rename of the
+  **same item** (both survive), and a concurrent delete against an edit of a sibling.
 
 - [ ] **SW-05 · Todo widget window** — `L`
   Needs: SW-02, SW-03, SW-04. `340×360`. Row gap 12, `Checkbox` + 12px gap. Completed rows:

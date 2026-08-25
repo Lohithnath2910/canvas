@@ -42,19 +42,30 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-04` — `TodoListDoc` in `canvas-doc`.** ([TASKS.md](TASKS.md), section Wb.) §11.2's
-array-of-maps pattern is **already verified compiling against yrs 0.19.2** — use it as
-written rather than re-deriving it. `{id, text, done}` only; do **not** build `due` or
-`assignee` speculatively. **Trap 1 applies**: yrs indexes by UTF-8 byte offset, so any
-text indexing inside an item has to walk to a `char_boundary`. Mirror `StickyNoteDoc`'s
-test set — concurrent add/toggle converging, snapshot round-trip, garbage bytes rejected
-without a panic.
+**`SW-05` — the Todo widget window.** ([TASKS.md](TASKS.md), section Wb.) The first real
+second widget type, and the task that finally closes SW-01's and SW-02's open halves.
+`340×360`, row gap 12, `Checkbox` (SW-03) + 12px gap, completed rows `dim` + 1px strike, a
+due date as a `Tag` on the right, footer of a 1px `edge` rule and `N OPEN · N DONE` in
+interface face 11 `dim`.
 
-Then `SW-05` (the Todo window itself, `340×360`; **counts are computed in Rust and passed
-in as `in property<int>`** — a Slint binding cannot run an imperative loop, §13.6), and
-then back to **`SW-02`**, which was skipped on purpose: a create-control-per-type strip is
-pointless while the sticky note is the only type with a window, and SW-05 is what gives it
-a second one.
+Four things that are already decided and should not be re-derived:
+
+- **Counts come from Rust**, via `TodoListDoc::counts()` → `(open, done)`, passed in as
+  `in property<int>`. A Slint binding cannot run an imperative loop — §13.6, a parse error
+  not a runtime limit.
+- **The window and doc plug into SW-01's enums**: one arm each in `WidgetDoc` and
+  `WidgetWindow` in `widget.rs`, and the compiler names every `match` that needs updating.
+  The shared flush, placement, drag anchor and undo plumbing in `LiveWidget` is already
+  type-agnostic — do not duplicate it.
+- **Rows come over as a Slint `struct` + `ModelRc`** — §13.6's pattern, and `NoteRow` in
+  `home.slint` is a worked example already in this repo.
+- **Reuse `ScrollBar`** for the item list rather than building a second one (S1-46's
+  note), and reuse `wire_note`'s header wiring shape — the 32px header, glyph strip and
+  drag region are the same on every type (rule 3).
+
+Then **`SW-02`** comes back off the shelf, because there will finally be a second type for
+a create control to offer, and SW-01's DoD line about opening a non-note window can be
+re-checked and ticked.
 
 **Two commands worth knowing about that did not exist this morning:**
 `cargo run -p canvas-app -- --gallery` opens the §6 component gallery (SW-03), and
@@ -62,10 +73,10 @@ a second one.
 SW-01's dispatch can be exercised (`--remove` takes it out again).
 
 **The VERIFICATION QUEUE is still the largest block of value the user can unlock**, and it
-now has its own section per task: undo/redo (S1-43), reduced motion (S1-44), the home
-scrollbar (S1-47), the SW-01 regression check, and the four components in `--gallery`
-(SW-03) — on top of the palette, the global hotkey, the open/close animation, the screen
-clamp and the drag feel. All written, all clippy-clean, none watched working.
+now has a section per task: undo/redo (S1-43), reduced motion (S1-44), the home scrollbar
+(S1-47), the SW-01 regression check, and the four components in `--gallery` (SW-03) — on
+top of the palette, the global hotkey, the open/close animation, the screen clamp and the
+drag feel. All written, all clippy-clean, none watched working.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -91,7 +102,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 41 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 57 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -127,7 +138,7 @@ Canvas/
   crates/
     canvas-app/      runtime: App owns the Store + live windows. app.rs is the core.
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
-    canvas-doc/      CRDT documents (yrs). 12 tests.
+    canvas-doc/      CRDT documents (yrs). StickyNoteDoc + UndoHistory + TodoListDoc. 38 tests.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -251,6 +262,50 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-25 — SW-04: `TodoListDoc`
+
+- ✅ **`canvas-doc/src/todo.rs`, 16 tests, all passing** — verified by
+  `cargo test --workspace` (57 tests now). Convergence is covered three ways rather than
+  the one the DoD asks for: concurrent **adds** (nothing lost), a concurrent **toggle
+  against a rename of the same item** (both survive, which is the case a
+  last-write-wins merge would break), and a concurrent **delete against an edit of a
+  sibling**. Snapshot round-trip, idempotent re-application, `diff_since` minimality and
+  garbage-bytes-without-a-panic all mirror `StickyNoteDoc`'s set.
+
+**§11.2's pattern was used as written** — `yrs::Array` of `yrs::Map`, `{id, text, done}`,
+no `due` or `assignee` built on spec. Three things were added that its sketch does not
+cover, each for a reason that already exists elsewhere in this codebase:
+
+- **`set_text` and `set_done` return `None` when nothing changed.** `StickyNoteDoc::set_text`
+  already does this, and it matters more here than it looks: a no-op that still returned an
+  update would write a `revision_history` row, which S1-43's undo replay would then read as
+  a real edit step. Undo would gain phantom stops.
+- **`counts()` returns `(open, done)`.** §13.6 is explicit that a Slint binding cannot run
+  an imperative loop — it is a parse error, not a runtime limit — so the footer's
+  `N OPEN · N DONE` has to be computed in Rust and passed in as `in property<int>`.
+- **`add_item` returns the new id with the update.** Otherwise the caller has to re-read
+  the array to find the row it just created, which is a second transaction for information
+  we already had.
+
+**Trap 1 — yrs indexing by UTF-8 byte offset — does not bite yet, and it is worth being
+clear why rather than assuming it is handled.** An item's text is replaced wholesale with
+`map.insert(&mut txn, "text", …)`; nothing indexes into it, so there is no offset to get
+wrong. The unicode test passes because there is no arithmetic to fail. **The trap goes
+live the moment SW-05 does per-keystroke diffing inside an item**, the way
+`StickyNoteDoc::set_text` does — at which point `common_affixes`' `char_boundary` walk is
+the thing to reuse, not to re-derive.
+
+**The whole-value replace is a real trade-off, not an oversight.** Two peers editing the
+*same* item's text concurrently will have one of them win the field rather than merging
+character by character — but that is a `Map` field write, which is still a CRDT
+resolution, not last-write-wins across the document, and Hard Constraint 3 holds. Todo item
+text is a short label, not prose. If that turns out to be wrong, the fix is a `yrs::Text`
+per item rather than an `Any::String`, and it changes the data shape — so it is a question
+for the user, not a later refactor.
 
 ### 2026-08-25 — SW-03: the four missing §6 components, and a gallery to look at them in
 

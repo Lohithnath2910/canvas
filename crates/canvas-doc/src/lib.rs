@@ -1,3 +1,6 @@
+pub mod todo;
+pub use todo::{TodoItem, TodoListDoc};
+
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, GetString, ReadTxn, StateVector, Text, TextRef, Transact, Update};
