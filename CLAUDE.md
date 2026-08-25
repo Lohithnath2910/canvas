@@ -43,6 +43,13 @@
 >
 > ### Standing rules that are not in this document
 >
+> - **Stop when the Claude usage limit reaches 90%.** Do not start another task past that
+>   point. Finish the one in hand to a committed, logged state — tick or `🟡` the box, move
+>   **Current task**, rewrite the GO block, append the `progress.md` entry, commit — and
+>   then stop and say plainly that you stopped on the limit rather than on the backlog.
+>   Leaving a task half-built with nothing written down is the one failure this whole
+>   documentation protocol exists to prevent. The only exception is the user explicitly
+>   saying to keep going past it.
 > - **Write no code comments.** Anywhere. Reasoning goes in `progress.md`, `TASKS.md`
 >   and commit messages.
 > - **Log as you go, every single task.** The moment a task is finished, update

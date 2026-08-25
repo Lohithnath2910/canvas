@@ -58,11 +58,16 @@ It does **not** mean "do one task and come back". Repeat this cycle without paus
    on it. Anything on that list that a task genuinely has to change needs the user's word
    first.
 5. Update the docs in this order: tick the box (or leave it open and add a 🟡 note —
-   see rule 7), move **Current task**, rewrite the GO block in `progress.md`, append a
+   see rule 2 in the next section), move **Current task**, rewrite the GO block in `progress.md`, append a
    dated entry to `progress.md`, `git commit` with the task ID in the subject.
 6. **Go straight back to step 1 for the next task.** No summary, no check-in, no asking
    what to do next. The user said "go" once; that covers the whole backlog.
-7. Stop only when one of these is true, and say which: the backlog has no task left that
+7. **Stop at 90% of the Claude usage limit**, whatever the backlog says — user instruction,
+   2026-08-25, also in CLAUDE.md's standing rules and the GO block in [progress.md](progress.md).
+   Do not start another task past it; finish the one in hand to a committed, logged state,
+   then stop and say you stopped on the limit rather than on the backlog. Only an explicit
+   "keep going" overrides it.
+8. Stop also when one of these is true, and say which:
    can be done without the user · the next task is blocked on an **Open question** below
    and no unblocked task remains · step 3 or step 4 has failed twice on the same task.
 

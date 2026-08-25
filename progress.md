@@ -35,6 +35,14 @@ by you. That is not a reason to stop. Anything needing eyes lands as: code commi
 `🟡` entry here, **box left unticked**, and a new line in the VERIFICATION QUEUE in
 `TASKS.md` saying exactly what to click. Then carry on. The user ticks it later.
 
+**Stop at 90% of the Claude usage limit**, whatever the backlog says — user instruction,
+2026-08-25, and it is also in CLAUDE.md's standing rules. Do not start another task past
+that point. Finish the one in hand to a committed, logged state — tick or 🟡 the box, move
+**Current task**, rewrite this block, append the entry below, commit — then stop and say
+you stopped on the limit rather than on the backlog. A half-built task with nothing written
+down is exactly what this protocol exists to prevent. Only an explicit "keep going"
+overrides it.
+
 **Stop only when** one of these is true, and say which: nothing unticked is left that can
 be done without the user · the next task is blocked on an **Open question** and no
 unblocked task remains · step 3 or 4 failed twice on the same task. Then report once:
