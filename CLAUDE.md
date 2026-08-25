@@ -8,16 +8,25 @@
 >
 > ### If the user just said "go" (or anything equally short)
 >
-> That means *continue the project from where it was left*. Do not ask what to work on.
-> Do this, in order:
+> That means *continue the project from where it was left, task after task, until the
+> backlog runs out.* Do not ask what to work on. Do not stop after one task to check in.
 >
-> 1. Read **`progress.md`** top to bottom — the **GO** block at the very top names the
->    exact next action, and START HERE below it has the current state, the file layout,
->    the commands, the override table, and every trap already hit.
-> 2. Read **`TASKS.md`** — the numbered backlog. The **Current task** line at the top is
->    authoritative; work from there.
+> 1. Read **`progress.md`** top to bottom. The **🟢 GO** block at the very top is the
+>    operating instruction: what the next task is, the cycle to run it in, and the
+>    **🔒 DO NOT REGRESS** floor. START HERE below it has the current state, the file
+>    layout, the commands, the override table, and every trap already hit.
+> 2. Read **`TASKS.md`** — the numbered backlog. **Current task** at the top is
+>    authoritative; **The loop** section says how to work it.
 > 3. Read this spec only for the design detail of whatever you are actually building.
-> 4. Start working. Report at the end of each unit, not before starting one.
+> 4. Work: one task → clippy + tests clean → check the regression floor → tick or 🟡 the
+>    box, move Current task, rewrite the GO block, log it, commit with the task ID →
+>    **straight on to the next task.** Report once, at the end of the whole run.
+>
+> **You cannot verify visually** (§13.7) and that is not a reason to stall. A task that
+> needs eyes gets committed, logged `🟡`, left unticked, and added to the VERIFICATION
+> QUEUE in `TASKS.md` with exactly what to click. Then you keep building. Stop only when
+> nothing is left that can be done without the user, or an **Open question** genuinely
+> blocks every remaining task.
 >
 > ### The build order — this OVERRIDES §14
 >
@@ -49,7 +58,14 @@
 >   while you wait rather than stalling.
 > - **Ask before adding any dependency** (Hard Constraint 6).
 > - **Ask, do not guess**, on a CRDT data shape, the wire protocol, the storage schema, or
->   any design token not already in this file. Add it to **Open questions** in `TASKS.md`.
+>   any design token not already in this file. Add it to **Open questions** in `TASKS.md`,
+>   skip past it to the next unblocked task, and raise it in the end-of-run report.
+> - **Never regress working behaviour** to make a new task easier. The **🔒 DO NOT
+>   REGRESS** table in `progress.md` is the floor; changing anything on it needs the
+>   user's word first.
+> - **§4.1's "stop and report after each unit" no longer applies.** The user asked on
+>   2026-08-25 for continuous work: one task, logged and committed, then straight to the
+>   next. Small units and one-task-per-commit still stand — the stopping does not.
 >
 > The pristine original of this file is in `handoff/`. Only the five image links differ.
 

@@ -4,45 +4,78 @@
 
 ---
 
-## 🟢 GO — the exact next action
+## 🟢 GO — read this first, then keep going
 
-*If you have just been told "go", "continue", or anything equally short, start here.
-This block is rewritten at the end of every unit of work, so it is always current.*
+*If you have just been told "go", "continue", or anything equally short: this block is the
+whole instruction. It is rewritten at the end of every task, so it is always current.*
 
-**Next code task: `S1-28` — first-launch empty state.** ([TASKS.md](TASKS.md), section 1h.)
-Home with zero notes shows `NOTHING HERE YET` plus a line pointing at the create control,
-centred, matching the note's own empty state (§8). Small. `home.slint` already has the
-rows list and the `NEW NOTE` control to hang it off; delete `%APPDATA%/Canvas` to see the
-empty case.
+### What "go" means
 
-**Ask the user, in the same message you start work — do not wait for an answer:**
+**Work the backlog continuously.** Not one task and a check-in — task after task, until
+the backlog runs out or one of the stop conditions below is true. The user said "go"
+once and that covers the whole run.
 
-1. **The tray (S1-27) and the body scrollbar (S1-46)** — both written on 2026-08-25 and
-   neither watched working. The `Tray` block and the scrollbar line in the VERIFICATION
-   QUEUE at the top of [TASKS.md](TASKS.md) say exactly what to click.
-2. **Confirm the resize grab zone (S1-06).** Rebuilt twice on 2026-08-25 and still never
-   watched working. The user's second report was that the zone starts *outside* the note
-   so the cursor has to sit in empty space; `Layout.resize-border` went 30px → 36px in
-   response, which puts 12px of it inside the visible plate instead of 6px. Check: the
-   visible plate edge and all four corners grab **without** having to move outside the
-   note; live resizing is smooth rather than only updating on release; and the window
-   still responds to clicks and drags afterwards. If the feel is still off, the number is
-   the only thing to change — `Layout.resize-border` in `theme/layout.slint`, one line.
-3. **The rest of the VERIFICATION QUEUE** — about 23 behaviours now, all written and
-   compiling, none watched.
+Each cycle, in order:
 
-**Do not stall waiting on any of it.** Build S1-28 while they check.
+1. **Next task** — named below, and on the **Current task** line in [TASKS.md](TASKS.md).
+2. **Build that one task only.** Read its entry in `TASKS.md` and the CLAUDE.md sections
+   it points at. Don't chain two, don't tidy next door.
+3. **`cargo clippy --workspace --all-targets` and `cargo test --workspace` clean**, then
+   `cargo fmt --all`.
+4. **Check DO NOT REGRESS below.** It is the floor. If a task genuinely has to change
+   something on it, stop and ask — that is one of the few things worth interrupting for.
+5. **Log it, in this order:** tick the box in `TASKS.md` (or leave it open with a 🟡 note
+   — see the next paragraph), move **Current task**, rewrite this GO block so it names
+   the *new* next action, append a dated entry below, `git commit` with the task ID in
+   the subject.
+6. **Go straight to the next task.** No summary between tasks, no asking what's next.
 
-**Two open questions block work that is coming up soon**, and both should be asked once
-the current unit is reported rather than saved for later: what pin should do beyond the
-desktop layer, and — before Stage W starts — whether the Spreadsheet supports formulas and
-whether its rows and columns insert mid-sheet. That second one decides the CRDT shape and
-cannot be retrofitted. All of them are in **Open questions** at the bottom of
-[TASKS.md](TASKS.md).
+**You cannot see the screen** (CLAUDE.md §13.7), so most tasks cannot be honestly ticked
+by you. That is not a reason to stop. Anything needing eyes lands as: code committed,
+`🟡` entry here, **box left unticked**, and a new line in the VERIFICATION QUEUE in
+`TASKS.md` saying exactly what to click. Then carry on. The user ticks it later.
 
-**The rule that keeps this working:** finish a task → tick its box in `TASKS.md` → move
-the **Current task** line → rewrite this GO block → append a dated entry below → commit
-with the task ID in the subject. Every task, not every session.
+**Stop only when** one of these is true, and say which: nothing unticked is left that can
+be done without the user · the next task is blocked on an **Open question** and no
+unblocked task remains · step 3 or 4 failed twice on the same task. Then report once:
+task IDs closed, what is 🟡 waiting on the user, and any question that blocked you.
+
+### The next task
+
+**`S1-29` — open/close animation.** ([TASKS.md](TASKS.md), section 1h.) Widget open is
+160ms, opacity 0→1 plus a 6px rise; close is 100ms, fade only. No scale, no bounce
+(rule 5). `Motion.open` / `Motion.close` / `Motion.open-rise` already exist in
+`theme/motion.slint` and already collapse correctly when `Motion.reduced` is set, so
+S1-44 mostly falls out of this one. The plate is the thing that moves, not the window.
+
+After it: `S1-30` onward in `TASKS.md`, in numeric order.
+
+### Questions worth raising in the end-of-run report — but never worth stalling for
+
+- **Before Stage W starts:** does the Spreadsheet support formulas, and can rows and
+  columns be inserted mid-sheet? The second decides the CRDT shape and cannot be
+  retrofitted, so SW-13 is genuinely blocked on it. Everything before SW-13 is not.
+- What pin should do beyond holding a note at the desktop layer.
+- The Whiteboard has no artboard (open question 4) — SW-12 needs one.
+
+All of them are in **Open questions** at the bottom of [TASKS.md](TASKS.md).
+
+---
+
+## 🔒 DO NOT REGRESS
+
+Everything here has been watched working by the user. A new task may build on it; no task
+may quietly break it. If you touch one of these files, re-check the matching line.
+
+| Works | Where it lives | What breaks it |
+|---|---|---|
+| Notes resize from every edge and corner | `Layout.resize-border` = **36px**, `theme/layout.slint` | Lowering the number — at 6px and 30px the grab zone sat in empty space. And **never** re-introduce `SendMessageW(WM_NCLBUTTONDOWN)`; see trap 4 |
+| Tray icon owns the app lifetime; quit is tray-only | `ui/tray.slint`, `App::install_tray`, `maybe_quit` in `main.rs` | Removing `maybe_quit`'s early return when a tray exists — that is the only thing keeping the app alive with no windows |
+| Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
+| Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
+| Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
+| 28 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
 
@@ -99,11 +132,15 @@ Database lives at `%APPDATA%/Canvas/canvas_local.db`. Delete that folder for a c
    in this file, TASKS.md, and git commit messages instead.
 2. **Only tick a TASKS.md box for behaviour you actually watched work.** Code that
    compiles is `🟡` here and the box stays open. This has already been got wrong twice —
-   S1-06 was ticked because a property was set, not because resizing worked.
+   S1-06 was ticked because a property was set, not because resizing worked. It is not a
+   reason to stop working: log it 🟡, add the click-through to the VERIFICATION QUEUE,
+   and move to the next task.
 3. **Ask before adding a dependency** (Hard Constraint 6). Current additions beyond the
    spec's closed stack, all signed off: `windows-sys`, `raw-window-handle`.
 4. Verify against the pinned versions rather than memory. `slint 1.17.1` and `yrs 0.19.2`
    are exactly what §11/§13 were written against, so those code samples apply verbatim.
+5. **"go" means keep going.** One task, log it, commit, next task — no check-in in
+   between. The full protocol is the 🟢 GO block at the top of this file.
 
 ### Decisions that OVERRIDE the spec
 
@@ -158,10 +195,6 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 ### Known gaps
 
-- 🟡 **A tray icon now owns the app lifetime** (S1-27) — home can be closed without
-  stranding the app, and quit is a tray menu entry. Written 2026-08-25, **not yet watched
-  working**; if the icon turns out not to appear, `maybe_quit` in `main.rs` is the one
-  place that decides whether the app can still be quit by closing its last window.
 - `canvas-sync` is an empty stub. No networking exists, so the strip's syncing / offline
   / peers / error states are only reachable through the Ctrl+G dev cycler.
 - **No rich text, and there will not be any** — dropped 2026-08-25. The body is plain text
@@ -172,6 +205,11 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   generalising the runtime (SW-01) before any widget gets built.
 - **The Whiteboard has no artboard.** §10.5 is one paragraph and `widget-types.png` does
   not cover it. Ask before SW-12 rather than inventing a tool dock.
+- **Only the note body has a scrollbar.** The home list still scrolls bare; giving it one
+  means narrowing the rows by the 8px gutter, which moves every row's delete icon. Logged
+  as S1-47 rather than done on the way past.
+- **The tray icon is white on transparent**, which reads on the default dark Windows 11
+  taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
 
 ---
 
@@ -754,3 +792,60 @@ scrollbar track" is now row 13 of the override table.
 **Neither task is ticked.** Both are behaviour I have not watched, per ground rule 2.
 `TASKS.md`'s verification queue has a new **Tray** block and a scrollbar line with exactly
 what to click.
+
+### 2026-08-25 — S1-06, S1-27, S1-46 confirmed · S1-28 built · the docs now run a loop
+
+**Three tasks ticked on the user's word.** They reported *"resizing etc works"* covering
+the three things the previous report asked them to click:
+
+- ✅ **S1-06 — resize.** Third attempt, and the answer was one number:
+  `Layout.resize-border` = 36px, being the 24px transparent `plate-margin` plus 12px
+  inside the visible plate, so the grab zone straddles the plate edge instead of sitting
+  beyond it. At 6px and at 30px it was almost entirely in empty space. This is now on the
+  DO NOT REGRESS table; the number is not free to lower.
+- ✅ **S1-27 — tray icon and app lifetime.**
+- ✅ **S1-46 — the note body scrollbar.**
+
+**S1-28 — first-launch empty state.** 🟡 built, needs eyes.
+
+- The two lines existed already but were parked 48px below the header in a
+  `VerticalLayout`, which is not what §8 asks for. They now sit in a plain `Rectangle`
+  spanning the whole list region — hairline to footer rule — and are centred inside it by
+  absolute `y`, with `empty-title.y` computed from its own height plus the 12px gap plus
+  `empty-hint.height`. Absolute positioning rather than a layout, per §13.4.
+- The rows `Flickable` became `if root.rows.length > 0:`. It is declared after the empty
+  state, so with zero rows it was an invisible element sitting on top of the message and
+  swallowing scroll events over it. Making it conditional is cheaper than reordering.
+- ✅ Verified as far as is possible without eyes: `%APPDATA%/Canvas` was moved aside, the
+  app launched genuinely cold into a fresh empty database, came up clean with no layout
+  error and no panic, created the db, and stayed running — so the zero-rows branch is
+  what rendered. The real database was then restored and `--dump` confirms the note is
+  intact. **Whether it looks right is still the user's call.**
+
+**The three markdown files now describe a loop, not a single unit of work.**
+The user asked that "go" in a cold chat pick up the next task and *keep going* without
+breaking what already works. Concretely:
+
+- `progress.md`'s GO block was rewritten from "here is the next action" into **the
+  operating instruction**: the cycle (build one task → clippy + tests → check the
+  regression floor → tick or 🟡 → move Current task → rewrite GO → log → commit → next
+  task), an explicit "no check-in between tasks", and three named stop conditions.
+- **New: a 🔒 DO NOT REGRESS table** directly under it. Seven rows, each naming the
+  behaviour, the file it lives in, and the specific thing that breaks it. This is the
+  floor a task may build on but not quietly undo.
+- `TASKS.md` gained a **The loop** section at the top of *How to use this file*, with the
+  same cycle and the same stop conditions, plus the rule that makes the loop possible:
+  a session cannot see the screen, so eyes-needed work is committed, logged 🟡, left
+  unticked, and pushed onto the VERIFICATION QUEUE — and then the session **carries on**
+  rather than waiting.
+- `CLAUDE.md`'s "If the user just said go" block was rewritten to match, and its standing
+  rules gained two lines: never regress the floor, and **§4.1's "stop and report after
+  each unit" is explicitly retired.** Small units and one-task-per-commit still stand;
+  the stopping does not. That is override 14 in spirit, though it is a process decision
+  rather than a design one, so it is not in the override table.
+
+**Also logged rather than done on the way past:** `S1-47`, the same scrollbar on the home
+list. It is not a copy-paste — home's rows are full-bleed and carry a delete icon at the
+right edge, so the 8px gutter moves every icon inward, and that is a look decision.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, 28 tests pass.

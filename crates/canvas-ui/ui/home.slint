@@ -233,22 +233,30 @@ export component HomeWindow inherits Window {
             background: Palette.edge;
         }
 
-        if root.rows.length == 0: VerticalLayout {
+        if root.rows.length == 0: Rectangle {
             x: Layout.pad;
-            y: Layout.header-band + 1px + 48px;
+            y: Layout.header-band + 1px;
             width: parent.width - 2 * Layout.pad;
-            spacing: 12px;
-            alignment: start;
+            height: parent.height - self.y - 64px;
 
-            Text {
+            empty-title := Text {
+                x: 0;
+                y: (parent.height - self.height - 12px - empty-hint.height) / 2;
+                width: parent.width;
                 text: "NOTHING HERE YET";
                 color: Palette.text;
                 horizontal-alignment: center;
                 font-family: Typography.interface-face;
                 font-size: Typography.title-size;
                 letter-spacing: Typography.title-tracking;
+                overflow: elide;
+                wrap: no-wrap;
             }
-            Text {
+
+            empty-hint := Text {
+                x: 0;
+                y: empty-title.y + empty-title.height + 12px;
+                width: parent.width;
                 text: "Press NEW NOTE to create your first note.";
                 color: Palette.dim;
                 horizontal-alignment: center;
@@ -258,7 +266,7 @@ export component HomeWindow inherits Window {
             }
         }
 
-        Flickable {
+        if root.rows.length > 0: Flickable {
             x: 0;
             y: Layout.header-band + 1px;
             width: parent.width;

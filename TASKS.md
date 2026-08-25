@@ -5,15 +5,15 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-28` — first-launch empty state
+**Current task:** `S1-29` — open/close animation
 **Stage:** 1 — Sticky note + app shell
-**Done:** 18 of 53 (5 tasks dropped, 3 added, see below)
-**Awaiting your eyes:** `S1-27` (tray) and `S1-46` (body scrollbar) are written and running
-but unwatched — see the verification queue below
+**Done:** 22 of 53 (5 tasks dropped, 3 added, see below)
+**Left 🟡 for the user to look at:** `S1-28` (home empty state) — see the verification queue
 
-**Told "go" and nothing else?** Read the 🟢 GO block at the top of
-[progress.md](progress.md) — it names the exact next action and what to ask the user
-while you work. Then start here at **Current task** above. Do not ask what to work on.
+**Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
+Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
+below, task after task, until the backlog runs out or something on the stop list in that
+section is true.
 
 ## ⚠ BUILD ORDER OVERRIDDEN — 2026-08-25
 
@@ -43,21 +43,53 @@ visible instead of looking like an oversight.
 
 ## How to use this file
 
+### The loop — this is what "go" means
+
+**"go" means: work the backlog continuously until it runs out or the user stops you.**
+It does **not** mean "do one task and come back". Repeat this cycle without pausing:
+
+1. Read the 🟢 GO block at the top of [progress.md](progress.md), then the
+   **Current task** line above.
+2. Build **that one task only**. Do not chain two into one pass, and do not refactor
+   next door.
+3. `cargo clippy --workspace --all-targets` and `cargo test --workspace` must both be
+   clean. `cargo fmt --all`.
+4. Re-read **DO NOT REGRESS** in [progress.md](progress.md) and confirm you broke nothing
+   on it. Anything on that list that a task genuinely has to change needs the user's word
+   first.
+5. Update the docs in this order: tick the box (or leave it open and add a 🟡 note —
+   see rule 7), move **Current task**, rewrite the GO block in `progress.md`, append a
+   dated entry to `progress.md`, `git commit` with the task ID in the subject.
+6. **Go straight back to step 1 for the next task.** No summary, no check-in, no asking
+   what to do next. The user said "go" once; that covers the whole backlog.
+7. Stop only when one of these is true, and say which: the backlog has no task left that
+   can be done without the user · the next task is blocked on an **Open question** below
+   and no unblocked task remains · step 3 or step 4 has failed twice on the same task.
+
+At the end of a run, report once: the task IDs you closed, anything left 🟡 for the user
+to look at, and any question that blocked you.
+
+### The rules the loop runs on
+
 1. Work tasks **in numeric order**. A task's `Needs:` line lists its hard prerequisites.
-2. One task = one coherent, compiling, manually-verified unit. Do not chain two.
-3. When a task is done, in this order, before starting anything else: tick its box,
-   update **Current task** above, **rewrite the 🟢 GO block at the top of `progress.md`**
-   so it names the next action, append a dated entry to `progress.md`, then `git commit`
-   with the task ID in the subject. Every task — never batched to the end of a session.
-   This is the only thing that lets a cold session say "go" and carry on.
-4. `cargo clippy --workspace --all-targets` must be clean before ticking anything.
-5. **Only tick a box for behaviour you actually saw work.** Code that merely compiles is
-   `🟡` in `progress.md` and the box stays unticked. This rule has been broken twice
-   already — S1-06 was ticked because `resize-border-width` was set, not because resizing
-   worked, and it did not work.
-6. **Write no code comments.** User instruction. Reasoning goes here, in `progress.md`,
+   A task blocked on an open question is skipped, not guessed at — move to the next
+   unblocked one and note the skip.
+2. **Only tick a box for behaviour you actually saw work.** You cannot see the screen
+   (§13.7). So anything that needs eyes lands as: code committed, `🟡` entry in
+   `progress.md`, **box left unticked**, and a new line in the VERIFICATION QUEUE below
+   saying exactly what to click. Then you carry on to the next task. This is the whole
+   reason the loop can keep moving without the user in it.
+3. **Never regress working behaviour to make a new task easier.** The DO NOT REGRESS
+   list in `progress.md` is the floor.
+4. **Write no code comments.** User instruction. Reasoning goes here, in `progress.md`,
    and in commit messages.
-7. Hit a spec ambiguity? Add it to **Open questions** at the bottom and ask — do not guess.
+5. **Ask before adding a dependency** (Hard Constraint 6). Enabling a feature on a crate
+   already in the closed stack is not a new dependency; adding a crate is.
+6. Hit a spec ambiguity? Add it to **Open questions** at the bottom, skip past it, and
+   raise it in the end-of-run report. Do not guess on a CRDT shape, a wire protocol, a
+   storage schema, or a design token.
+7. Every number you need should already be in CLAUDE.md §5. If it isn't, take it off the
+   existing 8px spacing scale and say so in `progress.md` — do not invent a token.
 
 Size legend: `S` ≈ under 30 min · `M` ≈ 30–90 min · `L` ≈ half a session or more.
 
@@ -70,14 +102,15 @@ working.** It was all built in one session without a click-through. Run `cargo r
 canvas-app` and go through this list; tick the task where it passes, open a new numbered
 task where it does not.
 
-S1-27 and S1-46 have since been written and now sit in this queue too. Everything after
-S1-28 builds directly on this list, so it is worth clearing before going further.
+This queue is how the loop keeps moving without the user in it: anything a session cannot
+see gets committed, logged 🟡, and listed here with exactly what to click. Ticked lines
+are confirmed — leave them ticked. Do not re-open a ticked line to "make sure".
 
 **Note window**
 - [ ] Drag the header — window follows 1:1, no drift, no inertia → **S1-07**
 - [ ] Hover anywhere in the header — four controls fade in over 100ms, nothing shifts → **S1-08**
-- [ ] Drag each of the 4 edges and 4 corners — resizes like a normal window, clamps at
-      240×180, corners do both axes → **S1-06**
+- [x] Drag each of the 4 edges and 4 corners — resizes like a normal window, clamps at
+      240×180, corners do both axes → **S1-06** ✅ confirmed 2026-08-25
 - [ ] Tab through: body → colour → pin → delete → close, each showing a focus ring;
       Shift+Tab reverses; Esc from the body drops focus → **S1-11**, **S1-12**
 - [ ] Click the colour icon repeatedly — plate steps through 5 grey tones → part of **S1-05**
@@ -87,8 +120,9 @@ S1-28 builds directly on this list, so it is worth clearing before going further
 - [ ] Click `x` — note closes but stays in the home list → **S1-21**
 - [ ] Pin a note, open a browser over it — note stays behind. Click it, type, click away;
       it settles back to the desktop layer → **S1-22**
-- [ ] Type past the bottom of a note — a 4px thumb appears at the body's right edge,
+- [x] Type past the bottom of a note — a 4px thumb appears at the body's right edge,
       tracks the wheel, and drags to scroll. No thumb when the text fits → **S1-46**
+      ✅ confirmed 2026-08-25
 - [ ] Ctrl+G in the body — cycles all 7 strip states, title names each one → **S1-04**
 - [ ] Move and resize a note, restart the app — it reopens exactly where it was → **S1-18**
 
@@ -96,17 +130,18 @@ S1-28 builds directly on this list, so it is worth clearing before going further
 - [ ] `NEW NOTE` — creates a note, opens its window, adds a row → **S1-25**
 - [ ] Click a row — toggles that note open/closed; the row's dots reflect it → **S1-24**
 - [ ] Row delete icon — confirm overlay, then gone from list and from disk → **S1-26**
-- [ ] Empty state shows on a fresh database (delete `%APPDATA%/Canvas`) → **S1-28**
+- [ ] Empty state shows on a fresh database (delete `%APPDATA%/Canvas`), centred in the
+      list area, and disappears the moment the first note exists → **S1-28**
 - [ ] Open three notes at once — all independently draggable and editable → confirms **S1-20**
 - [ ] Home `x` closes home and leaves notes running
 
-**Tray** → **S1-27**
-- [ ] A Canvas icon (five dots) sits in the notification area at launch
-- [ ] Close home with two notes open — both stay on screen and editable
-- [ ] Left-click the tray icon — home comes back with the right list
-- [ ] Close home AND every note — Canvas stays running, tray icon still there
-- [ ] Right-click the tray — `New note` creates and opens one
-- [ ] `Quit Canvas` closes everything and the process actually exits
+**Tray** → **S1-27** ✅ confirmed 2026-08-25
+- [x] A Canvas icon (five dots) sits in the notification area at launch
+- [x] Close home with two notes open — both stay on screen and editable
+- [x] Left-click the tray icon — home comes back with the right list
+- [x] Close home AND every note — Canvas stays running, tray icon still there
+- [x] Right-click the tray — `New note` creates and opens one
+- [x] `Quit Canvas` closes everything and the process actually exits
 
 **Check state on disk at any point:** `cargo run -p canvas-app -- --dump`
 
@@ -225,7 +260,7 @@ first. These three come before it.
 
 ### 1c — Window shell, header, drag
 
-- [ ] **S1-06 · Frameless window + native resize** — `M`
+- [x] **S1-06 · Frameless window + native resize** — `M`
   Needs: S1-03. `no-frame: true`, `resize-border-width: 6px`, `preferred-width/height`
   320×280, `min-width/height` 240×180, **no max** (omit the properties; don't set a huge
   sentinel). `width` and `min-width` cannot coexist on one element — the compiler rejects
@@ -234,6 +269,11 @@ first. These three come before it.
   *DoD:* the window resizes from every edge and corner, clamps at 240×180, never locks
   aspect ratio.
   *Refs:* §13.5, §7.3
+  ✅ **Confirmed by the user 2026-08-25** — "resizing etc works", after the third attempt.
+  The answer was `Layout.resize-border` = 36px: 24px of transparent `plate-margin` plus
+  12px inside the visible plate, so the grab zone straddles the plate edge. Do not lower
+  it without re-testing; at 6px and at 30px the zone sat almost entirely in empty space.
+  The `WM_NCLBUTTONDOWN` mechanism it replaced must never come back — see trap 4.
 
 - [ ] **S1-07 · Header: disjoint TouchArea regions, glyph strip, title, drag** — `L`
   Needs: S1-04, S1-05, S1-06. Header exactly 32px. Glyph strip at `x=16`, title at `x=51`
@@ -416,14 +456,14 @@ and `raw-window-handle-06` features (inside it — build flags only).
   state 10. Removes the widget, its document, its position and its revision history.
   *DoD:* deleted notes are gone from the list, from disk, and from screen if open.
 
-- [ ] **S1-27 · Tray icon and app lifetime** — `M`
+- [x] **S1-27 · Tray icon and app lifetime** — `M`
   Needs: S1-23. Canvas keeps running when home is closed. The tray icon reopens home;
   quit is explicit and from the tray only. **Closing the home window must not close a
   single note.** Needs Slint's `system-tray` feature re-enabled — I disabled it for
   binary size in S0-2.
   *DoD:* close home with two notes open — both stay on screen and editable. Reopen home
   from the tray; the list is correct. Quit from the tray closes everything cleanly.
-  🟡 **Built 2026-08-25, unwatched.** `ui/tray.slint` (`CanvasTray inherits SystemTrayIcon`),
+  ✅ **Confirmed by the user 2026-08-25.** `ui/tray.slint` (`CanvasTray inherits SystemTrayIcon`),
   `assets/icons/tray.png` (the five-cell glyph strip, 64×64 white on transparent), and
   `App::install_tray` / `sync_tray` / `show_home` / `quit` in `app.rs`. `maybe_quit` now
   returns early whenever a tray exists, so the tray is the only way out; without one
@@ -435,6 +475,11 @@ and `raw-window-handle-06` features (inside it — build flags only).
   create control, centred, matching the note's own empty state.
   *DoD:* shows on a fresh database, disappears on the first note.
   *Refs:* §8
+  🟡 **Built 2026-08-25, needs your eyes.** `home.slint` — the two lines now sit in a
+  plain `Rectangle` spanning the whole list region and are centred inside it by absolute
+  `y`, rather than a `VerticalLayout` parked 48px below the header. The rows `Flickable`
+  became `if root.rows.length > 0:` so an empty list has nothing on top of the message.
+  Verified only that a genuinely fresh `%APPDATA%/Canvas` boots clean into this branch.
 
 - [ ] **S1-29 · Open/close animation** — `S`
   Needs: S1-20. Open 160ms, opacity 0→1 plus a 6px rise. Close 100ms, fade only.
@@ -569,7 +614,7 @@ exist yet (rule 3).
 
 ### 1k — added after the fact
 
-- [ ] **S1-46 · Visible scrollbar in the note body** — `S`
+- [x] **S1-46 · Visible scrollbar in the note body** — `S`
   Needs: S1-09. **Overrides §7.3**, which says the body scrolls with no visible scrollbar.
   The user asked for one directly: the wheel worked but gave no sense of position or
   length. `ScrollBar` in `theme/controls.slint` — a 4px thumb, `dim` at rest stepping to
@@ -581,6 +626,13 @@ exist yet (rule 3).
   *DoD:* the thumb appears only on overflow, tracks the wheel, drags to scroll, and
   reaches both ends. Reuse it for every scrolling widget in Stage W rather than
   rebuilding one per type.
+
+- [ ] **S1-47 · The same scrollbar on the home list** — `S`
+  Needs: S1-46. Home's rows `Flickable` still scrolls bare. Reuse `ScrollBar` — but the
+  rows are full-bleed and carry a delete icon at their right edge, so the 8px gutter
+  moves every row's icon inward. Decide that deliberately rather than on the way past.
+  *DoD:* with more notes than fit, the thumb appears and drags; the delete icons still
+  line up with the note window's own header cluster.
 
 ---
 
