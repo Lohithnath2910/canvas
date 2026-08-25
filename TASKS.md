@@ -4,10 +4,10 @@
 [progress.md](progress.md) first for the state of the project, then starts here at the
 first unticked box.
 
-**Last updated:** 2026-08-25
-**Current task:** `SW-11` — `WhiteboardDoc` (every window task in Stage W is blocked on open question 8)
+**Last updated:** 2026-08-26
+**Current task:** `SW-05` — the Todo widget window, **BLOCKED on open question 8**. Nothing unblocked is left; the run stopped here.
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 26 ticked, 43 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 105 tests pass.
+**Done:** 27 ticked, 42 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 122 tests pass.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -1119,13 +1119,30 @@ because the app is currently hardcoded to a single type.
 
 ### Wf — Whiteboard
 
-- [ ] **SW-11 · `WhiteboardDoc`** — `L`
+- [x] **SW-11 · `WhiteboardDoc`** — `L`
   Needs: SW-04. Map of shapes `{type, x, y, w, h, rotation, style}` + arrays of point lists
   for strokes. **Strokes must be appended incrementally as points arrive**, never
   re-encoded as a full canvas — that shape is what makes Stage 3 traffic scale with stroke
   length instead of canvas size, so it has to be right from the start.
+  **Done 2026-08-26** in `canvas-doc/src/whiteboard.rs`, 17 tests. §11.3's shape exactly:
+  `shapes` is a `yrs::Map` keyed by shape id, `strokes` is a `yrs::Map` keyed by stroke id
+  with a `yrs::Array` of points inside each. **Points are stored flat — `x, y, x, y, …` in
+  one array, not a map or a nested array per point.** A point is then two array appends and
+  nothing else, which is what keeps an appended point's update near its own size; a map per
+  point would carry key strings for every sample of a freehand line.
+  `begin_stroke` / `extend_stroke(id, &[Point])` is the API a pointer-move handler wants —
+  a stroke opens once and grows, so nothing ever re-sends what is already drawn.
   *DoD:* unit tests — appending 1000 points produces updates proportional to the points
   added, not to the canvas contents.
+  ✅ both halves, tested separately, because they are different claims.
+  `appending_1000_points_costs_traffic_proportional_to_the_points_added` grows a stroke to
+  1000 points and asserts one further point costs less than a twentieth of the whole-canvas
+  snapshot, and that ten points cost under twelve times one.
+  `stroke_traffic_does_not_grow_with_the_canvas` draws the same ten points on an empty
+  board and on one holding 200 shapes and 4000 other stroke points, and asserts the cost
+  barely moves while the snapshot is more than twenty times either. Also covered: two peers
+  drawing at once keeping both strokes whole, and **two peers extending the same stroke
+  losing no points** (20 points survive, none duplicated).
 
 - [ ] **SW-12 · Whiteboard widget window** — `L`
   Needs: SW-11. **No artboard exists for this one** — §10.5 is the only reference, so

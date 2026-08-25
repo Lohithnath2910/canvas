@@ -1,6 +1,6 @@
 # Canvas — Progress Log
 
-**Last updated:** 2026-08-25
+**Last updated:** 2026-08-26
 
 ---
 
@@ -50,41 +50,46 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-05` — the Todo widget window.** ([TASKS.md](TASKS.md), section Wb.) The first real
-second widget type, and the task that finally closes SW-01's and SW-02's open halves.
-`340×360`, row gap 12, `Checkbox` (SW-03) + 12px gap, completed rows `dim` + 1px strike, a
-due date as a `Tag` on the right, footer of a 1px `edge` rule and `N OPEN · N DONE` in
-interface face 11 `dim`.
+**The backlog has no unblocked task left. The run stopped on that, not on a limit.**
 
-Four things that are already decided and should not be re-derived:
+**`SW-05` — the Todo widget window — is next and is BLOCKED on open question 8**: *do the
+other widget types get the note's four header controls (colour · pin · delete · close)?*
+Three of the four are window behaviours and obviously belong on any type. The open one is
+**colour-as-grey-tone**. Question 8's own wording is *"decide once, apply to all types"*,
+so guessing it costs one `IconButton` on six widget types, not one.
 
-- **Counts come from Rust**, via `TodoListDoc::counts()` → `(open, done)`, passed in as
-  `in property<int>`. A Slint binding cannot run an imperative loop — §13.6, a parse error
-  not a runtime limit.
-- **The window and doc plug into SW-01's enums**: one arm each in `WidgetDoc` and
-  `WidgetWindow` in `widget.rs`, and the compiler names every `match` that needs updating.
-  The shared flush, placement, drag anchor and undo plumbing in `LiveWidget` is already
-  type-agnostic — do not duplicate it.
-- **Rows come over as a Slint `struct` + `ModelRc`** — §13.6's pattern, and `NoteRow` in
-  `home.slint` is a worked example already in this repo.
-- **Reuse `ScrollBar`** for the item list rather than building a second one (S1-46's
-  note), and reuse `wire_note`'s header wiring shape — the 32px header, glyph strip and
-  drag region are the same on every type (rule 3).
+**Everything else in Stage W is behind the same question**: SW-06 (Shared Document), SW-08
+(Calendar window), SW-10 (Kanban window), SW-12 (Whiteboard window — also behind question
+4, which is that no artboard for it exists). SW-13 and SW-14 are behind questions 5, 6
+and 7.
 
-Then **`SW-02`** comes back off the shelf, because there will finally be a second type for
-a create control to offer, and SW-01's DoD line about opening a non-note window can be
-re-checked and ticked.
+**Stage 1 ran out earlier and separately:** `S1-45` needs the VERIFICATION QUEUE walked by
+the user, `S1-48` needs open question 9 (a schema change), `S1-36`/`S1-37` need a peer.
 
-**Two commands worth knowing about that did not exist this morning:**
-`cargo run -p canvas-app -- --gallery` opens the §6 component gallery (SW-03), and
-`cargo run -p canvas-app --example insert_todo` puts a non-note row in the database so
-SW-01's dispatch can be exercised (`--remove` takes it out again).
+### The moment question 8 is answered
 
-**The VERIFICATION QUEUE is still the largest block of value the user can unlock**, and it
-now has a section per task: undo/redo (S1-43), reduced motion (S1-44), the home scrollbar
-(S1-47), the SW-01 regression check, and the four components in `--gallery` (SW-03) — on
-top of the palette, the global hotkey, the open/close animation, the screen clamp and the
-drag feel. All written, all clippy-clean, none watched working.
+Go straight to `SW-05`. Everything it needs is already built and tested:
+`TodoListDoc` with `counts() -> (open, done)` (SW-04), `Checkbox` and `Tag` in
+`theme/controls.slint` (SW-03), and SW-01's `WidgetDoc`/`WidgetWindow` enums where a new
+type is one arm each and the compiler names every `match` that needs it. Then `SW-02`
+comes off the shelf — it was skipped because a create-control-per-type strip is pointless
+while the note is the only type with a window — and SW-01's DoD line about opening a
+non-note window can finally be ticked.
+
+### Read this before assuming the widgets work
+
+**Four CRDT documents were built this run — Todo, Calendar, Kanban, Whiteboard — and none
+of them is wired to a window.** They are library code: 122 tests pass, and not one of them
+is reachable from `cargo run -p canvas-app`. That was the right work while blocked, because
+it is exactly the half that does not need eyes. Do not read the test count as a working
+widget.
+
+**The VERIFICATION QUEUE is now the only thing that moves the project forward**, and it has
+a section per task. From this run: undo/redo (S1-43), reduced motion (S1-44), the home
+scrollbar (S1-47), the SW-01 regression check, and the four §6 components via
+`cargo run -p canvas-app -- --gallery` (SW-03). Underneath: the palette, the global hotkey,
+the open/close animation, the screen clamp and the drag feel. All written, all clippy-clean,
+none watched working.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -110,7 +115,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 105 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 122 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -147,7 +152,8 @@ Canvas/
     canvas-app/      runtime: App owns the Store + live windows. app.rs is the core.
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
     canvas-doc/      CRDT documents (yrs). StickyNoteDoc, UndoHistory, TodoListDoc,
-                     CalendarDoc, KanbanDoc + a hand-written fractional index. 86 tests.
+                     CalendarDoc, KanbanDoc, WhiteboardDoc + a hand-written fractional
+                     index. 103 tests. The last four have NO window yet.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -243,10 +249,17 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   / peers / error states are only reachable through the Ctrl+G dev cycler.
 - **No rich text, and there will not be any** — dropped 2026-08-25. The body is plain text
   in one face. Silkscreen ships Regular only, and the user does not want bold or italic.
-- Only sticky notes exist. Todo, kanban, calendar and document are types in the storage
-  layer with correct default sizes and row glyphs, but **no doc types and no windows**,
-  and `app.rs:50` will not even open a non-note row. That is Stage W, and it starts by
-  generalising the runtime (SW-01) before any widget gets built.
+- **Only the sticky note is a usable widget. Four other CRDT documents exist with no window
+  attached.** `TodoListDoc`, `CalendarDoc`, `KanbanDoc` and `WhiteboardDoc` are built and
+  covered by 103 tests in `canvas-doc`, and **not one of them is reachable from the running
+  app** — there is no window, no create control and no entry in `WidgetDoc`/`WidgetWindow`
+  for them. Do not read the test count as a working widget. The runtime *can* now dispatch
+  by type (SW-01) and says so on the console when a type has no window yet; what is missing
+  is the windows, and **every one of them is blocked on open question 8**.
+- **The four §6 components (`Checkbox`, `Tag`, `Divider`, `TextField`) exist but nothing
+  uses them.** They render only in `cargo run -p canvas-app -- --gallery`, a dev window
+  built so SW-03's by-eye DoD could be checked at all. The first real user is the Todo
+  window.
 - **The Whiteboard has no artboard.** §10.5 is one paragraph and `widget-types.png` does
   not cover it. Ask before SW-12 rather than inventing a tool dock.
 - **Only the note body has a scrollbar.** The home list still scrolls bare; giving it one
@@ -280,6 +293,62 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-26 — SW-11: `WhiteboardDoc`, and the run stops on open question 8
+
+- ✅ **`canvas-doc/src/whiteboard.rs`, 17 tests** — verified by `cargo test --workspace`,
+  122 tests pass, clippy clean.
+
+**Points are stored flat: `x, y, x, y, …` in one `yrs::Array` per stroke.** Not a map per
+point, and not a nested array per point. This is the decision the DoD's whole traffic
+requirement rests on — a sample is then two array appends and nothing else, while a map per
+point would carry the key strings `"x"` and `"y"` for every sample of a freehand line, on
+the wire and in the document. Shapes are a `yrs::Map` keyed by shape id (the same
+by-construction reasoning as `KanbanDoc`'s cards), strokes a `yrs::Map` keyed by stroke id
+with the point array inside each.
+
+**`begin_stroke` then `extend_stroke(id, &[Point])` is the API a pointer-move handler
+wants.** A stroke opens once and grows; nothing ever re-sends what is already drawn. A
+whole-canvas resend is not merely discouraged by this shape — there is no method that
+would do it.
+
+**The DoD's claim was split into two tests, because it is two claims.** "Proportional to
+the points added" and "not proportional to the canvas" can each pass while the other fails.
+`appending_1000_points_costs_traffic_proportional_to_the_points_added` grows a stroke to
+1000 points, then checks one more point costs under a twentieth of the whole snapshot and
+that ten points cost under twelve times one.
+`stroke_traffic_does_not_grow_with_the_canvas` draws the *same* ten points on an empty
+board and on one carrying 200 shapes and 4000 other stroke points, and checks the cost
+barely moves while the snapshot is more than twenty times either.
+
+---
+
+## The run stopped here, and why
+
+**Every remaining task in Stage W is a widget *window*, and all of them are blocked on
+open question 8** — *do the other widget types get the note's four header controls?* Its
+own wording is *"Blocks: SW-05 onward — decide once, apply to all types, rather than per
+widget."* SW-05, SW-06, SW-08, SW-10 and SW-12 are all behind it; SW-12 is behind question
+4 as well (no Whiteboard artboard), and SW-13/SW-14 behind questions 5, 6 and 7.
+
+**Stage 1 ran out first, for different reasons:** `S1-45` (sign-off audit) needs the
+VERIFICATION QUEUE walked by the user, `S1-48` needs the new open question 9 answered (it
+is a schema change), and `S1-36`/`S1-37` need a second machine.
+
+**What this means for the shape of what was built.** The four CRDT documents from this run
+— Todo, Calendar, Kanban, Whiteboard — are **library code with no window attached**. They
+are fully tested and they are the half that cannot be checked by eye, so building them
+while blocked was the right use of the time. But they are **not reachable from the running
+app**, and they do not become so until question 8 is answered and the window tasks start.
+A session picking this up cold should not mistake 122 passing tests for a working
+whiteboard.
+
+**What *is* wired into the running app from this run:** S1-43 (undo/redo on Ctrl+Z/Ctrl+Y),
+S1-44 (reduced motion), S1-47 (the home scrollbar) and SW-01 (the type-dispatched runtime).
+All four are 🟡 — none has been watched working.
 
 ### 2026-08-25 — SW-09: `KanbanDoc`, and a fractional index written by hand
 

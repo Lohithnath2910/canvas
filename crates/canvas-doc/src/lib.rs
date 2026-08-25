@@ -1,3 +1,5 @@
+pub mod whiteboard;
+pub use whiteboard::{Point, Shape, Stroke, WhiteboardDoc};
 pub mod kanban;
 pub use kanban::{KanbanCard, KanbanColumn, KanbanDoc};
 pub mod fractional;
