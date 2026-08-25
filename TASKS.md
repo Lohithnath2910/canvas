@@ -7,8 +7,8 @@ first unticked box.
 **Last updated:** 2026-08-25
 **Current task:** `S1-43` — undo/redo backed by `revision_history`
 **Stage:** 1 — Sticky note + app shell
-**Done:** 21 ticked, 45 open (5 dropped, 5 added — S1-46, S1-47, S1-48 and the two Spreadsheet tasks)
-**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey) — see the verification queue
+**Done:** 23 ticked, 46 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks)
+**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -107,7 +107,11 @@ see gets committed, logged 🟡, and listed here with exactly what to click. Tic
 are confirmed — leave them ticked. Do not re-open a ticked line to "make sure".
 
 **Note window**
-- [ ] Drag the header — window follows 1:1, no drift, no inertia → **S1-07**
+- [ ] **Drag the header — the plate must stay glued to the grab point for the whole
+      drag, no drift, no inertia, no stutter.** Rewritten in **S1-51** after the user
+      reported stutter: it now anchors to `GetCursorPos()` at press instead of
+      accumulating window-relative deltas. Do the same drag on the home window's header
+      → **S1-07**, **S1-51**
 - [ ] Hover anywhere in the header — four controls fade in over 100ms, nothing shifts → **S1-08**
 - [x] Drag each of the 4 edges and 4 corners — resizes like a normal window, clamps at
       240×180, corners do both axes → **S1-06** ✅ confirmed 2026-08-25
@@ -157,6 +161,10 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
       with a 28px radius sits centred, its top about 15% down the screen
 - [ ] Press **Esc** — the palette goes away and the note is still there
 - [ ] The scrim covers the whole primary monitor, including over other apps
+- [ ] **The plate is centred left-to-right with its top ~15% down the screen.** It used to
+      land off to the right because the window was built 1.5× too big; the window geometry
+      is now confirmed correct by measurement, so this line is only about the plate inside
+      it → **S1-49**
 - [ ] The plate shows a 24px `search` icon, `TYPE A COMMAND` in small dim caps, and three
       rows — `New note` / `New todo` / `Settings` with `CTRL+N` / `CTRL+T` / `CTRL+,`
       right-aligned, each with a 24px icon → **S1-33**
@@ -738,6 +746,49 @@ exist yet (rule 3).
   *DoD:* typing a word that appears only in a note's body finds that note, and typing in
   the palette with 200 notes present does not stutter.
   *Refs:* §9, §12, Hard Constraint 2
+
+- [x] **S1-49 · The palette opened 1.5× too big and off to the side** — `S`
+  Needs: S1-32. Reported by the user: the Ctrl+K plate lands to the right of centre
+  instead of in the middle. **Cause, measured with a DPI-aware `GetWindowRect`:** the
+  window was created **3840×2160 on a 2560×1440 screen**. `screen::primary_bounds()`
+  returns *physical* pixels, but a Slint window that has not been `show()`n yet reports
+  `scale_factor() == 1.0` — the real 1.5 only arrives later as an event-loop event. So
+  Slint passed "2560×1440 logical" to winit, winit applied the 150% DPI, and every
+  coordinate inside the window came out 1.5× too far: the plate centres on `parent.width`,
+  so it sat ~1440px across a 2560px screen, and its top sat 1.5× too low too.
+  *Fix:* `fill_screen()` converts physical bounds to logical using `App::known_scale()` —
+  the scale factor of an **already open** window (home reports the correct 1.5) — and is
+  applied **before** `show()`. Do not "correct" it again after `show()`: that call reads
+  the new window's own scale, still 1.0, and puts the bug straight back.
+  *DoD:* the palette window measures exactly the screen. ✅ confirmed 2026-08-25 by
+  measurement — `2560x1440 at (0,0)`. The plate's own centring still wants eyes.
+
+- [x] **S1-50 · The palette's framebuffer was never given back** — `S`
+  Needs: S1-49. A full-screen software-rendered window is 15 MB of framebuffer at
+  2560×1440, and was 33 MB at the wrong 3840×2160. `hide_palette` only called `hide()`,
+  so the window — and its buffer — stayed alive for the rest of the session. It now
+  `take()`s the palette out of `App` and drops it from a 16ms `Timer::single_shot`, so the
+  component is never destroyed inside its own `dismissed` callback. The per-note pin-poll
+  timer was `Box::leak`ed and outlived its note; it is now owned by `Note`.
+  *DoD:* memory returns to the boot figure after the palette closes. ✅ confirmed
+  2026-08-25 by measurement: open 41.4 → 25.0 MB private, dismissed 41.5 → 11.0 MB
+  (boot is 10.9), 9.95 MB after a second open/close cycle.
+
+- [ ] **S1-51 · Drag tracks the cursor absolutely instead of accumulating deltas** — `S`
+  Needs: S1-07. Reported by the user: dragging a note stutters and does not feel 1:1 on a
+  165Hz screen. The old handler applied `mouse-x - pressed-x` — a **window-relative** delta
+  — to the window's own position on every move, which feeds the window's movement back
+  into the next delta. Measured with synthesised input: the cursor stayed inside a 120px
+  band and the window ran ~970px to the screen edge.
+  *Fix:* `begin_drag()` records `GetCursorPos()` minus the window origin once, on
+  `drag-started`; `drag_move()` then sets the position to `cursor − anchor` every move.
+  Nothing accumulates, so nothing can drift. It also skips `set_position` entirely when
+  the result is unchanged, and `placement_dirty` is now set on `drag-ended` rather than on
+  every mouse-move, keeping SQLite off the drag path. Falls back to the old delta maths if
+  `GetCursorPos` is unavailable (non-Windows).
+  *DoD:* **needs eyes** — the plate must sit still under the grab point for a whole drag,
+  with no drift and no stutter. In the verification queue.
+  *Refs:* §13.3, §5.5
 
 ---
 

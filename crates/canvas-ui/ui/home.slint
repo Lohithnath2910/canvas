@@ -146,6 +146,8 @@ export component HomeWindow inherits Window {
     callback open-row(string);
     callback delete-row(string);
     callback window-moved(length, length);
+    callback drag-started();
+    callback drag-ended();
     callback quit-requested();
     callback close-requested();
 
@@ -186,14 +188,20 @@ export component HomeWindow inherits Window {
             width: parent.width - Layout.pad - 40px;
             height: Layout.header-band - 6px;
             moved => {
-                if (!root.dragging) { root.dragging = true; }
+                if (!root.dragging) {
+                    root.dragging = true;
+                    root.drag-started();
+                }
                 root.window-moved(
                     self.mouse-x - self.pressed-x,
                     self.mouse-y - self.pressed-y
                 );
             }
             pointer-event(event) => {
-                if (event.kind == PointerEventKind.up) { root.dragging = false; }
+                if (event.kind == PointerEventKind.up && root.dragging) {
+                    root.dragging = false;
+                    root.drag-ended();
+                }
             }
         }
 

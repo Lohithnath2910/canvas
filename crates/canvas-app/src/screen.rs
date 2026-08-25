@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub struct Bounds {
     pub x: i32,
     pub y: i32,

@@ -21,6 +21,7 @@ const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
 const PIN_POLL_INTERVAL: Duration = Duration::from_millis(700);
 const OPEN_DELAY: Duration = Duration::from_millis(16);
 const CLOSE_FADE: Duration = Duration::from_millis(100);
+const PALETTE_RELEASE: Duration = Duration::from_millis(16);
 const KEEP_VISIBLE_W: f32 = 120.0;
 const KEEP_VISIBLE_H: f32 = 48.0;
 
@@ -43,6 +44,44 @@ fn clamp_to_screen(
     let y_max = bounds.y + bounds.height - margin - keep_h;
 
     slint::PhysicalPosition::new(pos.x.min(x_max).max(x_min), pos.y.min(y_max).max(y_min))
+}
+
+type DragAnchor = Rc<std::cell::Cell<Option<(i32, i32)>>>;
+
+fn begin_drag(window: &slint::Window, anchor: &DragAnchor) {
+    let pos = window.position();
+    anchor.set(crate::desktop_layer::cursor_pos().map(|(cx, cy)| (cx - pos.x, cy - pos.y)));
+}
+
+fn drag_move(
+    window: &slint::Window,
+    anchor: &DragAnchor,
+    dx: f32,
+    dy: f32,
+) -> slint::PhysicalPosition {
+    let scale = window.scale_factor();
+    let pos = window.position();
+    let target = match (anchor.get(), crate::desktop_layer::cursor_pos()) {
+        (Some((ax, ay)), Some((cx, cy))) => slint::PhysicalPosition::new(cx - ax, cy - ay),
+        _ => slint::PhysicalPosition::new(
+            pos.x + (dx * scale).round() as i32,
+            pos.y + (dy * scale).round() as i32,
+        ),
+    };
+    let next = clamp_to_screen(target, window.size(), scale);
+    if next.x != pos.x || next.y != pos.y {
+        window.set_position(next);
+    }
+    next
+}
+
+fn fill_screen(window: &slint::Window, bounds: &crate::screen::Bounds, scale: f32) {
+    let scale = if scale > 0.0 { scale } else { 1.0 };
+    window.set_size(slint::LogicalSize::new(
+        bounds.width as f32 / scale,
+        bounds.height as f32 / scale,
+    ));
+    window.set_position(slint::PhysicalPosition::new(bounds.x, bounds.y));
 }
 
 fn clamp_window_onto_screen(window: &slint::Window) -> Option<slint::PhysicalPosition> {
@@ -107,6 +146,7 @@ struct Note {
     pending_updates: Vec<Vec<u8>>,
     text_dirty: bool,
     placement_dirty: bool,
+    pin_timer: Option<slint::Timer>,
 }
 
 pub struct App {
@@ -229,22 +269,26 @@ impl App {
         }
 
         {
+            let anchor: DragAnchor = Rc::new(std::cell::Cell::new(None));
+            {
+                let anchor = anchor.clone();
+                let handle = home.as_weak();
+                home.on_drag_started(move || {
+                    if let Some(home) = handle.upgrade() {
+                        begin_drag(home.window(), &anchor);
+                    }
+                });
+            }
+            {
+                let anchor = anchor.clone();
+                home.on_drag_ended(move || anchor.set(None));
+            }
             let handle = home.as_weak();
             home.on_window_moved(move |dx, dy| {
                 let Some(home) = handle.upgrade() else {
                     return;
                 };
-                let win = home.window();
-                let scale = win.scale_factor();
-                let pos = win.position();
-                win.set_position(clamp_to_screen(
-                    slint::PhysicalPosition::new(
-                        pos.x + (dx * scale).round() as i32,
-                        pos.y + (dy * scale).round() as i32,
-                    ),
-                    win.size(),
-                    scale,
-                ));
+                drag_move(home.window(), &anchor, dx, dy);
             });
         }
 
@@ -377,10 +421,14 @@ impl App {
                 pending_updates: Vec::new(),
                 text_dirty: false,
                 placement_dirty: false,
+                pin_timer: None,
             },
         );
 
-        wire_note(app, id, &window);
+        let pin_timer = wire_note(app, id, &window);
+        if let Some(note) = app.borrow_mut().notes.get_mut(id) {
+            note.pin_timer = Some(pin_timer);
+        }
         play_open(&window);
         window.show()?;
         let scale = window.window().scale_factor();
@@ -468,8 +516,9 @@ impl App {
     }
 }
 
-fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
+fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Timer {
     let owned_id = id.to_string();
+    let pin_timer = slint::Timer::default();
 
     {
         let weak = Rc::downgrade(app);
@@ -491,9 +540,40 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
         });
     }
 
+    let anchor: DragAnchor = Rc::new(std::cell::Cell::new(None));
+
+    {
+        let anchor = anchor.clone();
+        let handle = window.as_weak();
+        window.on_drag_started(move || {
+            if let Some(window) = handle.upgrade() {
+                begin_drag(window.window(), &anchor);
+            }
+        });
+    }
+
     {
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
+        let anchor = anchor.clone();
+        window.on_drag_ended(move || {
+            anchor.set(None);
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(note) = a.notes.get_mut(&id) {
+                note.placement_dirty = true;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let anchor = anchor.clone();
         let handle = window.as_weak();
         window.on_window_moved(move |dx, dy| {
             let Some(window) = handle.upgrade() else {
@@ -501,16 +581,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
             };
             let win = window.window();
             let scale = win.scale_factor();
-            let pos = win.position();
-            let next = clamp_to_screen(
-                slint::PhysicalPosition::new(
-                    pos.x + (dx * scale).round() as i32,
-                    pos.y + (dy * scale).round() as i32,
-                ),
-                win.size(),
-                scale,
-            );
-            win.set_position(next);
+            let next = drag_move(win, &anchor, dx, dy);
 
             let Some(app) = weak.upgrade() else {
                 return;
@@ -522,7 +593,6 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
                 let logical = next.to_logical(scale);
                 note.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
                 note.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
-                note.placement_dirty = true;
             }
         });
     }
@@ -635,8 +705,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
         let handle = window.as_weak();
-        let timer = Box::leak(Box::new(slint::Timer::default()));
-        timer.start(slint::TimerMode::Repeated, PIN_POLL_INTERVAL, move || {
+        pin_timer.start(slint::TimerMode::Repeated, PIN_POLL_INTERVAL, move || {
             let Some(window) = handle.upgrade() else {
                 return;
             };
@@ -665,6 +734,8 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
             }
         });
     }
+
+    pin_timer
 }
 
 pub fn dump() -> Result<(), Box<dyn std::error::Error>> {
@@ -842,6 +913,20 @@ impl App {
         }
     }
 
+    fn known_scale(app: &SharedApp) -> f32 {
+        let Ok(a) = app.try_borrow() else {
+            return 1.0;
+        };
+        if let Some(home) = &a.home {
+            return home.window().scale_factor();
+        }
+        a.notes
+            .values()
+            .next()
+            .map(|n| n.window.window().scale_factor())
+            .unwrap_or(1.0)
+    }
+
     pub fn show_palette(app: &SharedApp) {
         let existing = app.borrow().palette.as_ref().map(|p| p.clone_strong());
         let palette = match existing {
@@ -889,19 +974,16 @@ impl App {
         palette.set_query(slint::SharedString::new());
         App::refresh_palette(app, "");
 
-        if let Some(bounds) = crate::screen::primary_bounds() {
-            let win = palette.window();
-            win.set_size(slint::PhysicalSize::new(
-                bounds.width as u32,
-                bounds.height as u32,
-            ));
-            win.set_position(slint::PhysicalPosition::new(bounds.x, bounds.y));
+        let bounds = crate::screen::primary_bounds();
+        if let Some(bounds) = bounds {
+            fill_screen(palette.window(), &bounds, App::known_scale(app));
         }
 
         if let Err(e) = palette.show() {
             eprintln!("canvas: palette failed to show: {e}");
             return;
         }
+
         crate::desktop_layer::take_foreground(palette.window());
     }
 
@@ -970,9 +1052,12 @@ impl App {
     }
 
     pub fn hide_palette(app: &SharedApp) {
-        if let Some(palette) = &app.borrow().palette {
-            let _ = palette.hide();
-        }
+        let taken = app.borrow_mut().palette.take();
+        let Some(palette) = taken else {
+            return;
+        };
+        let _ = palette.hide();
+        slint::Timer::single_shot(PALETTE_RELEASE, move || drop(palette));
     }
 
     pub fn hide_home(app: &SharedApp) {

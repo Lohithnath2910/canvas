@@ -42,11 +42,16 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stopped by the user on 2026-08-25 after S1-35**, with everything from S1-29 to S1-35
-committed and logged. **Nothing in this run has been watched working** — the whole
-palette, the open/close animation, the screen clamp and the global hotkey are sitting in
-the VERIFICATION QUEUE in [TASKS.md](TASKS.md). Walk that queue before building anything
-new; several of its lines would change what the next task should be.
+**Interrupted by the user on 2026-08-25 after S1-51**, which was a bug-fix detour off the
+backlog: the user reported drag stutter, a memory jump, and the Ctrl+K palette opening off
+to the side. All three are fixed and committed (S1-49, S1-50, S1-51 in
+[TASKS.md](TASKS.md)); the two memory ones are confirmed by measurement, the drag feel and
+the palette's on-screen position still need eyes and are in the VERIFICATION QUEUE.
+
+**Nothing from S1-29 to S1-35 has been watched working either** — the palette, the
+open/close animation, the screen clamp and the global hotkey are all still queued. Walk
+that queue before building anything new; several of its lines would change what the next
+task should be.
 
 **`S1-43` — undo/redo backed by `revision_history`.** ([TASKS.md](TASKS.md), section 1k.)
 Not a local edit stack — the `revision_history` rows `canvas-storage` is already writing.
@@ -224,6 +229,83 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   as S1-47 rather than done on the way past.
 - **The tray icon is white on transparent**, which reads on the default dark Windows 11
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
+
+---
+
+### 2026-08-25 — S1-49, S1-50, S1-51: three bugs the user hit while using the app
+
+Off-backlog. The user reported drag stutter, RAM going from "4–5 MB" to "20 MB ish", and
+the Ctrl+K palette landing to one side instead of centred. All three were real; two of
+them turned out to be the same bug.
+
+- ✅ **The palette window was built 1.5× too big — S1-49.** Verified by measurement, not
+  by eye: read back with a **DPI-aware** `GetWindowRect`, the palette was
+  **3840×2160 on a 2560×1440 screen**. Now `2560x1440 at (0,0)`.
+- ✅ **The palette's framebuffer is given back on dismiss — S1-50.** Private bytes:
+  open 41.4 → **25.0 MB**, dismissed 41.5 → **11.0 MB** against a boot figure of 10.9,
+  and **9.95 MB** after a second open/close cycle. It used to keep every byte for the
+  rest of the session.
+- 🟡 **Drag anchors to the cursor instead of accumulating deltas — S1-51.** Clippy-clean
+  and 30 tests pass, but **drag feel cannot be measured, only felt** — it is in the
+  verification queue.
+
+**The palette bug is a Slint DPI trap worth remembering.** `screen::primary_bounds()`
+returns *physical* pixels. A Slint window that has not been `show()`n yet reports
+`scale_factor() == 1.0` — the real 1.5 arrives later as an event-loop event. So
+`set_size(PhysicalSize(2560,1440))` was passed to winit as "2560×1440 **logical**", winit
+applied the 150% DPI, and the window came out 3840×2160. Everything inside then landed
+1.5× too far out: the plate centres on `parent.width`, so it sat about 1440px across a
+2560px screen — which is exactly the "off to the side" the user saw — and its top sat 1.5×
+too low as well. `fill_screen()` now converts using `App::known_scale()`, the scale factor
+of an **already open** window, and runs **before** `show()`.
+
+**Do not "correct" the size again after `show()`.** That was tried and it reintroduced the
+bug exactly: the post-show call reads the new window's own scale, which is still 1.0 at
+that moment, and re-inflates the window. The debug line that proved it read
+`scale=1 size=PhysicalSize { width: 2560, height: 1440 } known=1.5` — Slint's own idea of
+the window was 2560 wide while Windows had made it 3840.
+
+**The drag was running away, not stuttering in the render.** The old handler applied
+`mouse-x - pressed-x` — a **window-relative** delta — to the window's own position on every
+mouse-move, which feeds the window's movement back into the next delta. Measured with
+synthesised input: the cursor stayed inside a 120px band and the window travelled ~970px to
+the screen edge. `begin_drag()` now records `GetCursorPos()` minus the window origin once,
+on `drag-started`, and `drag_move()` sets the position to `cursor − anchor` on every move.
+Nothing accumulates, so nothing can drift. Two smaller things came off the drag path with
+it: `set_position` is skipped when the result is unchanged, and `placement_dirty` is set on
+`drag-ended` rather than on every mouse-move, so the 500ms flush cannot fire a SQLite write
+mid-drag. `Note.placement` is still updated in memory every move, so `flush_all` on quit
+still saves the right position even if the mouse-up is never seen.
+
+**The RAM regression was smaller than it looked.** Release builds, measured:
+
+| | private | working set |
+|---|---|---|
+| v1 milestone (`3627cd2`) — one note window, no DB, no home, no tray | 6.63 MB | 25.29 MB |
+| current, at boot | 10.9 MB | 25.3 MB |
+
+Boot is ~4 MB above the old build — that is SQLite, the home window (468×568 against the
+note's 368×328) and the tray — and working set is unchanged. The 20 MB the user saw was
+the palette. **`GetSystemMetrics` and `GetWindowRect` lie to a DPI-unaware process**, so
+any future measurement of this kind has to call `SetProcessDpiAwarenessContext(-4)` first
+or it will read every number back divided by 1.5.
+
+**One thing found and not fixed: the app renders ~30–42 frames a second while completely
+idle, every one of them with an empty dirty region.** Found via
+`SLINT_DEBUG_PERFORMANCE=refresh_lazy,console`. Something is asking for a redraw ~35×/sec
+with nothing to redraw. It is not the glyph strip's `Timer` (gated on `syncing`) and not
+any `animate` in the tree — most likely the transparent/`no-frame` window defeating the
+software renderer's partial rendering. Worth a task of its own; it is wasted CPU on every
+widget and will be six times worse once Stage W has six window types open.
+
+**Two Slint / Win32 debugging techniques that worked here, for next time:**
+- `windows_subsystem = "windows"` hides the console, but **stderr still redirects**:
+  `Start-Process -RedirectStandardError` captures `eprintln!` and `SLINT_DEBUG_PERFORMANCE`
+  output from the release build without rebuilding it.
+- `SendKeys("^k")` from PowerShell **does** fire a `RegisterHotKey` hotkey, so the S1-35
+  global hotkey mechanism can be exercised headlessly. It fired both Ctrl+K and Ctrl+N from
+  a non-Canvas foreground window — good evidence the hidden-message-window approach works,
+  though the visual half is still the user's to confirm.
 
 ---
 
