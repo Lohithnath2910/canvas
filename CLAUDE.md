@@ -1,21 +1,54 @@
 > ## ⚠ READ THIS BEFORE ANYTHING ELSE
 >
-> **This spec is the original brief, not the current state of the build.** Nine of its
-> decisions have been deliberately overridden by the user after seeing the app run.
-> Following it literally will undo working, agreed-on behaviour.
+> **This spec is the original brief, not the current state of the build.** Eleven of its
+> decisions have been deliberately overridden by the user after seeing the app run,
+> including the **order the stages are built in** and the **removal of rich text**.
+> Following this document literally will undo working, agreed-on behaviour.
 >
-> **Do this first, in order:**
-> 1. Read **`progress.md`** — its START HERE section has the current state, the file
->    layout, the commands, the table of what overrides this spec, and the traps already hit.
-> 2. Read **`TASKS.md`** — the numbered backlog. Work from the first unticked box.
-> 3. Then read this spec for design detail.
+> ### If the user just said "go" (or anything equally short)
 >
-> **Three standing rules that are not in this document:**
+> That means *continue the project from where it was left*. Do not ask what to work on.
+> Do this, in order:
+>
+> 1. Read **`progress.md`** top to bottom — the **GO** block at the very top names the
+>    exact next action, and START HERE below it has the current state, the file layout,
+>    the commands, the override table, and every trap already hit.
+> 2. Read **`TASKS.md`** — the numbered backlog. The **Current task** line at the top is
+>    authoritative; work from there.
+> 3. Read this spec only for the design detail of whatever you are actually building.
+> 4. Start working. Report at the end of each unit, not before starting one.
+>
+> ### The build order — this OVERRIDES §14
+>
+> 1. **Finish Stage 1** — everything that does not need a second machine.
+> 2. **Stage W** — every widget type, single-player: Todo, Shared Document, Calendar,
+>    Kanban, Whiteboard, Spreadsheet. This is §14's Stages 4 and 5 moved ahead of the
+>    backend, plus a Spreadsheet that is **not in this document at all**.
+> 3. **Stage 2** (backend), then **Stage 3** (sync), then the multiplayer tasks that were
+>    deferred out of Stage 1 (S1-36, S1-37, Shared Document cursors, undo-after-remote).
+>
+> **Rich text (§7.7, and §7.2's bold/italic/code/strike rows) is cancelled.** The body face
+> is Silkscreen, which ships Regular only, and the user does not want those formats. The
+> note body is plain text in one face. Do not build it back.
+>
+> ### Standing rules that are not in this document
+>
 > - **Write no code comments.** Anywhere. Reasoning goes in `progress.md`, `TASKS.md`
 >   and commit messages.
+> - **Log as you go, every single task.** The moment a task is finished, update
+>   `TASKS.md` (tick the box, move **Current task**) *and* append a dated entry to
+>   `progress.md`, *then* commit with the task ID in the subject. Do not batch this up
+>   for the end of a session — the whole point is that the next session can pick up cold.
 > - **Only tick a `TASKS.md` box for behaviour you personally watched work.** Compiling
->   is not done. This has already been got wrong four times.
+>   is not done. This has already been got wrong four times. Code that only compiles is
+>   `🟡` in `progress.md` and the box stays open.
+> - **You cannot verify visually on your own.** §13.7 explains why automated screenshot
+>   checking has lied on this project before. Anything needing eyes goes to the user:
+>   say exactly what to click and what should happen, and keep building something else
+>   while you wait rather than stalling.
 > - **Ask before adding any dependency** (Hard Constraint 6).
+> - **Ask, do not guess**, on a CRDT data shape, the wire protocol, the storage schema, or
+>   any design token not already in this file. Add it to **Open questions** in `TASKS.md`.
 >
 > The pristine original of this file is in `handoff/`. Only the five image links differ.
 

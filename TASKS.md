@@ -9,6 +9,10 @@ first unticked box.
 **Stage:** 1 — Sticky note + app shell
 **Done:** 18 of 52 (5 tasks dropped, 2 added, see below)
 
+**Told "go" and nothing else?** Read the 🟢 GO block at the top of
+[progress.md](progress.md) — it names the exact next action and what to ask the user
+while you work. Then start here at **Current task** above. Do not ask what to work on.
+
 ## ⚠ BUILD ORDER OVERRIDDEN — 2026-08-25
 
 The user reordered the roadmap after reviewing what was left:
@@ -39,8 +43,11 @@ visible instead of looking like an oversight.
 
 1. Work tasks **in numeric order**. A task's `Needs:` line lists its hard prerequisites.
 2. One task = one coherent, compiling, manually-verified unit. Do not chain two.
-3. When a task is done: tick its box, update **Current task** above, append a dated entry
-   to `progress.md`, and `git commit` with the task ID in the subject.
+3. When a task is done, in this order, before starting anything else: tick its box,
+   update **Current task** above, **rewrite the 🟢 GO block at the top of `progress.md`**
+   so it names the next action, append a dated entry to `progress.md`, then `git commit`
+   with the task ID in the subject. Every task — never batched to the end of a session.
+   This is the only thing that lets a cold session say "go" and carry on.
 4. `cargo clippy --workspace --all-targets` must be clean before ticking anything.
 5. **Only tick a box for behaviour you actually saw work.** Code that merely compiles is
    `🟡` in `progress.md` and the box stays unticked. This rule has been broken twice
@@ -799,7 +806,8 @@ protocol, the storage schema, or a design token not already specified.
 Before a session ends — especially one running low on context:
 
 1. `TASKS.md`: boxes ticked, **Current task** line updated.
-2. `progress.md`: dated entry appended with honest `✅` / `🟡` / `❌` markers.
+2. `progress.md`: the 🟢 GO block rewritten to name the exact next action, and a dated
+   entry appended with honest `✅` / `🟡` / `❌` markers.
 3. `git commit` — the working tree should never be left dirty at a session boundary.
 4. Anything half-finished: leave a `// TODO(<task-id>)` in the code **and** a note under
    that task here.

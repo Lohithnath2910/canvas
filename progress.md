@@ -1,8 +1,45 @@
 # Canvas — Progress Log
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-27` — tray icon and app lifetime.
-**Before starting it:** run the verification pass at the top of [TASKS.md](TASKS.md).
+
+---
+
+## 🟢 GO — the exact next action
+
+*If you have just been told "go", "continue", or anything equally short, start here.
+This block is rewritten at the end of every unit of work, so it is always current.*
+
+**Next code task: `S1-27` — tray icon and app lifetime.** ([TASKS.md](TASKS.md), section 1h.)
+Canvas keeps running when home is closed; the tray icon reopens home; quit is explicit and
+from the tray only. Needs Slint's `system-tray` feature, which was disabled in S0-2 for
+binary size — re-enable it. This is next because closing home with notes open currently
+strands the app with no way back to it.
+
+**Ask the user, in the same message you start work — do not wait for an answer:**
+
+1. **Confirm the resize fix (S1-06).** Rebuilt 2026-08-25 (commit `6d50abb`) and never
+   watched working. Three things to check: the visible plate edge and all four corners
+   still grab; live resizing is smooth now rather than only updating on release; and the
+   window still responds to clicks and drags afterwards. If any fail, the fallback is a
+   `WM_NCHITTEST` window subclass — see the 2026-08-25 resize entry below.
+2. **The rest of the VERIFICATION QUEUE** at the top of [TASKS.md](TASKS.md) — about
+   17 behaviours that are written and compiling but have never been watched work.
+
+**Do not stall waiting on either.** Build S1-27 while they check.
+
+**Two open questions block work that is coming up soon**, and both should be asked once
+the current unit is reported rather than saved for later: what pin should do beyond the
+desktop layer (decide by S1-27), and — before Stage W starts — whether the Spreadsheet
+supports formulas and whether its rows and columns insert mid-sheet. That second one
+decides the CRDT shape and cannot be retrofitted. All of them are in **Open questions**
+at the bottom of [TASKS.md](TASKS.md).
+
+**The rule that keeps this working:** finish a task → tick its box in `TASKS.md` → move
+the **Current task** line → rewrite this GO block → append a dated entry below → commit
+with the task ID in the subject. Every task, not every session.
+
+---
+
 **Build order changed 2026-08-25** — finish Stage 1, then build every widget type
 single-player (Stage W), then the backend and sync. Rich text is dropped. See the
 override block at the top of [TASKS.md](TASKS.md).
