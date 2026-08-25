@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-06` — Shared Document widget
+**Current task:** `SW-08` — Calendar window, **HALF BUILT** — the shell compiles, the wiring does not exist. See its entry.
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 28 ticked, 42 open (5 dropped, 9 added — S1-46 to S1-51, SW-16, and the two Spreadsheet tasks). 122 tests pass.
+**Done:** 28 ticked, 43 open (5 dropped, 10 added — S1-46 to S1-51, SW-16, SW-17, and the two Spreadsheet tasks). 122 tests pass.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -1072,6 +1072,28 @@ because the app is currently hardcoded to a single type.
   🟡 **add, toggle, edit and delete have not been driven by hand** — they need eyes and a
   pointer. In the verification queue.
 
+- [ ] **SW-17 · A create control that scales past two types** — `M`
+  Needs: SW-02. **Raised by the user 2026-08-26**, looking at home with two buttons on it:
+  > *"the home page thing for todo is like okayish, since only two you did till now, but
+  > what about other windows for each of kanban board, Calendar, etc etc — we dont have any
+  > windows or options to use those, also in the command window too"*
+
+  Two labelled 34px `Button`s already fill a good part of home's footer. **Seven will not
+  fit** — `NEW SPREADSHEET` alone is ~150px against a 420px plate — and the command palette
+  still offers only `New note`, `New todo` and `Settings` (§9's three defaults, written when
+  three was the whole list).
+  Both surfaces need the same list, and it should be **derived from one table of built
+  types** in Rust rather than written out twice and drifting.
+  The shape to decide (and it is a real design decision, so show the user before building
+  it out): home's footer probably becomes a **strip of 16px §5.6 glyph buttons**, one per
+  type, since the row list already uses those exact glyphs to mean those exact types and
+  the header cluster is already unlabelled icons — or a single `NEW` primary that opens the
+  palette, which is what §9 says the palette is *for*. **Only offer a type that can
+  actually open a window**; a control that prints "no window yet" to the console is worse
+  than no control.
+  *DoD:* every built type is creatable from home and from the palette, both lists come from
+  one place in Rust, and adding the next type touches that table only.
+
 - [ ] **SW-03 · The four missing library components** — `M`
   Needs: S1-13. `controls.slint` currently has `IconButton` and `Button` only.
   Build `Checkbox` (§6.4 — radius **2px**, not 8px: 8px on a 16×16 box renders as a disc,
@@ -1127,7 +1149,20 @@ because the app is currently hardcoded to a single type.
   `StickyNoteDoc` and most of `sticky-note.slint`.
   **The collaborator cursors (§10.2) are NOT in this task** — they need a peer and land
   after Stage 3, via relative positions, never absolute offsets.
+  **Done 2026-08-26, and it reuses the note component itself rather than copying it.**
+  `StickyNoteWindow` gained `in property <length> pad` and `in property <string>
+  delete-label`; every `Layout.pad` inside it became `root.pad`, and `Layout.title-x`
+  became `root.pad + Layout.strip-w + 12px` so the title still sits 12px past the strip at
+  either padding. §5.3 is explicit that padding drives **both** header and body — the glyph
+  strip and the body text share a left edge — so a document could not simply have a wider
+  body box. `KIND_DOCUMENT` therefore builds a `StickyNoteWindow` with `pad = 24` and
+  `delete-label = "DELETE DOCUMENT"`, and maps to `StickyNoteDoc` in `WidgetDoc`. The
+  `520×420` size already came from `canvas_storage::default_size`.
   *DoD:* creates, edits, persists. Cursor work explicitly recorded as deferred.
+  🟡 **needs eyes** — clippy-clean, 122 tests pass, the app launches. **There is no way to
+  create one yet**: SW-17 is the create control for it. Use
+  `cargo run -p canvas-app --example insert_todo` as the model for seeding one by hand
+  until then. Cursors remain deferred to after Stage 3, as the task says.
 
 ### Wd — Calendar
 
@@ -1159,6 +1194,19 @@ because the app is currently hardcoded to a single type.
   **Chips carry the 24-hour start time only, never the event name** — at a ~52px column an
   11px Silkscreen label holds five characters and a truncated name reads worse than none.
   Grey level carries duration. A day view is what is needed if names are ever required.
+  ⚠ **HALF BUILT — stopped mid-task 2026-08-26 on the 90% usage limit, not on a blocker.**
+  What exists: `ui/calendar.slint` with the seven-column grid, the per-day rule that steps
+  to `text` for `today`, a `CalendarChip` struct carrying `{id, label, day, top, height,
+  tone}`, and the standard header, strip, drag region and three controls. It **compiles,
+  is exported from `main.slint`, and is clippy-clean**, so the tree is not broken.
+  What is missing, and is the whole of the next session's first task:
+  **(1)** no `Calendar` arm in `WidgetDoc`/`WidgetWindow` in `widget.rs` — the compiler
+  will name every site once you add it; **(2)** no `wire_calendar` in `app.rs`;
+  **(3)** nothing maps `CalendarDoc`'s events to chips — that is where the real work is:
+  `day` from the event's weekday, `top` from its start offset inside the day, `height`
+  from `duration()` bucketed to §10.4's **24/32/40/56px**, `tone` from the same duration,
+  and `label` as the **24-hour start time only**. `CalendarDoc::events_between` already
+  exists to select the week, and returns overlapping events, not merely contained ones.
   *DoD:* a week renders with correctly positioned and sized chips; today is marked; events
   survive a restart.
 

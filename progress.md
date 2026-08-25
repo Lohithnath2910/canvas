@@ -50,46 +50,55 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**The backlog has no unblocked task left. The run stopped on that, not on a limit.**
+**⚠ The last session stopped MID-TASK, on the 90% usage limit, not on a blocker.** Read
+this before starting anything.
 
-**`SW-05` — the Todo widget window — is next and is BLOCKED on open question 8**: *do the
-other widget types get the note's four header controls (colour · pin · delete · close)?*
-Three of the four are window behaviours and obviously belong on any type. The open one is
-**colour-as-grey-tone**. Question 8's own wording is *"decide once, apply to all types"*,
-so guessing it costs one `IconButton` on six widget types, not one.
+**`SW-08` — the Calendar window — is HALF BUILT.** `ui/calendar.slint` exists, compiles, is
+exported from `main.slint` and is clippy-clean, so **the tree is not broken** and all 122
+tests pass. What it does not have is any connection to the runtime. Finish it first:
 
-**Everything else in Stage W is behind the same question**: SW-06 (Shared Document), SW-08
-(Calendar window), SW-10 (Kanban window), SW-12 (Whiteboard window — also behind question
-4, which is that no artboard for it exists). SW-13 and SW-14 are behind questions 5, 6
-and 7.
+1. Add a `Calendar` arm to `WidgetDoc` and `WidgetWindow` in `widget.rs`. The compiler will
+   list every `match` that needs one — that is why they are enums.
+2. Write `wire_calendar` in `app.rs`, modelled on `wire_todo`.
+3. **The real work: map `CalendarDoc` events to `CalendarChip`s.** `day` from the weekday,
+   `top` from the start offset inside that day, `height` from `duration()` bucketed to
+   §10.4's **24/32/40/56px**, `tone` from the same duration, and `label` as the **24-hour
+   start time only — never the event name** (§10.4 is emphatic; a truncated name in a 52px
+   column reads worse than none). `CalendarDoc::events_between` already selects a week and
+   returns *overlapping* events, not merely contained ones.
 
-**Stage 1 ran out earlier and separately:** `S1-45` needs the VERIFICATION QUEUE walked by
-the user, `S1-48` needs open question 9 (a schema change), `S1-36`/`S1-37` need a peer.
+Then **`SW-17`**, which the user raised directly while looking at the app: home has two
+labelled buttons and the palette offers three actions, and **neither scales to seven widget
+types**. Both lists should come from one table of built types in Rust. It carries a real
+design decision — glyph strip vs. a single `NEW` that opens the palette — so show the user
+before building it out.
 
-### The moment question 8 is answered
+Then `SW-10` (Kanban window + card drag, on `KanbanDoc`'s fractional index),
+and after that the two that are genuinely blocked: `SW-12` needs **open question 4** (the
+Whiteboard has no artboard at all) and `SW-13`/`SW-14` need **open questions 5, 6 and 7**
+(Spreadsheet formulas, mid-sheet insertion, default size).
 
-Go straight to `SW-05`. Everything it needs is already built and tested:
-`TodoListDoc` with `counts() -> (open, done)` (SW-04), `Checkbox` and `Tag` in
-`theme/controls.slint` (SW-03), and SW-01's `WidgetDoc`/`WidgetWindow` enums where a new
-type is one arm each and the compiler names every `match` that needs it. Then `SW-02`
-comes off the shelf — it was skipped because a create-control-per-type strip is pointless
-while the note is the only type with a window — and SW-01's DoD line about opening a
-non-note window can finally be ticked.
+### What is real and what is not
 
-### Read this before assuming the widgets work
+**Wired into the running app and reachable by a user:** the sticky note, and **the Todo
+widget** (SW-05). Home creates both; the palette creates both. The **Shared Document**
+(SW-06) is built and dispatches, but **nothing can create one yet** — that is SW-17.
 
-**Four CRDT documents were built this run — Todo, Calendar, Kanban, Whiteboard — and none
-of them is wired to a window.** They are library code: 122 tests pass, and not one of them
-is reachable from `cargo run -p canvas-app`. That was the right work while blocked, because
-it is exactly the half that does not need eyes. Do not read the test count as a working
-widget.
+**Built, tested, and NOT reachable from the app:** `CalendarDoc`, `KanbanDoc` and
+`WhiteboardDoc`, plus the Calendar window shell above. Do not read 122 passing tests as a
+working calendar.
 
-**The VERIFICATION QUEUE is now the only thing that moves the project forward**, and it has
-a section per task. From this run: undo/redo (S1-43), reduced motion (S1-44), the home
-scrollbar (S1-47), the SW-01 regression check, and the four §6 components via
-`cargo run -p canvas-app -- --gallery` (SW-03). Underneath: the palette, the global hotkey,
-the open/close animation, the screen clamp and the drag feel. All written, all clippy-clean,
-none watched working.
+**Only in `--gallery`:** the four §6 components (SW-03). The Todo window is the first real
+user of `Checkbox` and `Tag`.
+
+### Still the largest block of value
+
+**The VERIFICATION QUEUE.** Nothing built in the last two sessions has been watched
+working, and it now has a section per task: the Todo widget (SW-05/SW-02), three header
+controls (SW-16), undo/redo (S1-43), reduced motion (S1-44), the home scrollbar (S1-47),
+the SW-01 regression check, and the four components via `--gallery` (SW-03) — on top of the
+palette, the global hotkey, the open/close animation, the screen clamp and the drag feel.
+`S1-45` cannot honestly close until it is walked.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -249,13 +258,11 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   / peers / error states are only reachable through the Ctrl+G dev cycler.
 - **No rich text, and there will not be any** — dropped 2026-08-25. The body is plain text
   in one face. Silkscreen ships Regular only, and the user does not want bold or italic.
-- **Only the sticky note is a usable widget. Four other CRDT documents exist with no window
-  attached.** `TodoListDoc`, `CalendarDoc`, `KanbanDoc` and `WhiteboardDoc` are built and
-  covered by 103 tests in `canvas-doc`, and **not one of them is reachable from the running
-  app** — there is no window, no create control and no entry in `WidgetDoc`/`WidgetWindow`
-  for them. Do not read the test count as a working widget. The runtime *can* now dispatch
-  by type (SW-01) and says so on the console when a type has no window yet; what is missing
-  is the windows, and **every one of them is blocked on open question 8**.
+- **Widget types: see the table in the 2026-08-26 SW-06 entry below.** Short version:
+  sticky note and **Todo** are real and creatable; **Shared Document** is built but has no
+  create control (SW-17); **Calendar** has a doc and an unwired window shell; **Kanban** and
+  **Whiteboard** have docs only; **Spreadsheet** has neither. Do not read the test count as
+  a working widget.
 - **The four §6 components (`Checkbox`, `Tag`, `Divider`, `TextField`) exist but nothing
   uses them.** They render only in `cargo run -p canvas-app -- --gallery`, a dev window
   built so SW-03's by-eye DoD could be checked at all. The first real user is the Todo
@@ -299,6 +306,59 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-26 — SW-06 Shared Document; SW-08 started and stopped mid-task
+
+**Stopped on the 90% usage limit, not on a blocker.** The standing rule says finish what is
+in hand to a committed, logged state first, so: the tree compiles, clippy is clean, 122
+tests pass, and the app launches. The half-built part is named precisely below and in
+`TASKS.md`.
+
+- 🟡 **SW-06 · the Shared Document is a `StickyNoteWindow` with `pad = 24`.** Clippy-clean
+  and the app launches, but **nothing can create one yet** — that is SW-17.
+- ⚠ **SW-08 · the Calendar window shell exists and is not wired to anything.**
+
+**The document reuses the note component rather than copying it, and §5.3 is why.** The
+obvious shortcut is to give a document a wider body box and leave the header alone. §5.3
+does not allow it: *"padding drives both header and body — the Glyph Strip and body text
+must share a left edge."* So `StickyNoteWindow` gained `in property <length> pad`, every
+`Layout.pad` inside it became `root.pad`, and `Layout.title-x` — a hardcoded 84px, which is
+16 + 56 + 12 — became `root.pad + Layout.strip-w + 12px`, so the title still sits 12px past
+the strip at either padding. `KIND_DOCUMENT` then builds the same component with `pad = 24`
+and `delete-label = "DELETE DOCUMENT"`, and maps to `StickyNoteDoc`. Two window types, one
+component, no duplicated header.
+
+**A user question worth recording, because it names a real gap:**
+
+> *"the home page thing for todo is like okayish, since only two you did till now, but what
+> about other windows for each of kanban board, Calendar, etc etc — we dont have any windows
+> or options to use those, also in the command window too"*
+
+Correct on both counts. Home has two labelled `Button`s and the palette has §9's three
+default actions, which were written when three *was* the whole list. **Neither scales to
+seven types** — `NEW SPREADSHEET` alone is about 150px against a 420px plate. Logged as
+**SW-17**, with the note that both lists should come from **one table of built types in
+Rust** rather than being written twice and drifting, and that a control must only be offered
+for a type that can actually open a window.
+
+**Where the widget types actually stand, because the test count is misleading:**
+
+| Type | Doc | Window | Creatable |
+|---|---|---|---|
+| Sticky note | ✅ | ✅ | ✅ home + palette |
+| Todo | ✅ | ✅ | ✅ home + palette |
+| Shared Document | ✅ (reuses `StickyNoteDoc`) | ✅ (reuses the note window) | ❌ **SW-17** |
+| Calendar | ✅ `CalendarDoc` | ⚠ shell only, unwired | ❌ |
+| Kanban | ✅ `KanbanDoc` | ❌ | ❌ |
+| Whiteboard | ✅ `WhiteboardDoc` | ❌ blocked on question 4 | ❌ |
+| Spreadsheet | ❌ blocked on questions 5, 6 | ❌ | ❌ |
+
+**What the next session does first is finish SW-08**, and its entry in `TASKS.md` lists the
+three concrete missing pieces — the enum arms, `wire_calendar`, and the event-to-chip
+mapping, which is where the actual thinking is.
 
 ### 2026-08-26 — SW-16, SW-05, SW-02: the second widget type, and colour dropped
 

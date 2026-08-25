@@ -3,11 +3,12 @@ use std::time::Duration;
 use slint::ComponentHandle;
 
 use canvas_doc::{StickyNoteDoc, TodoListDoc, UndoHistory};
-use canvas_storage::{WindowPlacement, KIND_STICKY_NOTE, KIND_TODO};
+use canvas_storage::{WindowPlacement, KIND_DOCUMENT, KIND_STICKY_NOTE, KIND_TODO};
 use canvas_ui::{platform_system_sans, Motion, StickyNoteWindow, TodoWindow, Typography};
 
 const OPEN_DELAY: Duration = Duration::from_millis(16);
 const CLOSE_FADE: Duration = Duration::from_millis(100);
+const DOC_PAD: f32 = 24.0;
 
 pub enum WidgetDoc {
     StickyNote(StickyNoteDoc),
@@ -17,7 +18,7 @@ pub enum WidgetDoc {
 impl WidgetDoc {
     pub fn load(kind: &str, snapshot: Option<&[u8]>) -> Option<Self> {
         match kind {
-            KIND_STICKY_NOTE => Some(WidgetDoc::StickyNote(match snapshot {
+            KIND_STICKY_NOTE | KIND_DOCUMENT => Some(WidgetDoc::StickyNote(match snapshot {
                 Some(bytes) if !bytes.is_empty() => StickyNoteDoc::load(bytes),
                 _ => StickyNoteDoc::new(),
             })),
@@ -80,11 +81,15 @@ impl Clone for WidgetWindow {
 impl WidgetWindow {
     pub fn create(kind: &str, reduced_motion: bool) -> Option<Result<Self, slint::PlatformError>> {
         match kind {
-            KIND_STICKY_NOTE => Some(StickyNoteWindow::new().map(|window| {
+            KIND_STICKY_NOTE | KIND_DOCUMENT => Some(StickyNoteWindow::new().map(|window| {
                 window
                     .global::<Typography>()
                     .set_system_sans(platform_system_sans().into());
                 window.global::<Motion>().set_reduced(reduced_motion);
+                if kind == KIND_DOCUMENT {
+                    window.set_pad(DOC_PAD);
+                    window.set_delete_label("DELETE DOCUMENT".into());
+                }
                 WidgetWindow::StickyNote(window)
             })),
             KIND_TODO => Some(TodoWindow::new().map(|window| {
