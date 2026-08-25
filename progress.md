@@ -110,7 +110,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 75 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 105 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -146,7 +146,8 @@ Canvas/
   crates/
     canvas-app/      runtime: App owns the Store + live windows. app.rs is the core.
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
-    canvas-doc/      CRDT documents (yrs). StickyNoteDoc + UndoHistory + TodoListDoc. 38 tests.
+    canvas-doc/      CRDT documents (yrs). StickyNoteDoc, UndoHistory, TodoListDoc,
+                     CalendarDoc, KanbanDoc + a hand-written fractional index. 86 tests.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -276,6 +277,55 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-25 — SW-09: `KanbanDoc`, and a fractional index written by hand
+
+- ✅ **`canvas-doc/src/fractional.rs`, 8 tests, and `canvas-doc/src/kanban.rs`, 22 tests**
+  — verified by `cargo test --workspace`, 105 tests. The DoD's two named cases both pass,
+  and five more concurrency cases with them.
+
+**The nested-array failure mode is avoided by construction, not by care.** Cards live in a
+**`yrs::Map` keyed by card id**. A card is therefore *one map entry* — there is no array
+slot to reorder, so there is no operation that could duplicate or drop it, whatever two
+peers do at once. Its column and its position are ordinary fields on that entry, and two
+concurrent moves resolve the way any two concurrent field writes resolve: one column wins,
+consistently on every peer, with the card still existing exactly once. The test asserts
+precisely that, including that an untouched bystander card did not move. Columns stay a
+`yrs::Array` of `{id, title}` — they are not reordered by dragging, so an array is honest
+there.
+
+**The fractional index is hand-written, because adding a crate needs the user's word**
+(Hard Constraint 6) and the algorithm is about sixty lines. Digits are base-36, `0-9a-z`,
+chosen because that set sorts lexicographically in the same order as its values in ASCII —
+so plain string comparison *is* position comparison, which is what makes the `pos` field
+sortable straight out of the document with no parsing.
+
+Three things about it worth not re-deriving:
+
+- **A key is the fraction after an implied decimal point**, always strictly inside
+  `0 < k < 1`. The published versions of this algorithm carry an integer part to grow in
+  both directions; that is unnecessary here, because you can always subdivide toward 0 or
+  toward 1. `prepending_always_shrinks` and `appending_always_grows` each run 500 times.
+- **No key may end in `0`.** That is the invariant the whole midpoint recursion rests on:
+  a trailing zero makes "the next key down" unrepresentable. `key_between` returns `None`
+  rather than a bad key if it is ever handed one, and there is a test for it.
+- **`key_between` returns `Option`, not a key with a fallback.** An inverted range is a
+  caller bug, and silently returning something plausible would put cards in the wrong order
+  in a way no test could see. `move_card` computes its own neighbours so it cannot invert.
+
+**`move_card(id, column, index)` is deliberately the API a drop gives you** — a column and
+a slot — not a pair of keys. It resolves the neighbours in the destination itself,
+excluding the card being moved, so SW-10 never touches an index key. `many_moves_into_the_
+same_gap_stay_ordered` drops 200 cards into the single gap between the same two neighbours
+and checks the order strictly holds; that is the case that makes a naive midpoint scheme
+collapse.
+
+**Two fields that are not speculative.** `assignee` and `due` are on the card because
+§10.3's card meta line is literally `ASSIGNEE · DATE` (or `UNASSIGNED`). `due` is epoch
+milliseconds as `Any::BigInt`, the same choice and for the same reason as `CalendarDoc`.
 
 ### 2026-08-25 — SW-05 blocked on open question 8; SW-07 `CalendarDoc` done instead
 

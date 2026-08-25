@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `SW-09` — `KanbanDoc` with fractional indexing (SW-05, SW-06, SW-08 are blocked on open question 8)
+**Current task:** `SW-11` — `WhiteboardDoc` (every window task in Stage W is blocked on open question 8)
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 25 ticked, 44 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 75 tests pass.
+**Done:** 26 ticked, 43 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 105 tests pass.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -1076,13 +1076,36 @@ because the app is currently hardcoded to a single type.
 
 ### We — Kanban
 
-- [ ] **SW-09 · `KanbanDoc` with fractional indexing** — `L`
+- [x] **SW-09 · `KanbanDoc` with fractional indexing** — `L`
   Needs: SW-04. Columns as an array of maps; cards keyed by id with a **fractional-index**
   position field. **Never nested-array reordering** — it is a known CRDT failure mode that
   duplicates and loses cards under concurrent moves, and it must not ship even as a
   single-player shortcut, because it would have to be rewritten at Stage 3 anyway.
+  **Done 2026-08-25**: `canvas-doc/src/fractional.rs` (the index algorithm, 8 tests) and
+  `canvas-doc/src/kanban.rs` (`KanbanDoc`, 22 tests). Cards live in a **`yrs::Map` keyed by
+  card id**, so a card is one entry that two peers can only ever converge on — there is no
+  array position to reorder and therefore nothing to duplicate. Columns stay a
+  `yrs::Array` of `{id, title}`. A card is `{id, column, title, assignee, due, pos}`;
+  `assignee` and `due` are there because §10.3's card meta line is `ASSIGNEE · DATE`, and
+  `due` is epoch millis as `Any::BigInt` to match `CalendarDoc`.
+  **The fractional index is hand-written — no new dependency** (Hard Constraint 6). Base-36
+  digits `0-9a-z`, which sort lexicographically in the same order as their values, treated
+  as the fraction after an implied decimal point. `key_between(lower, upper)` returns a key
+  strictly between two neighbours, or `None` if the range is inverted or a key ends in `0`
+  — the invariant the algorithm rests on. **No integer part is needed**: keys are always
+  strictly inside `0 < k < 1`, so both ends can be subdivided forever.
+  `move_card(id, column, index)` is the API a drop gives you — it finds the neighbours in
+  the destination column itself, so callers never handle keys.
   *DoD:* unit tests — a card moved between columns keeps its identity; two docs moving the
   same card concurrently converge with no duplication and no loss.
+  ✅ both, plus more — `cargo test --workspace`, 105 tests pass.
+  `a_card_moved_between_columns_keeps_its_identity` checks the id, title **and** assignee
+  survive the move; `two_docs_moving_the_same_card_converge_without_duplication_or_loss`
+  moves one card to two different columns concurrently and asserts the boards match, the
+  card exists exactly once, and the bystander card did not move. Also covered: concurrent
+  moves of *different* cards both landing, a move against a rename, a **delete against a
+  move** (the card is not resurrected), a three-way move, and 200 moves into the same gap
+  staying strictly ordered.
 
 - [ ] **SW-10 · Kanban widget window + card drag** — `L`
   Needs: SW-09. `640×400`. Three equal columns, gap 12. Column header interface-face-11
