@@ -42,26 +42,28 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-47` — the same scrollbar on the home list.** ([TASKS.md](TASKS.md), section 1k.)
-`ScrollBar` already exists in `theme/controls.slint` and is proven in the note body
-(S1-46, confirmed by the user). Home's rows `Flickable` still scrolls bare. The one real
-decision in it: home's rows are full-bleed and carry a delete icon at their right edge, so
-reserving the same permanent 8px gutter moves every row's icon inward. Make that call
-deliberately and say so — the icons currently line up with the note window's header
-cluster.
+**Stage 1 has run out of tasks that can be done without the user.** `S1-45` (sign-off
+audit) needs the VERIFICATION QUEUE walked; `S1-48` needs open question 9 answered;
+`S1-36` and `S1-37` need a second machine. So the loop crosses into **Stage W**.
 
-**`S1-45`, the Stage 1 sign-off audit, is the next task by number and is skipped because
-it is blocked on the user.** It cannot be finished honestly until the VERIFICATION QUEUE
-in [TASKS.md](TASKS.md) has been walked, and the queue is now long: undo/redo, reduced
-motion, the palette, the global hotkey, the open/close animation, the screen clamp and the
-drag feel are all written and clippy-clean but none of them has been watched working.
+**`SW-01` — generalise the runtime to any widget type.** ([TASKS.md](TASKS.md), section
+Wa.) A large one, and everything else in Stage W is behind it. Today `App::boot` filters
+to `KIND_STICKY_NOTE` and `Note` is a concrete struct holding a `StickyNoteWindow` and a
+`StickyNoteDoc`; both have to become type-dispatched — one live-widget registry that can
+hold any window/doc pair, spawned by `widget_type`. **Keep the flush timer, the placement
+tracking, the pending-update buffer, the drag anchor and the undo history shared** — they
+are already type-agnostic and duplicating them per type is how this refactor goes wrong.
+*DoD:* a hand-inserted row of a non-note type opens its own window at boot instead of
+being silently skipped, before any real second type exists.
 
-After S1-47 the only Stage 1 task left is `S1-48` (palette search over note bodies), and
-**that one is blocked on open question 5** — it needs either a `text` column on `widgets`
-or FTS5, and rule 6 says do not change the schema without asking. S1-36 and S1-37 need a
-peer and stay deferred to 1j. So the backlog runs into the user shortly after S1-47, and
-the next real move after that is **Stage W**, starting at `SW-01` — generalising the
-runtime so it can open a widget that is not a sticky note.
+Then `SW-02` (a create control per type on home) and `SW-03` (the four missing §6
+components: `Checkbox`, `Tag`, `Divider`, `TextField`), then Todo at `SW-04`.
+
+**The VERIFICATION QUEUE is now the largest single block of value the user can unlock**,
+and it has grown again: undo/redo (S1-43), reduced motion (S1-44) and the home scrollbar
+(S1-47) have joined the palette, the global hotkey, the open/close animation, the screen
+clamp and the drag feel. All of it is written and clippy-clean; none of it has been watched
+working. `S1-45` cannot honestly close until it is walked.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -236,6 +238,42 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-25 — S1-47: the home list gets a scrollbar, and does not get a gutter
+
+- 🟡 **`ScrollBar` overlaid on the home list's right 8px.** Clippy-clean, 41 tests pass,
+  the app launches with no runtime warning — but **three notes do not overflow a 520px
+  list**, so nothing has been watched scrolling. In the VERIFICATION QUEUE.
+
+**The task warned that the 8px gutter would move every row's delete icon inward. It
+does — so the gutter was not reserved.** The note body has to reserve one: its
+`TextInput` wraps, so a gutter that appeared only on overflow could re-wrap the text into
+needing it and oscillate. That is the S1-46 reasoning and it still stands **there**. A
+home row cannot oscillate: every text in it is `wrap: no-wrap; overflow: elide`, so there
+is nothing to reflow and no reason to pay for a permanent gutter.
+
+So the bar is **overlaid** on the rightmost 8px of the list area and the rows keep their
+full width. The payoff is the alignment the task asked to be deliberate about: a row's
+delete icon stays at `width - pad - icon-size`, which is exactly where the note window's
+`close-btn` sits, so the two line up across windows.
+
+**Overlaying does not break §13.3 here, and it is worth being precise about why** rather
+than treating "two things in the same corner" as automatically wrong. The rule is that two
+`TouchArea`s must not share a *screen region*. In a home row the region is already
+carefully partitioned: the row's own `TouchArea` is `parent.width - 44px` wide, and the
+delete `IconButton` spans `width-32 … width-16`. The scroll band is `width-8 … width`.
+Nothing overlaps, and there is 8px of dead space between the icon and the bar. A
+consequence worth knowing: hovering the thumb does **not** light the row behind it,
+because that row's hover comes from a `TouchArea` that ends 44px short.
+
+**The list and its bar now live in one conditional wrapper `Rectangle`.** The first
+version made the `Flickable` unconditional with `visible: false` so the bar could reference
+it by name across scopes — which would have left an invisible `Flickable` sitting exactly
+on top of S1-28's empty state. Wrapping both in `if root.rows.length > 0:` keeps the
+empty-state swap byte-for-byte what it was.
 
 ### 2026-08-25 — S1-44: reduced motion now reads the OS setting
 
