@@ -157,6 +157,7 @@ impl App {
 
         App::open_home(&app)?;
         App::install_tray(&app);
+        App::install_hotkeys(&app);
         App::start_flush_timer(&app);
         Ok(app)
     }
@@ -816,6 +817,31 @@ impl App {
         }
     }
 
+    pub fn install_hotkeys(app: &SharedApp) {
+        let weak = Rc::downgrade(app);
+        let registered = crate::hotkey::install(move |id| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            match id {
+                crate::hotkey::HOTKEY_PALETTE => App::show_palette(&app),
+                crate::hotkey::HOTKEY_NEW_NOTE => {
+                    if let Err(e) = App::create_note(&app) {
+                        eprintln!("canvas: create failed: {e}");
+                    }
+                    App::refresh_home(&app);
+                }
+                _ => {}
+            }
+        });
+        if !registered {
+            eprintln!(
+                "canvas: Ctrl+K / Ctrl+N are not registered globally — another app may hold them.\n\
+                 canvas: Ctrl+K still works while a note's body has focus."
+            );
+        }
+    }
+
     pub fn show_palette(app: &SharedApp) {
         let existing = app.borrow().palette.as_ref().map(|p| p.clone_strong());
         let palette = match existing {
@@ -874,7 +900,9 @@ impl App {
 
         if let Err(e) = palette.show() {
             eprintln!("canvas: palette failed to show: {e}");
+            return;
         }
+        crate::desktop_layer::take_foreground(palette.window());
     }
 
     pub fn refresh_palette(app: &SharedApp, query: &str) {

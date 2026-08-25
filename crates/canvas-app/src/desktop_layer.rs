@@ -3,8 +3,8 @@ mod imp {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, SetWindowPos, HWND_BOTTOM, HWND_NOTOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
-        SWP_NOSIZE,
+        GetForegroundWindow, SetForegroundWindow, SetWindowPos, HWND_BOTTOM, HWND_NOTOPMOST,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     };
 
     fn hwnd_of(window: &slint::Window) -> Option<HWND> {
@@ -45,12 +45,22 @@ mod imp {
             place(hwnd, HWND_BOTTOM);
         }
     }
+
+    pub fn take_foreground(window: &slint::Window) {
+        let Some(hwnd) = hwnd_of(window) else {
+            return;
+        };
+        unsafe {
+            SetForegroundWindow(hwnd);
+        }
+    }
 }
 
 #[cfg(not(windows))]
 mod imp {
     pub fn apply_pin(_window: &slint::Window, _pinned: bool) {}
     pub fn hold_at_desktop_layer(_window: &slint::Window) {}
+    pub fn take_foreground(_window: &slint::Window) {}
 }
 
-pub use imp::{apply_pin, hold_at_desktop_layer};
+pub use imp::{apply_pin, hold_at_desktop_layer, take_foreground};

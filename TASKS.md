@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-35` — palette hotkey
+**Current task:** `S1-43` — undo/redo backed by `revision_history`
 **Stage:** 1 — Sticky note + app shell
 **Done:** 21 ticked, 45 open (5 dropped, 5 added — S1-46, S1-47, S1-48 and the two Spreadsheet tasks)
-**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-34` (the palette) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -144,6 +144,14 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
 - [ ] Delete a note from its own trash icon — same 100ms fade, not an instant vanish
 
 **Command palette** → **S1-31**, **S1-32**
+- [ ] **The big one for S1-35:** click on something that is *not* Canvas — a browser, the
+      desktop — and press **Ctrl+K**. The palette should come up over it, focused, ready
+      to type. If nothing happens, say so: it means winit is not pumping the hidden
+      message window, and the fix is to subclass a real window instead → **S1-35**
+- [ ] From anywhere, press **Ctrl+N** — a new note appears without touching the mouse
+      → **S1-35**
+- [ ] Watch the console at launch for `Ctrl+K / Ctrl+N are not registered globally` —
+      that line means another app already owns the combination → **S1-35**
 - [ ] Click into a note's body and press **Ctrl+K** — the screen dims to a flat scrim
       (dimmed, **not** blurred — text behind it must stay sharp) and a 640px-wide plate
       with a 28px radius sits centred, its top about 15% down the screen
@@ -610,7 +618,7 @@ mouse" bar reachable.
   is present and kept. **Search is title-only**: matching bodies would mean decoding every
   note's yrs blob from disk on every keystroke. Logged as **S1-48**.
 
-- [ ] **S1-35 · Palette hotkey** — `M`
+- [ ] **S1-35 · Palette hotkey** — `M` — 🟡 built, needs eyes
   Needs: S1-34. Ctrl+K opens it; Ctrl+N creates a note.
   A **true OS-global** hotkey needs Win32 `RegisterHotKey` — `windows-sys` is already a
   dependency by then, so this no longer needs a separate sign-off. The stopgap bound in a
@@ -619,6 +627,12 @@ mouse" bar reachable.
   *DoD:* a note is creatable with **no mouse at all**. The hotkey's real scope stated
   honestly in `progress.md`.
   *Refs:* §14 Stage 1 item 10
+  Real `RegisterHotKey`, delivered through a hidden `HWND_MESSAGE` window with its own
+  wndproc, since Slint's winit loop would hand `WM_HOTKEY` to `DefWindowProc` otherwise.
+  **The unverified part is whether winit's loop pumps that window's messages at all** — if
+  Ctrl+K does nothing from another app, that is the reason, and the note-body Ctrl+K
+  fallback is deliberately still there. Needs the `Win32_Graphics_Gdi` feature on
+  `windows-sys` (a feature, not a new crate — rule 5).
 
 ### 1j — Network-reflecting states — DEFERRED until after Stage 3
 

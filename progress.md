@@ -42,27 +42,22 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-35` — palette hotkey.** ([TASKS.md](TASKS.md), section 1i.) Ctrl+K opens the palette,
-Ctrl+N creates a note. Right now Ctrl+K is a **stopgap** in `sticky-note.slint`'s
-`body-input.key-pressed` — it fires only while a note's body has focus, so with only the
-home window open, or with a browser in front, there is no way to reach the palette at all.
+**Stopped by the user on 2026-08-25 after S1-35**, with everything from S1-29 to S1-35
+committed and logged. **Nothing in this run has been watched working** — the whole
+palette, the open/close animation, the screen clamp and the global hotkey are sitting in
+the VERIFICATION QUEUE in [TASKS.md](TASKS.md). Walk that queue before building anything
+new; several of its lines would change what the next task should be.
 
-A true OS-global hotkey is Win32 `RegisterHotKey` + a `WM_HOTKEY` message pump.
-`windows-sys` is already a dependency and `Win32_UI_Input_KeyboardAndMouse` is already an
-enabled feature, so **this needs no sign-off**. The hard part is that `RegisterHotKey`
-delivers `WM_HOTKEY` to a thread's message queue, and Slint's winit loop owns that queue —
-so the hook has to reach the Slint event loop, most likely via a hidden message-only
-window plus `slint::invoke_from_event_loop`. Whatever lands, **§14 Stage 1 item 10 says to
-state its real scope honestly**: if it ends up focus-scoped rather than OS-global, say so
-in as many words rather than calling it done.
+**`S1-43` — undo/redo backed by `revision_history`.** ([TASKS.md](TASKS.md), section 1k.)
+Not a local edit stack — the `revision_history` rows `canvas-storage` is already writing.
+`yrs` has its own `UndoManager`; check whether the pinned 0.19.2 exposes it before
+building anything by hand. The **"correct after a remote edit"** half of §14's DoD is
+unreachable until Stage 3 and is already recorded as deferred rather than dropped.
 
-**This is the last task in Stage 1 that can be built without the user.** S1-36 and S1-37
-need a peer and are deferred to 1j; S1-43 (undo/redo) is next in numeric order and can be
-built; S1-44 (reduced motion) needs the OS setting read; S1-45 is the sign-off audit,
-which needs the whole verification queue walked first. Check `TASKS.md` rather than
-assuming.
-
-After it: `S1-43` onward in `TASKS.md`, in numeric order.
+Then `S1-44` (reduced motion — `Motion.reduced` exists and every duration already collapses
+off it; what is missing is reading the OS setting) and `S1-45` (the Stage 1 sign-off
+audit, which **needs the verification queue walked first**). S1-36 and S1-37 need a peer
+and stay deferred to 1j.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -111,8 +106,8 @@ what is actually true. Read all three before writing code.
 each note flagged open. Notes are frameless, transparent-margined, rounded plates with a
 dot-matrix glyph strip, an editable title, and four header controls. Text persists to
 SQLite and survives a restart. There is a **command palette** over a full-screen scrim,
-reachable with Ctrl+K **only while a note's body has focus** until S1-35 lands. 30 tests
-pass.
+opened by an OS-global Ctrl+K (Ctrl+N creates a note) — **built but never watched
+working**, with a note-body Ctrl+K left in as a fallback. 30 tests pass.
 
 ```
 Canvas/
@@ -152,7 +147,10 @@ Database lives at `%APPDATA%/Canvas/canvas_local.db`. Delete that folder for a c
    reason to stop working: log it 🟡, add the click-through to the VERIFICATION QUEUE,
    and move to the next task.
 3. **Ask before adding a dependency** (Hard Constraint 6). Current additions beyond the
-   spec's closed stack, all signed off: `windows-sys`, `raw-window-handle`.
+   spec's closed stack, all signed off: `windows-sys`, `raw-window-handle`. `windows-sys`
+   features enabled so far: `Win32_Foundation`, `Win32_UI_WindowsAndMessaging`,
+   `Win32_UI_Input_KeyboardAndMouse`, `Win32_Graphics_Gdi` — features are not new
+   dependencies (TASKS.md rule 5), but they are listed here so the surface stays visible.
 4. Verify against the pinned versions rather than memory. `slint 1.17.1` and `yrs 0.19.2`
    are exactly what §11/§13 were written against, so those code samples apply verbatim.
 5. **"go" means keep going.** One task, log it, commit, next task — no check-in in
@@ -226,6 +224,50 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   as S1-47 rather than done on the way past.
 - **The tray icon is white on transparent**, which reads on the default dark Windows 11
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
+
+---
+
+### 2026-08-25 — S1-35: a real global hotkey for the palette
+
+- 🟡 **`RegisterHotKey` for Ctrl+K and Ctrl+N, OS-wide.** Written and clippy-clean.
+  **Not watched working, and this one has a specific way it can fail** — see below.
+
+**The mechanism, and where it might not hold.** `RegisterHotKey` posts `WM_HOTKEY` to the
+registering thread's message queue. Slint's winit loop owns that queue, and winit has no
+idea what `WM_HOTKEY` is — it would hand it to `DefWindowProc` and the key would vanish.
+So `hotkey.rs` creates a **hidden `HWND_MESSAGE` window with its own wndproc** and
+registers the hotkeys against that. winit's loop calls `DispatchMessageW` on everything in
+the thread queue, and `DispatchMessageW` routes by `hwnd`, so our wndproc should be
+called even though winit knows nothing about the window.
+
+**"Should" is doing real work in that sentence.** If winit ever pumps with a *filtered*
+`PeekMessage`, our window's messages never get dispatched and Ctrl+K silently does nothing
+from outside the app. That is the single most likely failure, it is in the verification
+queue as the first thing to check, and the fallback if it happens is to subclass one of
+winit's own windows via `SetWindowLongPtrW(GWLP_WNDPROC)` instead. **The note-body Ctrl+K
+from S1-32 was deliberately left in place** as the fallback path — when the global
+registration succeeds Windows swallows Ctrl+K before the focused window sees it, so the
+two cannot both fire.
+
+**The palette takes the foreground explicitly.** A window that merely `show()`s while
+another app is in front usually does not get keyboard focus on Windows, which would have
+left the scrim up with no way to type in it or press Esc. `SetForegroundWindow` is
+normally refused — but "the process owns the hotkey that was just pressed" is on Windows'
+own list of cases where it is allowed, which is exactly the situation. New
+`desktop_layer::take_foreground`.
+
+The wndproc hands off through `slint::invoke_from_event_loop` rather than calling into
+`App` directly, so nothing runs re-entrantly inside a message dispatch nested in Slint's
+own loop.
+
+**One feature was enabled, no crate added:** `WNDCLASSW` is gated behind `windows-sys`'s
+`Win32_Graphics_Gdi` (its `hbrBackground` field is an `HBRUSH`). Rule 5 says enabling a
+feature on a crate already in the closed stack is not a new dependency. Nothing from Gdi
+is actually called.
+
+If registration fails — most likely because another app already owns Ctrl+K — the app
+prints a line saying so and saying the note-body fallback still works, rather than failing
+silently.
 
 ---
 
