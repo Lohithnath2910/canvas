@@ -7,7 +7,7 @@ first unticked box.
 **Last updated:** 2026-08-25
 **Current task:** `S1-29` — open/close animation
 **Stage:** 1 — Sticky note + app shell
-**Done:** 22 of 53 (5 tasks dropped, 3 added, see below)
+**Done:** 21 ticked, 44 open (5 dropped, 4 added — S1-46, S1-47 and the two Spreadsheet tasks)
 **Left 🟡 for the user to look at:** `S1-28` (home empty state) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
