@@ -17,11 +17,14 @@ strands the app with no way back to it.
 
 **Ask the user, in the same message you start work — do not wait for an answer:**
 
-1. **Confirm the resize fix (S1-06).** Rebuilt 2026-08-25 (commit `6d50abb`) and never
-   watched working. Three things to check: the visible plate edge and all four corners
-   still grab; live resizing is smooth now rather than only updating on release; and the
-   window still responds to clicks and drags afterwards. If any fail, the fallback is a
-   `WM_NCHITTEST` window subclass — see the 2026-08-25 resize entry below.
+1. **Confirm the resize grab zone (S1-06).** Rebuilt twice on 2026-08-25 and still never
+   watched working. The user's second report was that the zone starts *outside* the note
+   so the cursor has to sit in empty space; `Layout.resize-border` went 30px → 36px in
+   response, which puts 12px of it inside the visible plate instead of 6px. Check: the
+   visible plate edge and all four corners grab **without** having to move outside the
+   note; live resizing is smooth rather than only updating on release; and the window
+   still responds to clicks and drags afterwards. If the feel is still off, the number is
+   the only thing to change — `Layout.resize-border` in `theme/layout.slint`, one line.
 2. **The rest of the VERIFICATION QUEUE** at the top of [TASKS.md](TASKS.md) — about
    17 behaviours that are written and compiling but have never been watched work.
 
@@ -279,6 +282,45 @@ weird bug."
   disagree about a cell neither typed), whether rows and columns can be inserted mid-sheet
   (which decides the CRDT shape and cannot be retrofitted), and what its default size is.
 - Stage W is now six types and 15 tasks. Nothing was started — this is backlog only.
+
+### 2026-08-25 — Resize grab zone widened; one wrong diagnosis recorded
+
+User's follow-up after the resize rebuild: *"the expanding thing is slightly starting from
+outside the note and not properly from the edge, hence have to keep my cursor completely
+out of the note and have to adjust it."*
+
+**A wrong theory, checked and discarded before it shipped.** `resize-border-width` is a
+logical `length`, but `i-slint-backend-winit-1.17.1/drag_resize_window.rs:48` compares it
+against a **physical** cursor position with no scale factor applied. That predicts exactly
+the reported symptom on a scaled display — at 150% a 30px band would be 20 logical px and
+would end 4px *outside* the 24px margin. It was wrong: a temporary print of
+`window().scale_factor()` reported **1**, so scaling was not the cause here.
+
+**The actual cause, from reading `get_resize_direction`:** the band is measured inward
+from the **window** edge, and the plate is inset by `Layout.plate-margin` (24px). A 30px
+band therefore lands 24px in empty margin and only **6px inside the visible plate** —
+the same thin 6px the deleted edge grips had, except the deleted *corner* grips were 16px
+and the uniform band gives corners only 6px too. So the reliable part of the target is the
+invisible margin, which is exactly what the user described.
+
+- ✅ `Layout.resize-border` 30px → **36px**: 24px outside the plate plus **12px inside**,
+  so the zone straddles the visible edge instead of sitting almost entirely beyond it.
+  12px is the most that can be taken without reaching header content — the header band
+  starts at plate `y=8`, and the icons sit at `y=16..32`, untouched. On the other three
+  sides 12px stays inside the plate's own 16px padding, so it covers nothing.
+- Worth knowing: **resize wins over UI content.** `event_loop.rs:435` returns early from
+  `MouseInput` when a resize direction is live, before the press reaches Slint. So the top
+  few pixels of the header resize rather than drag — which is how a real title bar behaves,
+  not a regression.
+- 🟡 **Kept, but unverified:** the border is now multiplied by `scale_factor()` after
+  `show()` on both windows, via a new `resize-border` property on each. At scale 1 this
+  is a no-op, which is why it could not be confirmed here — but the physical-vs-logical
+  mismatch in the Slint source above is real, so a 125%/150% display would otherwise get a
+  band that misses the plate entirely. Re-check this the first time Canvas runs on a scaled
+  monitor. It is not re-applied when a window moves between monitors of different scale.
+- 🟡 **Still not watched working.** S1-06 stays unticked. This is the second attempt at the
+  same task and both were reported as compiling-and-plausible; the box does not get ticked
+  until the user says the grab feels right.
 
 ## Standing update rule
 

@@ -165,6 +165,8 @@ impl App {
         app.borrow_mut().home = Some(home.clone_strong());
         App::refresh_home(app);
         home.show()?;
+        let scale = home.window().scale_factor();
+        home.set_resize_border(home.get_resize_border() * scale);
         Ok(())
     }
 
@@ -277,6 +279,8 @@ impl App {
 
         wire_note(app, id, &window);
         window.show()?;
+        let scale = window.window().scale_factor();
+        window.set_resize_border(window.get_resize_border() * scale);
         Ok(())
     }
 

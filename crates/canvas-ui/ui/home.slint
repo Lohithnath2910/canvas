@@ -154,7 +154,8 @@ export component HomeWindow inherits Window {
     min-width: 340px + 2 * Layout.plate-margin;
     min-height: 300px + 2 * Layout.plate-margin;
     no-frame: true;
-    resize-border-width: Layout.resize-border;
+    in-out property <length> resize-border: Layout.resize-border;
+    resize-border-width: root.resize-border;
     background: transparent;
     title: "Canvas";
 

@@ -33,7 +33,8 @@ export component StickyNoteWindow inherits Window {
     min-width: Layout.note-min-w + 2 * Layout.plate-margin;
     min-height: Layout.note-min-h + 2 * Layout.plate-margin;
     no-frame: true;
-    resize-border-width: Layout.resize-border;
+    in-out property <length> resize-border: Layout.resize-border;
+    resize-border-width: root.resize-border;
     background: transparent;
     title: "Canvas";
 
