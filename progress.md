@@ -42,17 +42,17 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-30` — off-screen clamping.** ([TASKS.md](TASKS.md), section 1h.) A note dragged past
-a screen edge clips at the boundary — radius and border simply cut. **No push-back, no
-bounce, no snap-in** (§8). At least 120px of width plus the full 32px header has to stay
-on screen so the note can always be grabbed again, so the clamp belongs in
-`wire_note`'s `on_window_moved` in `app.rs`, where the new physical position is already
-being computed. The display-change case ("fully off-screen after a monitor change moves
-to the nearest edge on next launch") belongs in `App::open_note`, against the placement
-read from disk. That second half may not be testable here — if not, `🟡` it and do not
-tick the box.
+**`S1-31` — the five palette icons.** ([TASKS.md](TASKS.md), section 1i.) `search`, `plus`,
+`check`, `settings` and `enter`, built the same way as the eight icons already in
+`theme/icons.slint`: one component per glyph, `Path` children, the exact command strings
+from CLAUDE.md §5.6's table, 1.5px stroke, square caps and joins on a 16-unit viewbox.
+`IconPlus` and `IconCheck` **already exist** — home uses both — so the real work is
+`search`, `settings` and `enter`, plus rendering all five at **24px, a size that exists
+nowhere else in the product** (§9). `IconBase` is fixed at 16×16, so the 24px case needs
+a size that the icon components take rather than hardcode; check how `stroke-color` is
+already threaded through before inventing a second mechanism.
 
-After it: `S1-31` onward in `TASKS.md`, in numeric order.
+After it: `S1-32` onward in `TASKS.md`, in numeric order.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -214,6 +214,56 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   as S1-47 rather than done on the way past.
 - **The tray icon is white on transparent**, which reads on the default dark Windows 11
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
+
+---
+
+### 2026-08-25 — S1-30: off-screen clamping
+
+- 🟡 **A note can no longer be dragged somewhere it cannot be grabbed back from.** 120px
+  of plate width and the full 48px header band always stay on screen. Written and
+  clippy-clean; **not watched working**, so the box stays open.
+
+**Clamped against the virtual screen rect, not the nearest monitor's work area.** This is
+the one real decision in the task. `MonitorFromPoint` + `GetMonitorInfoW` would give a
+per-monitor clamp, and on a two-monitor desktop that clamp fires at the **internal** edge
+between the two screens — the note would stop dead halfway across the join, which is
+exactly the push-back §8 forbids. `SM_XVIRTUALSCREEN`/`SM_YVIRTUALSCREEN`/
+`SM_CXVIRTUALSCREEN`/`SM_CYVIRTUALSCREEN` give the union bounding box of every monitor,
+so adjacent screens are contiguous inside it and only the true outer boundary clamps.
+The known cost: on monitors of different heights the union has dead corners a note could
+still be parked in. That is a worse-looking edge case than a note that refuses to cross
+between screens, so it is the trade taken.
+
+New `crates/canvas-app/src/screen.rs` — `virtual_bounds() -> Option<Bounds>`, Win32 behind
+`#[cfg(windows)]` and `None` everywhere else, so a non-Windows build simply does not
+clamp. `GetSystemMetrics` is already in the `Win32_UI_WindowsAndMessaging` feature that
+`desktop_layer.rs` uses, so **no dependency and no feature was added**.
+
+`clamp_to_screen` works in physical pixels, which is what the drag path already deals in:
+
+- The plate is inset from the window by the 24px transparent `plate-margin`, so every
+  bound is written against the *plate* rect, not the window rect.
+- `KEEP_VISIBLE_W` = 120px (§8). `KEEP_VISIBLE_H` = 48px = `Layout.header-band`, this
+  build's actual header — §8 says "the full 32px header", but the user's override made the
+  band 48px, and the override wins.
+- The top bound is the plate's top edge, not a 120px column: the header cannot go above
+  the screen top at all, since it is the only draggable part.
+
+Applied in three places: both windows' `on_window_moved` (the drag), and again right after
+`show()` in `open_note` / `open_home`. **That second call is what covers the display-change
+case** — a note whose stored position is off every current monitor gets pulled back to the
+nearest edge of the virtual desktop on the next launch, and the corrected position is
+written back through `placement_dirty`. It also covers a monitor being unplugged while a
+note is merely hidden, since a re-show goes through the same path.
+
+The clamp is deliberately *not* applied on resize. Resizing from a top or left edge is
+handled natively by Windows through `resize-border-width`, and reaching into that would
+mean re-entering the mechanism trap 4 is about.
+
+**Untestable here:** the unplug-a-monitor-and-relaunch case. Logged in the verification
+queue as such rather than ticked.
+
+Nothing on DO NOT REGRESS is touched. 28 tests, clippy clean.
 
 ---
 

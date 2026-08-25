@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-30` — off-screen clamping
+**Current task:** `S1-31` — the five palette icons
 **Stage:** 1 — Sticky note + app shell
 **Done:** 21 ticked, 44 open (5 dropped, 4 added — S1-46, S1-47 and the two Spreadsheet tasks)
-**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -142,6 +142,17 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
       downward on the way out
 - [ ] Same two checks on the home window: tray → `Open home` fades it up, `x` fades it out
 - [ ] Delete a note from its own trash icon — same 100ms fade, not an instant vanish
+
+**Off-screen clamping** → **S1-30**
+- [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
+      push-back and no snap-in, and always leaves ~120px of plate plus the whole header
+      grabbable
+- [ ] Drag a note up past the top edge — the header never goes above the screen top
+- [ ] Same four drags on the home window
+- [ ] On a two-monitor setup, drag a note across the join — it must **not** stop at the
+      internal edge. This is the one that would prove the virtual-screen clamp right
+- [ ] 🟡 not testable here: move a note onto a second monitor, unplug it, relaunch —
+      the note should come back at the nearest edge of the remaining screen
 
 **Tray** → **S1-27** ✅ confirmed 2026-08-25
 - [x] A Canvas icon (five dots) sits in the notification area at launch
@@ -498,13 +509,18 @@ and `raw-window-handle-06` features (inside it — build flags only).
   inside the 24px transparent margin and never clips. `opened`/`closing` are Rust-driven
   so a re-shown home window replays the open. Close is a real 100ms delay before `hide()`.
 
-- [ ] **S1-30 · Off-screen clamping** — `M`
+- [ ] **S1-30 · Off-screen clamping** — `M` — 🟡 built, needs eyes
   Needs: S1-20. Clips at the boundary, radius and border simply cut — **no push-back, no
   bounce, no snap-in**. At least 120px of width plus the full header stays grabbable.
   Fully off-screen after a display change → nearest edge on next launch.
   *DoD:* dragged to each edge and verified. The display-change case may not be testable
   here — if not, mark it `🟡` and do not tick the box.
   *Refs:* §8
+  Clamped against the **virtual screen rect** (`SM_*VIRTUALSCREEN`), not the nearest
+  monitor's work area — a per-monitor clamp would push back at the internal edge between
+  two monitors, which §8 forbids. The clamp keeps 120px of plate width and the full 48px
+  header band on screen. Applied on the drag path and again after `show()`, which is what
+  covers the display-change case. **The display-change half is untestable here.**
 
 ### 1i — Command palette
 

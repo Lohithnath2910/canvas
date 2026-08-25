@@ -4,6 +4,7 @@ use mimalloc::MiMalloc;
 
 mod app;
 mod desktop_layer;
+mod screen;
 
 use app::{App, SharedApp};
 

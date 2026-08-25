@@ -16,6 +16,40 @@ const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
 const PIN_POLL_INTERVAL: Duration = Duration::from_millis(700);
 const OPEN_DELAY: Duration = Duration::from_millis(16);
 const CLOSE_FADE: Duration = Duration::from_millis(100);
+const KEEP_VISIBLE_W: f32 = 120.0;
+const KEEP_VISIBLE_H: f32 = 48.0;
+
+fn clamp_to_screen(
+    pos: slint::PhysicalPosition,
+    size: slint::PhysicalSize,
+    scale: f32,
+) -> slint::PhysicalPosition {
+    let Some(bounds) = crate::screen::virtual_bounds() else {
+        return pos;
+    };
+    let margin = (PLATE_MARGIN * scale).round() as i32;
+    let keep_w = (KEEP_VISIBLE_W * scale).round() as i32;
+    let keep_h = (KEEP_VISIBLE_H * scale).round() as i32;
+    let width = size.width as i32;
+
+    let x_min = bounds.x - width + margin + keep_w;
+    let x_max = bounds.x + bounds.width - margin - keep_w;
+    let y_min = bounds.y - margin;
+    let y_max = bounds.y + bounds.height - margin - keep_h;
+
+    slint::PhysicalPosition::new(pos.x.min(x_max).max(x_min), pos.y.min(y_max).max(y_min))
+}
+
+fn clamp_window_onto_screen(window: &slint::Window) -> Option<slint::PhysicalPosition> {
+    let scale = window.scale_factor();
+    let pos = window.position();
+    let clamped = clamp_to_screen(pos, window.size(), scale);
+    if clamped.x == pos.x && clamped.y == pos.y {
+        return None;
+    }
+    window.set_position(clamped);
+    Some(clamped)
+}
 
 trait Fadeable: ComponentHandle + 'static {
     fn set_opened_flag(&self, value: bool);
@@ -125,6 +159,7 @@ impl App {
         if let Some(home) = existing {
             play_open(&home);
             home.show()?;
+            clamp_window_onto_screen(home.window());
             return Ok(());
         }
 
@@ -194,9 +229,13 @@ impl App {
                 let win = home.window();
                 let scale = win.scale_factor();
                 let pos = win.position();
-                win.set_position(slint::PhysicalPosition::new(
-                    pos.x + (dx * scale).round() as i32,
-                    pos.y + (dy * scale).round() as i32,
+                win.set_position(clamp_to_screen(
+                    slint::PhysicalPosition::new(
+                        pos.x + (dx * scale).round() as i32,
+                        pos.y + (dy * scale).round() as i32,
+                    ),
+                    win.size(),
+                    scale,
                 ));
             });
         }
@@ -218,6 +257,7 @@ impl App {
         home.show()?;
         let scale = home.window().scale_factor();
         home.set_resize_border(home.get_resize_border() * scale);
+        clamp_window_onto_screen(home.window());
         App::sync_tray(app);
         Ok(())
     }
@@ -281,6 +321,7 @@ impl App {
         if let Some(window) = existing {
             play_open(&window);
             window.show()?;
+            clamp_window_onto_screen(window.window());
             return Ok(());
         }
 
@@ -336,6 +377,16 @@ impl App {
         window.show()?;
         let scale = window.window().scale_factor();
         window.set_resize_border(window.get_resize_border() * scale);
+
+        if let Some(moved) = clamp_window_onto_screen(window.window()) {
+            let logical = moved.to_logical(scale);
+            let mut a = app.borrow_mut();
+            if let Some(note) = a.notes.get_mut(id) {
+                note.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
+                note.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
+                note.placement_dirty = true;
+            }
+        }
         Ok(())
     }
 
@@ -443,9 +494,13 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
             let win = window.window();
             let scale = win.scale_factor();
             let pos = win.position();
-            let next = slint::PhysicalPosition::new(
-                pos.x + (dx * scale).round() as i32,
-                pos.y + (dy * scale).round() as i32,
+            let next = clamp_to_screen(
+                slint::PhysicalPosition::new(
+                    pos.x + (dx * scale).round() as i32,
+                    pos.y + (dy * scale).round() as i32,
+                ),
+                win.size(),
+                scale,
             );
             win.set_position(next);
 
