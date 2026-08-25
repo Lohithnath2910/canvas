@@ -5,7 +5,7 @@ import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconTrash, IconPlus, IconNote, IconCheck, IconColumns, IconCalendar, IconDoc, IconX } from "theme/icons.slint";
-import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
+import { IconButton, Button, ButtonVariant, ScrollBar } from "theme/controls.slint";
 
 export struct NoteRow {
     id: string,
@@ -284,21 +284,37 @@ export component HomeWindow inherits Window {
             }
         }
 
-        if root.rows.length > 0: Flickable {
+        if root.rows.length > 0: Rectangle {
             x: 0;
             y: Layout.header-band + 1px;
             width: parent.width;
             height: parent.height - self.y - 64px;
-            viewport-height: rows-layout.preferred-height;
 
-            rows-layout := VerticalLayout {
-                width: 100%;
-                alignment: start;
-                for row in root.rows: Row {
-                    item: row;
-                    activated => { root.open-row(row.id); }
-                    delete-requested => { root.pending-delete = row.id; }
+            rows-scroll := Flickable {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                viewport-height: max(rows-layout.preferred-height, self.height);
+
+                rows-layout := VerticalLayout {
+                    width: 100%;
+                    alignment: start;
+                    for row in root.rows: Row {
+                        item: row;
+                        activated => { root.open-row(row.id); }
+                        delete-requested => { root.pending-delete = row.id; }
+                    }
                 }
+            }
+
+            ScrollBar {
+                x: parent.width - Layout.scroll-gutter;
+                y: 0;
+                height: parent.height;
+                view-height: rows-scroll.height;
+                viewport-height: rows-scroll.viewport-height;
+                viewport-y <=> rows-scroll.viewport-y;
             }
         }
 

@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-47` — the same scrollbar on the home list
+**Current task:** `SW-01` — generalise the runtime (S1-48 is skipped, blocked on open question 9)
 **Stage:** 1 — Sticky note + app shell
 **Done:** 23 ticked, 46 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 41 tests pass.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -138,6 +138,17 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
       list area, and disappears the moment the first note exists → **S1-28**
 - [ ] Open three notes at once — all independently draggable and editable → confirms **S1-20**
 - [ ] Home `x` closes home and leaves notes running
+- [ ] Make **ten or more** notes (hold `NEW NOTE`) so the list overflows: a 4px thumb
+      appears at the home list's right edge, tracks the wheel, and drags to scroll →
+      **S1-47**
+- [ ] With the list overflowing, hover a row — the row highlight and its delete icon must
+      still work right up against the thumb, and hovering the thumb must **not** highlight
+      the row behind it → **S1-47**
+- [ ] Put a note window next to home and compare right edges: the row's delete icon and
+      the note's `x` must sit at the same distance from their plate's right edge. The
+      scrollbar is overlaid, not guttered, precisely so this stays true → **S1-47**
+- [ ] Delete notes back down to a few — the thumb disappears and no 8px strip is left
+      behind → **S1-47**
 
 **Open/close animation** → **S1-29**
 - [ ] `NEW NOTE` — the new note's plate fades up over ~160ms and rises 6px into place.
@@ -793,8 +804,20 @@ exist yet (rule 3).
   Needs: S1-46. Home's rows `Flickable` still scrolls bare. Reuse `ScrollBar` — but the
   rows are full-bleed and carry a delete icon at their right edge, so the 8px gutter
   moves every row's icon inward. Decide that deliberately rather than on the way past.
+  **Done 2026-08-25, and the gutter was NOT reserved.** The note body has to reserve one
+  because its `TextInput` wraps and a gutter that came and went would re-wrap the text.
+  A home row cannot: every text in it is `wrap: no-wrap; overflow: elide`, so there is
+  nothing to reflow. The `ScrollBar` is therefore **overlaid** on the rightmost 8px of the
+  list area and the rows keep their full width — which keeps each row's delete icon at
+  `width - pad - icon-size`, exactly where the note window's `close-btn` sits, so the two
+  still line up. §13.3 holds without a gutter as well: the row's own `TouchArea` stops
+  44px short of the right edge and the delete `IconButton` spans `width-32 … width-16`, so
+  the 8px band overlaps neither, with 8px of dead space between them. The list and its bar
+  now share one conditional wrapper `Rectangle` so the empty state (S1-28) still swaps in
+  and out exactly as before, rather than sitting behind a hidden `Flickable`.
   *DoD:* with more notes than fit, the thumb appears and drags; the delete icons still
-  line up with the note window's own header cluster.
+  line up with the note window's own header cluster. 🟡 **needs eyes** — the app launches
+  clean but three notes do not overflow a 520px list. In the verification queue.
 
 - [ ] **S1-48 · Palette search should match note bodies, not just titles** — `M`
   Needs: S1-34. S1-34 searches titles only. Matching bodies the obvious way means
@@ -805,6 +828,8 @@ exist yet (rule 3).
   the snapshot, or SQLite FTS5. **Ask before changing the schema** (rule 6).
   *DoD:* typing a word that appears only in a note's body finds that note, and typing in
   the palette with 200 notes present does not stutter.
+  **Blocked 2026-08-25 on open question 9** — a `text` column on `widgets` or FTS5 is a
+  schema change, and rule 6 says do not make one unsupervised. Skipped; not abandoned.
   *Refs:* §9, §12, Hard Constraint 2
 
 - [x] **S1-49 · The palette opened 1.5× too big and off to the side** — `S`
@@ -1101,6 +1126,19 @@ protocol, the storage schema, or a design token not already specified.
    Kanban or Calendar wants it is undecided. *Blocks:* SW-05 onward — decide once, apply
    to all types, rather than per widget.
 
+9. **How should the palette search note bodies — a `text` column on `widgets`, or FTS5?**
+   S1-34 matches titles only. Matching bodies the obvious way costs a `get_document` plus
+   a `StickyNoteDoc::load` for **every** note **on every keystroke**, which is exactly the
+   disk-I/O-on-the-typing-path that Hard Constraint 2 and trap 7 exist to stop. It needs a
+   cheap searchable copy of the text, and both ways of getting one are schema changes that
+   rule 6 says not to make unsupervised:
+   **(a)** a plain `text` column on `widgets`, written by the same 500ms flush that already
+   writes the snapshot — a few lines, no new table, and it doubles as the home list's
+   preview source; or **(b)** an FTS5 virtual table, which is a real index and scales to
+   thousands of notes but is a second copy of the data to keep in step and pulls in an
+   extension the bundled SQLite may or may not have compiled in. **(a) is the
+   recommendation** — 200 notes is the stated target, not 200,000.
+   *Blocks:* S1-48. **Ask before starting.**
 ---
 
 ## Session-end checklist
