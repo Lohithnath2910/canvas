@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-34` — palette results, selection, footer
+**Current task:** `S1-35` — palette hotkey
 **Stage:** 1 — Sticky note + app shell
-**Done:** 21 ticked, 44 open (5 dropped, 4 added — S1-46, S1-47 and the two Spreadsheet tasks)
-**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`/`S1-32`/`S1-33` (the palette) — see the verification queue
+**Done:** 21 ticked, 45 open (5 dropped, 5 added — S1-46, S1-47, S1-48 and the two Spreadsheet tasks)
+**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-34` (the palette) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -156,7 +156,23 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
       16px ones, just bigger — same stroke weight relative to the glyph → **S1-31**
 - [ ] Type anything — the placeholder goes, the query shows in big caps with a tall caret,
       and the three rows disappear (results arrive in S1-34) → **S1-33**
-- [ ] 🟡 nothing is selectable or clickable yet, and there is no footer — that is S1-34
+- [ ] **Look hard at the footer text for tofu boxes.** It should read
+      `UP/DOWN MOVE · ENTER OPEN · ESC CLOSE`. Silkscreen has no arrow or return glyphs,
+      so §9's `↑↓ MOVE · ⏎ OPEN · ESC CLOSE` was deliberately not used — if you would
+      rather have the symbols, they need a second font and that is a decision to make
+      → **S1-34**
+- [ ] ↑ and ↓ move the highlight, which is a plain `elev-raised` row fill with the icon
+      stepping to white — **no accent colour and no left bar anywhere** → **S1-34**
+- [ ] The footer's left side reads `3 RESULTS` / `1 RESULT` / `NO RESULTS` and matches
+      what is actually listed → **S1-34**
+- [ ] With rows showing, press ⏎ on `New note` — the palette closes and a new note opens
+      → **S1-34**
+- [ ] Type part of an existing note's **title** — it appears as a row with the note glyph,
+      and `OPEN` on the right if that note is currently on screen. ⏎ opens it → **S1-34**
+- [ ] 🟡 typing a word that is only in a note's **body** finds nothing. That is deliberate
+      and logged as **S1-48**, not a bug
+- [ ] 🟡 `New todo` and `Settings` do nothing — there is no todo type until Stage W and no
+      settings screen at all. Both print a line to the console instead of pretending
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -581,13 +597,18 @@ mouse" bar reachable.
   results. The plate's height follows the row count, so it collapses to the 56px input
   row alone.
 
-- [ ] **S1-34 · Palette results, selection, footer** — `M`
+- [ ] **S1-34 · Palette results, selection, footer** — `M` — 🟡 built, needs eyes
   Needs: S1-33. Rows 48px, 24px icon + 16px gap + body-14 label + right-aligned
   interface-11 `dim` meta. Selection = row fill `elev-raised`, icon steps to `text` —
   **no accent fill, no left bar**. Footer 32px, count left,
   `↑↓ MOVE · ⏎ OPEN · ESC CLOSE` right. Searching existing notes belongs here too.
   *DoD:* ↑↓ moves, ⏎ opens, Esc closes, count correct, no accent anywhere.
   *Refs:* §9, rule 2
+  **The footer legend reads `UP/DOWN MOVE · ENTER OPEN · ESC CLOSE`, not §9's string.**
+  Silkscreen has no `↑` (U+2191), `↓` (U+2193) or `⏎` (U+23CE) — checked against the
+  font's own cmap, not guessed — so §9's literal string would draw three tofu boxes. `·`
+  is present and kept. **Search is title-only**: matching bodies would mean decoding every
+  note's yrs blob from disk on every keystroke. Logged as **S1-48**.
 
 - [ ] **S1-35 · Palette hotkey** — `M`
   Needs: S1-34. Ctrl+K opens it; Ctrl+N creates a note.
@@ -692,6 +713,17 @@ exist yet (rule 3).
   moves every row's icon inward. Decide that deliberately rather than on the way past.
   *DoD:* with more notes than fit, the thumb appears and drags; the delete icons still
   line up with the note window's own header cluster.
+
+- [ ] **S1-48 · Palette search should match note bodies, not just titles** — `M`
+  Needs: S1-34. S1-34 searches titles only. Matching bodies the obvious way means
+  `get_document` + `StickyNoteDoc::load` for **every** note **on every keystroke** — disk
+  I/O and a yrs decode on the typing path, which is what Hard Constraint 2 and trap 7
+  exist to prevent. It needs a cheap searchable copy of the text instead: either a plain
+  `text` column on `widgets` kept up to date by the same 500ms flush that already writes
+  the snapshot, or SQLite FTS5. **Ask before changing the schema** (rule 6).
+  *DoD:* typing a word that appears only in a note's body finds that note, and typing in
+  the palette with 200 notes present does not stutter.
+  *Refs:* §9, §12, Hard Constraint 2
 
 ---
 

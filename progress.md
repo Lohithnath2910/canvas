@@ -42,23 +42,27 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-34` — palette results, selection, footer.** ([TASKS.md](TASKS.md), section 1i.) The
-rows are drawn (S1-33) but inert. This task adds: **selection** — row fill steps to
-`elev-raised` and its icon to `text`, **no accent fill and no left bar** (§9, rule 2);
-**↑↓** to move it and **⏎** to activate; a **32px footer** with a 1px `edge` rule above,
-the result count on the left and `↑↓ MOVE · ⏎ OPEN · ESC CLOSE` on the right; and
-**searching existing notes**, which is what a non-empty query should show instead of the
-empty list it currently gives.
+**`S1-35` — palette hotkey.** ([TASKS.md](TASKS.md), section 1i.) Ctrl+K opens the palette,
+Ctrl+N creates a note. Right now Ctrl+K is a **stopgap** in `sticky-note.slint`'s
+`body-input.key-pressed` — it fires only while a note's body has focus, so with only the
+home window open, or with a browser in front, there is no way to reach the palette at all.
 
-`Layout.palette-footer-h` and `palette-row-result` already exist. Keys belong in
-`query-input`'s `key-pressed` — it holds focus, and `Key.UpArrow`/`Key.DownArrow`/
-`Key.Return` reach it before the `TextInput` uses them. Rows can take a `TouchArea` each
-since rows are disjoint from one another; the thing to avoid is one area spanning the
-plate (trap 6). Activating `new-note` should call the existing `App::create_note` and
-dismiss; `new-todo` has no create path until Stage W's SW-01 and `settings` has no screen
-at all — say so rather than faking either.
+A true OS-global hotkey is Win32 `RegisterHotKey` + a `WM_HOTKEY` message pump.
+`windows-sys` is already a dependency and `Win32_UI_Input_KeyboardAndMouse` is already an
+enabled feature, so **this needs no sign-off**. The hard part is that `RegisterHotKey`
+delivers `WM_HOTKEY` to a thread's message queue, and Slint's winit loop owns that queue —
+so the hook has to reach the Slint event loop, most likely via a hidden message-only
+window plus `slint::invoke_from_event_loop`. Whatever lands, **§14 Stage 1 item 10 says to
+state its real scope honestly**: if it ends up focus-scoped rather than OS-global, say so
+in as many words rather than calling it done.
 
-After it: `S1-35` onward in `TASKS.md`, in numeric order.
+**This is the last task in Stage 1 that can be built without the user.** S1-36 and S1-37
+need a peer and are deferred to 1j; S1-43 (undo/redo) is next in numeric order and can be
+built; S1-44 (reduced motion) needs the OS setting read; S1-45 is the sign-off audit,
+which needs the whole verification queue walked first. Check `TASKS.md` rather than
+assuming.
+
+After it: `S1-43` onward in `TASKS.md`, in numeric order.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -84,7 +88,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 28 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 30 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -106,7 +110,9 @@ what is actually true. Read all three before writing code.
 `cargo run -p canvas-app` opens a **home window** listing every note, plus a window for
 each note flagged open. Notes are frameless, transparent-margined, rounded plates with a
 dot-matrix glyph strip, an editable title, and four header controls. Text persists to
-SQLite and survives a restart. 28 tests pass.
+SQLite and survives a restart. There is a **command palette** over a full-screen scrim,
+reachable with Ctrl+K **only while a note's body has focus** until S1-35 lands. 30 tests
+pass.
 
 ```
 Canvas/
@@ -129,7 +135,7 @@ Canvas/
 ```bash
 cargo run -p canvas-app              # run it
 cargo run -p canvas-app -- --dump    # print every note's text/position/state from disk
-cargo test --workspace               # 28 tests
+cargo test --workspace               # 30 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
 ```
@@ -220,6 +226,47 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   as S1-47 rather than done on the way past.
 - **The tray icon is white on transparent**, which reads on the default dark Windows 11
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
+
+---
+
+### 2026-08-25 — S1-34: palette selection, footer, and note search
+
+- 🟡 **The palette's rows are live.** ↑↓ move a highlight, ⏎ and click activate, the
+  footer carries a result count, and a non-empty query searches note titles. Written and
+  clippy-clean; **not watched working**, so the box stays open.
+- ✅ **Two new unit tests** — `count_label` singular/plural/empty, and that the empty
+  query offers exactly §9's three actions. 30 tests now, up from 28.
+
+**Silkscreen cannot draw §9's footer legend, so it is not used.** Checked against the
+font's own `cmap` table rather than assumed: `↑` (U+2191), `↓` (U+2193) and `⏎` (U+23CE)
+are **all absent** from `Silkscreen-Regular.ttf`. `·` (U+00B7) is present. §9's
+`↑↓ MOVE · ⏎ OPEN · ESC CLOSE` would therefore have rendered three tofu boxes. The footer
+reads `UP/DOWN MOVE · ENTER OPEN · ESC CLOSE` instead — same meaning, same middle dots,
+every glyph present. **This is a forced deviation from the spec, not a preference.**
+Getting the symbols back means a second font for that one string, which is a call for the
+user to make.
+
+**Search is title-only, deliberately, and is logged as S1-48.** Matching note bodies the
+obvious way is `get_document` + `StickyNoteDoc::load` for every note **on every
+keystroke** — a disk read and a yrs decode per note per character. That is precisely the
+shape of thing Hard Constraint 2 and trap 7 exist to keep off the typing path. It needs a
+cheap searchable copy of the text (a `text` column on `widgets` maintained by the existing
+500ms flush, or FTS5), and that is a **schema change, which rule 6 says to ask about**.
+So: titles now, S1-48 for bodies.
+
+Smaller decisions:
+- **↑↓ wrap** at both ends. §9 does not say; wrapping is what every command palette does.
+- **Hovering a row selects it**, so a click never activates a row other than the
+  highlighted one. §9 only defines selection visually, so this is an addition — one
+  `TouchArea` per row, which is safe because rows are disjoint from each other. The thing
+  trap 6 forbids is one area spanning the plate, and there still isn't one.
+- Selection is `elev-raised` fill plus the icon stepping to `text`, and nothing else —
+  **no accent fill, no left bar** (§9, rule 2).
+- `New todo` and `Settings` **print to stderr and do nothing**. There is no todo type
+  until Stage W's SW-01 and no settings screen anywhere. Wiring them to something
+  plausible would be worse than an obvious no-op.
+- Keys live in `query-input`'s `key-pressed`, which is where focus is. `Key.UpArrow`,
+  `Key.DownArrow` and `Key.Return` are intercepted before the `TextInput` sees them.
 
 ---
 

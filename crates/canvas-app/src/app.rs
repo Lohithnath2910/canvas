@@ -718,6 +718,14 @@ fn default_actions() -> Vec<PaletteRow> {
     ]
 }
 
+fn count_label(count: usize) -> String {
+    match count {
+        0 => "NO RESULTS".to_string(),
+        1 => "1 RESULT".to_string(),
+        n => format!("{n} RESULTS"),
+    }
+}
+
 fn first_line(text: &str) -> String {
     let line = text.lines().next().unwrap_or("").trim();
     if line.chars().count() > 60 {
@@ -833,6 +841,14 @@ impl App {
                 }
                 {
                     let weak = Rc::downgrade(app);
+                    palette.on_activated(move |id| {
+                        if let Some(app) = weak.upgrade() {
+                            App::activate_palette_row(&app, id.as_ref());
+                        }
+                    });
+                }
+                {
+                    let weak = Rc::downgrade(app);
                     palette.on_query_changed(move |query| {
                         if let Some(app) = weak.upgrade() {
                             App::refresh_palette(&app, query.as_ref());
@@ -868,15 +884,61 @@ impl App {
         let Some(palette) = a.palette.as_ref().map(|p| p.clone_strong()) else {
             return;
         };
-        drop(a);
 
-        let rows = if query.trim().is_empty() {
+        let needle = query.trim().to_lowercase();
+        let rows = if needle.is_empty() {
+            drop(a);
             default_actions()
         } else {
-            Vec::new()
+            let widgets = a.store.list_widgets().unwrap_or_default();
+            let matched: Vec<PaletteRow> = widgets
+                .iter()
+                .filter(|w| w.title.to_lowercase().contains(&needle))
+                .map(|w| PaletteRow {
+                    id: w.id.clone().into(),
+                    label: w.title.clone().into(),
+                    meta: if a.notes.contains_key(&w.id) {
+                        "OPEN".into()
+                    } else {
+                        slint::SharedString::new()
+                    },
+                    icon: "note".into(),
+                })
+                .collect();
+            drop(a);
+            matched
         };
+
+        palette.set_count_label(count_label(rows.len()).into());
+        palette.set_selected(0);
         let model: slint::VecModel<PaletteRow> = slint::VecModel::from(rows);
         palette.set_rows(slint::ModelRc::new(model));
+    }
+
+    pub fn activate_palette_row(app: &SharedApp, id: &str) {
+        match id {
+            ACTION_NEW_NOTE => {
+                App::hide_palette(app);
+                if let Err(e) = App::create_note(app) {
+                    eprintln!("canvas: create failed: {e}");
+                }
+                App::refresh_home(app);
+            }
+            ACTION_NEW_TODO => {
+                eprintln!("canvas: todo widgets do not exist yet (Stage W, SW-01)");
+            }
+            ACTION_SETTINGS => {
+                eprintln!("canvas: there is no settings screen yet");
+            }
+            _ => {
+                App::hide_palette(app);
+                let _ = app.borrow().store.set_open(id, true);
+                if let Err(e) = App::open_note(app, id) {
+                    eprintln!("canvas: open failed: {e}");
+                }
+                App::refresh_home(app);
+            }
+        }
     }
 
     pub fn hide_palette(app: &SharedApp) {
@@ -925,5 +987,25 @@ impl App {
             a.tray = None;
         }
         let _ = slint::quit_event_loop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{count_label, default_actions, ACTION_NEW_NOTE, ACTION_NEW_TODO, ACTION_SETTINGS};
+
+    #[test]
+    fn count_label_is_singular_plural_and_empty() {
+        assert_eq!(count_label(0), "NO RESULTS");
+        assert_eq!(count_label(1), "1 RESULT");
+        assert_eq!(count_label(7), "7 RESULTS");
+    }
+
+    #[test]
+    fn empty_query_offers_the_three_spec_actions() {
+        let rows = default_actions();
+        let ids: Vec<String> = rows.iter().map(|r| r.id.to_string()).collect();
+        assert_eq!(ids, vec![ACTION_NEW_NOTE, ACTION_NEW_TODO, ACTION_SETTINGS]);
+        assert!(rows.iter().all(|r| r.meta.starts_with("CTRL+")));
     }
 }

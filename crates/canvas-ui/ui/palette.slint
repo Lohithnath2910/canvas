@@ -1,5 +1,6 @@
 import { Palette } from "theme/palette.slint";
 import { Typography } from "theme/typography.slint";
+import { Motion, Ease } from "theme/motion.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { IconSearch, IconPlus, IconCheck, IconSettings, IconNote } from "theme/icons.slint";
@@ -38,12 +39,31 @@ component PaletteGlyph inherits Rectangle {
 export component PaletteWindow inherits Window {
     callback dismissed();
     callback query-changed(string);
+    callback activated(string);
 
     in property <[PaletteRow]> rows: [];
+    in property <string> count-label: "";
     in-out property <string> query: "";
+    in-out property <int> selected: 0;
 
     property <length> overlay-height:
-        Layout.palette-row-input + root.rows.length * Layout.palette-row-result;
+        Layout.palette-row-input
+        + root.rows.length * Layout.palette-row-result
+        + Layout.palette-footer-h;
+
+    function step(delta: int) {
+        if (root.rows.length == 0) {
+            return;
+        }
+        root.selected = (root.selected + delta + root.rows.length) .mod(root.rows.length);
+    }
+
+    function activate() {
+        if (root.rows.length == 0 || root.selected < 0 || root.selected >= root.rows.length) {
+            return;
+        }
+        root.activated(root.rows[root.selected].id);
+    }
 
     no-frame: true;
     background: transparent;
@@ -111,6 +131,18 @@ export component PaletteWindow inherits Window {
                     root.dismissed();
                     return accept;
                 }
+                if (event.text == Key.UpArrow) {
+                    root.step(-1);
+                    return accept;
+                }
+                if (event.text == Key.DownArrow) {
+                    root.step(1);
+                    return accept;
+                }
+                if (event.text == Key.Return) {
+                    root.activate();
+                    return accept;
+                }
                 return reject;
             }
         }
@@ -120,12 +152,27 @@ export component PaletteWindow inherits Window {
             y: Layout.palette-row-input + i * Layout.palette-row-result;
             width: parent.width;
             height: Layout.palette-row-result;
+            background: i == root.selected ? Palette.elev-raised : Colors.transparent;
+            animate background { duration: Motion.hover; easing: Ease.standard; }
+
+            row-touch := TouchArea {
+                width: 100%;
+                height: 100%;
+                mouse-cursor: pointer;
+                moved => {
+                    root.selected = i;
+                }
+                clicked => {
+                    root.selected = i;
+                    root.activate();
+                }
+            }
 
             PaletteGlyph {
                 x: Layout.pad-doc;
                 y: (Layout.palette-row-result - Layout.icon-size-palette) / 2;
                 icon: row.icon;
-                stroke-color: Palette.dim;
+                stroke-color: i == root.selected ? Palette.text : Palette.dim;
             }
 
             Text {
@@ -148,6 +195,48 @@ export component PaletteWindow inherits Window {
                 width: Layout.result-meta-w;
                 height: parent.height;
                 text: row.meta;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                vertical-alignment: center;
+                horizontal-alignment: right;
+                wrap: no-wrap;
+            }
+        }
+
+        Rectangle {
+            x: 0;
+            y: parent.height - Layout.palette-footer-h;
+            width: parent.width;
+            height: Layout.palette-footer-h;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.edge;
+            }
+
+            Text {
+                x: Layout.pad-doc;
+                y: 0;
+                height: parent.height;
+                text: root.count-label;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                vertical-alignment: center;
+                wrap: no-wrap;
+            }
+
+            Text {
+                x: parent.width - Layout.pad-doc - self.width;
+                y: 0;
+                height: parent.height;
+                text: "UP/DOWN MOVE · ENTER OPEN · ESC CLOSE";
                 color: Palette.dim;
                 font-family: Typography.interface-face;
                 font-size: Typography.label-size;
