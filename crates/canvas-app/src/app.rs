@@ -5,13 +5,13 @@ use std::time::Duration;
 
 use slint::ComponentHandle;
 
-use canvas_doc::{StickyNoteDoc, UndoHistory};
+use canvas_doc::{StickyNoteDoc, TodoListDoc, UndoHistory};
 
 use crate::widget::{LiveWidget, WidgetDoc, WidgetWindow};
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
     platform_system_sans, CanvasTray, HomeWindow, Motion, NoteRow, PaletteRow, PaletteWindow,
-    StickyNoteWindow, Typography,
+    StickyNoteWindow, TodoItemData, TodoWindow, Typography,
 };
 
 pub const ACTION_NEW_NOTE: &str = "new-note";
@@ -218,6 +218,18 @@ impl App {
             home.on_create_note(move || {
                 if let Some(app) = weak.upgrade() {
                     if let Err(e) = App::create_note(&app) {
+                        eprintln!("canvas: create failed: {e}");
+                    }
+                    App::refresh_home(&app);
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(app);
+            home.on_create_todo(move || {
+                if let Some(app) = weak.upgrade() {
+                    if let Err(e) = App::create_widget(&app, canvas_storage::KIND_TODO) {
                         eprintln!("canvas: create failed: {e}");
                     }
                     App::refresh_home(&app);
@@ -444,9 +456,13 @@ impl App {
 
         let poll_timer = match &window {
             WidgetWindow::StickyNote(note) => wire_note(app, id, note),
+            WidgetWindow::Todo(todo) => wire_todo(app, id, todo),
         };
         if let Some(widget) = app.borrow_mut().widgets.get_mut(id) {
             widget.poll_timer = Some(poll_timer);
+        }
+        if matches!(window, WidgetWindow::Todo(_)) {
+            refresh_todo(app, id);
         }
         window.play_open();
         window.show()?;
@@ -589,6 +605,303 @@ impl App {
     }
 }
 
+fn refresh_todo(app: &SharedApp, id: &str) {
+    let Ok(a) = app.try_borrow() else {
+        return;
+    };
+    let Some(widget) = a.widgets.get(id) else {
+        return;
+    };
+    let (WidgetDoc::Todo(doc), WidgetWindow::Todo(window)) = (&widget.doc, &widget.window) else {
+        return;
+    };
+    let (open, done) = doc.counts();
+    let rows: Vec<TodoItemData> = doc
+        .items()
+        .into_iter()
+        .map(|item| TodoItemData {
+            id: item.id.into(),
+            text: item.text.into(),
+            done: item.done,
+            due: slint::SharedString::new(),
+        })
+        .collect();
+    let window = window.clone_strong();
+    drop(a);
+
+    let model: slint::VecModel<TodoItemData> = slint::VecModel::from(rows);
+    window.set_items(slint::ModelRc::new(model));
+    window.set_open_count(open as i32);
+    window.set_done_count(done as i32);
+}
+
+fn todo_edit(app: &SharedApp, id: &str, change: impl FnOnce(&TodoListDoc) -> Option<Vec<u8>>) {
+    {
+        let Ok(mut a) = app.try_borrow_mut() else {
+            return;
+        };
+        let Some(widget) = a.widgets.get_mut(id) else {
+            return;
+        };
+        let WidgetDoc::Todo(doc) = &widget.doc else {
+            return;
+        };
+        let Some(update) = change(doc) else {
+            return;
+        };
+        widget.pending_updates.push(update);
+        widget.text_dirty = true;
+    }
+    refresh_todo(app, id);
+    App::refresh_home(app);
+}
+
+fn wire_todo(app: &SharedApp, id: &str, window: &TodoWindow) -> slint::Timer {
+    let owned_id = id.to_string();
+    let poll_timer = slint::Timer::default();
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_item_added(move |text| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let text = text.trim().to_string();
+            if text.is_empty() {
+                return;
+            }
+            todo_edit(&app, &id, |doc| Some(doc.add_item(&text).1));
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_item_toggled(move |item_id| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            todo_edit(&app, &id, |doc| doc.toggle_item(item_id.as_ref()));
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_item_text_edited(move |item_id, text| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            todo_edit(&app, &id, |doc| {
+                doc.set_text(item_id.as_ref(), text.as_ref())
+            });
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_item_removed(move |item_id| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            todo_edit(&app, &id, |doc| doc.delete_item(item_id.as_ref()));
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        window.on_edit_committed(move || {
+            if let Some(window) = handle.upgrade() {
+                window.set_editing_id(slint::SharedString::new());
+            }
+        });
+    }
+
+    let anchor: DragAnchor = Rc::new(std::cell::Cell::new(None));
+
+    {
+        let anchor = anchor.clone();
+        let handle = window.as_weak();
+        window.on_drag_started(move || {
+            if let Some(window) = handle.upgrade() {
+                begin_drag(window.window(), &anchor);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let anchor = anchor.clone();
+        window.on_drag_ended(move || {
+            anchor.set(None);
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement_dirty = true;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let anchor = anchor.clone();
+        let handle = window.as_weak();
+        window.on_window_moved(move |dx, dy| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let win = window.window();
+            let scale = win.scale_factor();
+            let next = drag_move(win, &anchor, dx, dy);
+
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                let logical = next.to_logical(scale);
+                widget.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
+                widget.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        window.on_pin_toggled(move |pinned| {
+            if let Some(window) = handle.upgrade() {
+                crate::desktop_layer::apply_pin(window.window(), pinned);
+            }
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let mut a = app.borrow_mut();
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement.pinned = pinned;
+                widget.placement_dirty = true;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_title_edited(move |title| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let trimmed = title.trim();
+            let title = if trimmed.is_empty() {
+                canvas_storage::DEFAULT_TITLE
+            } else {
+                trimmed
+            };
+            let Ok(a) = app.try_borrow() else {
+                return;
+            };
+            let _ = a.store.set_title(&id, title);
+            drop(a);
+            App::refresh_home(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_close_requested(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            App::close_widget(&app, &id);
+            App::refresh_home(&app);
+            crate::maybe_quit(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        window.on_palette_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::show_palette(&app);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_delete_confirmed(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            App::delete_widget(&app, &id);
+            App::refresh_home(&app);
+            crate::maybe_quit(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.window().on_close_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::close_widget(&app, &id);
+                App::refresh_home(&app);
+                crate::maybe_quit(&app);
+            }
+            slint::CloseRequestResponse::KeepWindowShown
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        poll_timer.start(slint::TimerMode::Repeated, PIN_POLL_INTERVAL, move || {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            if window.get_pinned() {
+                crate::desktop_layer::hold_at_desktop_layer(window.window());
+            }
+
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                let size = window
+                    .window()
+                    .size()
+                    .to_logical(window.window().scale_factor());
+                let w = (size.width - 2.0 * PLATE_MARGIN).round() as i32;
+                let h = (size.height - 2.0 * PLATE_MARGIN).round() as i32;
+                if w != widget.placement.width || h != widget.placement.height {
+                    widget.placement.width = w;
+                    widget.placement.height = h;
+                    widget.placement_dirty = true;
+                }
+            }
+        });
+    }
+
+    poll_timer
+}
+
 fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Timer {
     let owned_id = id.to_string();
     let pin_timer = slint::Timer::default();
@@ -666,21 +979,6 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) -> slint::Tim
                 let logical = next.to_logical(scale);
                 widget.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
                 widget.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
-            }
-        });
-    }
-
-    {
-        let weak = Rc::downgrade(app);
-        let id = owned_id.clone();
-        window.on_tone_changed(move |tone| {
-            let Some(app) = weak.upgrade() else {
-                return;
-            };
-            let mut a = app.borrow_mut();
-            if let Some(widget) = a.widgets.get_mut(&id) {
-                widget.placement.tone = tone as i64;
-                widget.placement_dirty = true;
             }
         });
     }
@@ -839,10 +1137,10 @@ pub fn dump() -> Result<(), Box<dyn std::error::Error>> {
     println!("widgets: {}", widgets.len());
     for w in widgets {
         let placement = store.get_placement(&w.id)?;
-        let text = match store.get_document(&w.id)? {
-            Some(bytes) if !bytes.is_empty() => StickyNoteDoc::load(&bytes).get_text(),
-            _ => String::new(),
-        };
+        let snapshot = store.get_document(&w.id)?;
+        let text = WidgetDoc::load(&w.widget_type, snapshot.as_deref())
+            .map(|doc| doc.text())
+            .unwrap_or_else(|| "<no doc type for this widget>".to_string());
         let revs = store.revision_count(&w.id)?;
         println!(
             "  {} type={} title={:?} revs={} open={:?} pos={:?} tone={:?} pinned={:?}",
@@ -1131,7 +1429,11 @@ impl App {
                 App::refresh_home(app);
             }
             ACTION_NEW_TODO => {
-                eprintln!("canvas: todo widgets do not exist yet (Stage W, SW-01)");
+                App::hide_palette(app);
+                if let Err(e) = App::create_widget(app, canvas_storage::KIND_TODO) {
+                    eprintln!("canvas: create failed: {e}");
+                }
+                App::refresh_home(app);
             }
             ACTION_SETTINGS => {
                 eprintln!("canvas: there is no settings screen yet");

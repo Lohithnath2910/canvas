@@ -202,7 +202,7 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 | §7.1 header 16px above content, 0 below | **8px above, 8px below** (band still 48px) | Spec version looked top-heavy; body box unchanged |
 | §7.6 state 1 two-line empty state | **One 25%-opacity placeholder line, caret on it** | Second line pushed the caret down a row |
 | §5.2 body prose in the system sans | **Body prose in Silkscreen** | User found the sans "too generic"; `Typography.body-face` reverts it |
-| §7.1 three header controls | **Four: colour · pin · delete · close** | No way to put a note away without deleting it |
+| §7.1 three header controls | **Four: colour · pin · delete · close**, then **three: pin · delete · close** from 2026-08-26 | Close was added because there was no way to put a note away without deleting it. Colour was then dropped by the user when open question 8 was answered — three controls on every widget type, the note included. `Palette.plate-tone` and the `tone` column stay, so an already-tinted note still renders; there is just no control. |
 | §8 widgets always-on-top | **Never always-on-top.** Pin = glued to desktop layer | Floating over every app was intrusive |
 | §8/§9 bare desktop + ⌘K palette only | **A home window too**, plus the palette | Notes need a place to be created and managed from |
 | §12 `window_positions` columns | **Plus `pinned`, `tone`, `open`** | `open` is what makes closing ≠ deleting |
@@ -296,6 +296,59 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-26 — SW-16, SW-05, SW-02: the second widget type, and colour dropped
+
+**Open question 8 was answered by the user: three header controls on every type —
+`pin · delete · close` — and colour is dropped from the sticky note as well.** They chose
+that knowing it regresses a control they had previously confirmed working, which is the
+explicit word the DO NOT REGRESS floor requires. The override table records it.
+
+- 🟡 **SW-16 · the colour control is gone.** `Layout.cluster-w` is **64px**, not 88 — the
+  drag region, the title width and the title editor all derive from that one number, so
+  nothing else moved. `Palette.plate-tone` and the `tone` column in `window_positions`
+  are **kept on purpose**: a note that already carries a tone still renders tinted, there
+  is simply no control to change it, and deleting them would have needed a migration to
+  undo. `IconPalette` stays in the icon library — it is one of §5.6's sixteen glyphs.
+- ✅ **SW-05 · a Todo widget exists and persists** — confirmed 2026-08-26 headlessly:
+  `cargo run -p canvas-app --example insert_todo` seeds a todo with three items (one
+  done); the app opens it in its own window with nothing on stderr; `--dump` reads all
+  three items back afterwards. `--dump` is now type-aware and reports any widget type
+  through `WidgetDoc`.
+- ✅ **SW-01's remaining DoD half closed.** "A non-note row opens its own window" is now
+  true, which it could not be until a second window type existed.
+- 🟡 **Adding, toggling, editing and deleting items has not been driven by hand.** Needs a
+  pointer. In the VERIFICATION QUEUE.
+
+**The enum dispatch did exactly what it was chosen for.** Adding Todo meant one arm per
+`match` in `widget.rs`, and the compiler listed every site that needed one — including
+`apply_placement`, `scale_resize_border` and `weak_open`, which are easy to forget. No
+site was found by reading.
+
+**Two decisions in the Todo window that §10.1 does not make:**
+
+- **A compose row sits below the list** — a `plus` glyph and a `TextInput`, Enter adds and
+  clears. §10.1 says nothing about how items get created. A modal or a floating button
+  would both break the flat-plate language; an always-present input line is the smallest
+  thing that works, and it puts the caret where a new note already puts it.
+- **Double-click a row to rename it**, the same gesture as the note's title and for the
+  same reason (trap 6): the row's *existing* `TouchArea` carries it rather than a second
+  one overlapping. `editing-id` lives on the window so exactly one row can be in edit
+  mode. Each row's `TouchArea` also stops 40px short of the right edge so it never shares
+  a region with that row's delete button.
+
+**Counts never touch a Slint binding.** `TodoListDoc::counts()` returns `(open, done)` in
+Rust and both arrive as `in property<int>` — §13.6, where an imperative loop in a binding
+is a parse error, not a runtime limit.
+
+**SW-02 came off the shelf** now that there is a second type: `NEW TODO` beside `NEW NOTE`
+in home's footer, the palette's `New todo` action live instead of printing "todo widgets
+do not exist yet", the empty state reworded, and the footer counting `N WIDGETS` rather
+than `N NOTES`. **Two labelled buttons will not scale to seven types** — that is the next
+thing to fix, and the user said so.
 
 ### 2026-08-26 — SW-11: `WhiteboardDoc`, and the run stops on open question 8
 

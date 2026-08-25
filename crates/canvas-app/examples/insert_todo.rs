@@ -15,7 +15,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let (row, _) = store.create_widget(canvas_storage::KIND_TODO)?;
-    store.set_title(&row.id, "HAND INSERTED TODO")?;
-    println!("inserted {} type={}", row.id, row.widget_type);
+    store.set_title(&row.id, "SEEDED TODO")?;
+
+    let doc = canvas_doc::TodoListDoc::new();
+    let (first, _) = doc.add_item("walk the verification queue");
+    doc.add_item("answer open question 9");
+    doc.add_item("look at the gallery");
+    doc.set_done(&first, true);
+    store.save_document(&row.id, &doc.snapshot(), &doc.state_vector())?;
+
+    println!(
+        "inserted {} type={} with {} items ({:?} open, {:?} done)",
+        row.id,
+        row.widget_type,
+        doc.items().len(),
+        doc.counts().0,
+        doc.counts().1
+    );
     Ok(())
 }

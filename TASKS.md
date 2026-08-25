@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-05` — the Todo widget window, **BLOCKED on open question 8**. Nothing unblocked is left; the run stopped here.
+**Current task:** `SW-06` — Shared Document widget
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 27 ticked, 42 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 122 tests pass.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Done:** 28 ticked, 42 open (5 dropped, 9 added — S1-46 to S1-51, SW-16, and the two Spreadsheet tasks). 122 tests pass.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -278,6 +278,47 @@ state §6 lists. Check each against §6's own table.
 - [ ] Focused field: 2px white ring sitting 2px outside the border, corners following it
 - [ ] The disabled field is uniformly faded, text included, and will not take a caret
 - [ ] Divider is a 1px hairline running the full width with no inset at either end
+
+
+**Three header controls, colour dropped** → **SW-16**
+- [ ] A note's header now shows **three** icons — pin · delete · close — not four. The
+      rightmost is still 16px from the plate's right edge and they are evenly spaced
+- [ ] The title has 24px more room before it elides
+- [ ] A note that already had a grey tone set **still opens tinted**. The tone is kept in
+      the database and still renders; there is just no control to change it now
+- [ ] Hovering anywhere in the header still fades all three in together
+
+
+**The Todo widget** → **SW-05**, **SW-02**
+
+This is the first widget type other than the sticky note. Everything in the **Note window**
+block above should behave the same way here — it is the same header, the same drag region,
+the same three controls.
+
+- [ ] Home now shows **two** buttons: `NEW NOTE` (white, primary) and `NEW TODO` (dark).
+      `NEW TODO` creates a todo, opens its window, and adds a row to the list with the
+      **check** glyph rather than the note glyph → **SW-02**
+- [ ] Ctrl+K → `New todo` (⌘T) does the same thing. It used to print "todo widgets do not
+      exist yet" to the console → **SW-02**
+- [ ] The todo window is `340×360` with the same 32px header, glyph strip, editable title
+      and three controls as a note
+- [ ] Type in the bottom row and press **Enter** — the item appears in the list and the
+      input clears, ready for the next one
+- [ ] Click an item's checkbox — the box fills white with **no tick**, the label steps to
+      `dim`, and a 1px strike appears **over the text only**, stopping where the text stops
+- [ ] The footer reads `N OPEN · N DONE` and both numbers change as you tick things
+- [ ] **Double-click an item** — it becomes an editable field, pre-selected. Enter or Esc
+      commits. Only one row can be editing at a time
+- [ ] Hover an item — a delete icon appears at its right edge; clicking it removes the item
+- [ ] Add more items than fit — the same 4px thumb as the note body appears and drags
+- [ ] The trash control says `DELETE LIST`, not `DELETE NOTE`
+- [ ] **Add items, close the window with `x`, reopen it from home — they are all there.**
+      Then quit from the tray, relaunch, and check again
+- [ ] Drag the todo window by its header — same feel as a note, no drift → also
+      **S1-51**
+- [ ] 🟡 A due-date `Tag` is built into the row but nothing sets a due date yet —
+      `TodoListDoc` stores `{id, text, done}` only, deliberately (SW-04). An empty tag
+      column is expected
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -939,7 +980,7 @@ glyph strip (rule 3) · no second accent colour anywhere (rules 1 and 2).
 Nothing else in this stage can start until these three land. Every one of them exists
 because the app is currently hardcoded to a single type.
 
-- [ ] **SW-01 · Generalise the runtime to any widget type** — `L`
+- [x] **SW-01 · Generalise the runtime to any widget type** — `L`
   Needs: S1-20. `app.rs:50` filters boot to `KIND_STICKY_NOTE`, and `Note` is a concrete
   struct holding a `StickyNoteWindow` and a `StickyNoteDoc`. Both need to become
   type-dispatched: one live-widget registry that can hold any window/doc pair, spawned by
@@ -957,24 +998,79 @@ because the app is currently hardcoded to a single type.
   exists. ✅ **the silent skip is gone** — confirmed 2026-08-25 by
   `cargo run -p canvas-app --example insert_todo` and reading the boot log:
   `canvas: <id> is a "todo" widget and that type has no document yet (Stage W)`.
-  🟡 **"opens its own window" cannot be finished here** — there is no second window type
-  to open until **SW-04**. Re-check this line then; the dispatch it needs is in place.
-  `--example insert_todo --remove` cleans the row up again.
+  ✅ **"opens its own window" closed 2026-08-26 by SW-05**, as this entry predicted: with a
+  real Todo window in the enums, `cargo run -p canvas-app --example insert_todo` followed by
+  a launch now opens that row in its own window with nothing on stderr, instead of the
+  "no window yet" line. `--example insert_todo --remove` cleans the row up again.
+
+- [ ] **SW-16 · Three header controls on every type; the colour control is dropped** — `S`
+  Needs: nothing. **Added and done 2026-08-26**, answering open question 8. The user chose
+  `pin · delete · close` on every widget type, and **removed colour from the sticky note
+  too** — knowing it regresses a control they had previously confirmed working. That
+  explicit word is what the DO NOT REGRESS floor requires; the override table in
+  `progress.md` records it.
+  `colour-btn` and the `tone-changed` callback are gone from `sticky-note.slint`, along
+  with `App::on_tone_changed`'s wiring. **`Layout.cluster-w` is now 64px, not 88** — the
+  drag region, the title width and the title editor all derive from it, so that one number
+  is the whole layout change. `IconPalette` stays in `theme/icons.slint`: it is one of
+  §5.6's sixteen named glyphs and the library keeps all of them.
+  **`Palette.plate-tone` and the `tone` column in `window_positions` are deliberately
+  kept.** A note already carrying a tone still renders it; there is simply no longer a
+  control to change it. Deleting them would have made this irreversible and would have
+  needed a migration.
+  *DoD:* the note header shows three controls, evenly spaced, with the rightmost still
+  16px from the plate edge; the title has 24px more room; a note that already had a tone
+  still opens tinted. 🟡 **needs eyes** — the app builds, is clippy-clean and launches, but
+  the header has not been looked at. In the verification queue.
 
 - [ ] **SW-02 · Home: a create control per type** — `M`
   Needs: SW-01. `NEW NOTE` becomes a create control per built type, each using its own
   §5.6 glyph — the row glyphs in `home.slint` already exist and already pick correctly by
   kind, so the list side needs no work. New widgets get their own type's default size
   (already correct in `canvas-storage`) and the title `UNTITLED`.
-  **Skipped 2026-08-25 — deliberately out of order, not blocked.** Its DoD is *"each type
-  creatable from home … opens its own window"*, and today the sticky note is the only type
-  with a window, so building the strip now produces one control that already exists plus
-  a row of buttons that would print "no window yet" to the console. The runtime side it
-  needs is already done: `App::create_widget(app, kind)` landed with SW-01 and
-  `create_note` is a one-line wrapper over it. **Come back to this once SW-05 gives it a
-  second real type to offer.**
+  **Done 2026-08-26 alongside SW-05**, which is what gave it a second type to offer.
+  `NEW TODO` sits beside `NEW NOTE` in home's footer — `primary` for the note, `default`
+  for the todo, so there is still exactly one primary action. The empty state now reads
+  *"Press NEW NOTE or NEW TODO to create your first widget"* and the footer count says
+  `N WIDGETS · N OPEN` rather than `N NOTES`. The palette's `New todo` action (⌘T) is
+  live too — it was printing "todo widgets do not exist yet" until now.
+  **The buttons carry labels, not glyphs.** §5.6's glyphs are already doing the work in
+  the row list, where they distinguish types at a glance; a `Button` in this design system
+  is a labelled control (§6.3) and there is no icon-button-with-label variant. Adding one
+  would be a new component, not a create control.
   *DoD:* each type creatable from home, appears in the list with the right glyph, opens
   its own window, and survives a restart.
+  ✅ **creation, opening and persistence** — confirmed 2026-08-26 headlessly: a seeded
+  todo row loads, opens its own window with no error, and its three items read back
+  intact through `--dump` after an app run. 🟡 **the two buttons and the row glyph have
+  not been looked at.** In the verification queue.
+
+- [ ] **SW-05 · Todo widget window** — `L`
+  Needs: SW-02, SW-03, SW-04. `340×360`. Row gap 12, `Checkbox` + 12px gap. Completed rows:
+  `dim` label + 1px strike. Due date as a `Tag` on the right, gap 8. Footer: 1px `edge`
+  rule + `N OPEN · N DONE` in interface face 11 `dim`.
+  **Counts are computed in Rust and passed in as `in property<int>`** — a Slint binding
+  cannot run an imperative loop, that is a parse error not a runtime limit (§13.6).
+  **Built 2026-08-26** as `ui/todo.slint` + `wire_todo` in `app.rs`. Same 32px header,
+  glyph strip, drag region and three controls as the note (SW-16), because rule 3 says
+  every widget wears the strip and nothing else reports state. Rows are a `TodoItemData`
+  `struct` + `ModelRc` per §13.6; `open-count`/`done-count` come from
+  `TodoListDoc::counts()` in Rust, never computed in a binding.
+  **A compose row sits below the list** — a `plus` glyph and a `TextInput`, Enter adds and
+  clears. Nothing in §10.1 says how items get created, and a modal or a floating button
+  would both break the flat-plate language; an always-present input line is the smallest
+  thing that works and it matches where the caret already is on a new note.
+  **Double-click a row to rename it**, the same gesture and the same reason as the note's
+  title (trap 6 — the row's existing `TouchArea` carries it, rather than a second one).
+  Editing is driven by `editing-id` on the window so exactly one row can be in edit mode.
+  Each row's `TouchArea` stops `todo-row-tail` (40px) short of the right edge so it never
+  shares a region with the row's delete `IconButton`.
+  *DoD:* add, toggle, edit and delete items; restart and they are all still there.
+  ✅ **persistence across a restart** — confirmed 2026-08-26 headlessly: a todo seeded with
+  three items (one done) opens in the app, and `--dump` reads all three back afterwards.
+  `--dump` is now type-aware, so it reports any widget type through `WidgetDoc`.
+  🟡 **add, toggle, edit and delete have not been driven by hand** — they need eyes and a
+  pointer. In the verification queue.
 
 - [ ] **SW-03 · The four missing library components** — `M`
   Needs: S1-13. `controls.slint` currently has `IconButton` and `Button` only.
@@ -1022,14 +1118,6 @@ because the app is currently hardcoded to a single type.
   ✅ all three, and more — `cargo test --workspace`, 57 tests pass. Convergence is covered
   three ways: concurrent adds (nothing lost), a concurrent toggle against a rename of the
   **same item** (both survive), and a concurrent delete against an edit of a sibling.
-
-- [ ] **SW-05 · Todo widget window** — `L`
-  Needs: SW-02, SW-03, SW-04. `340×360`. Row gap 12, `Checkbox` + 12px gap. Completed rows:
-  `dim` label + 1px strike. Due date as a `Tag` on the right, gap 8. Footer: 1px `edge`
-  rule + `N OPEN · N DONE` in interface face 11 `dim`.
-  **Counts are computed in Rust and passed in as `in property<int>`** — a Slint binding
-  cannot run an imperative loop, that is a parse error not a runtime limit (§13.6).
-  *DoD:* add, toggle, edit and delete items; restart and they are all still there.
 
 ### Wc — Shared Document
 
@@ -1241,6 +1329,16 @@ protocol, the storage schema, or a design token not already specified.
 - ~~Which widget type comes after the sticky note?~~ **All of them, before multiplayer.**
   The user reordered the roadmap on 2026-08-25 — see the override at the top of this file.
   Todo is still first within Stage W, for the reason §10.1 gives.
+- ~~Do the other widget types need their own header controls?~~ **Answered 2026-08-26:
+  three controls on every type — `pin · delete · close` — and the colour control is
+  DROPPED, including from the sticky note.** The user chose this knowing it regresses a
+  control they had previously confirmed working; that explicit word is what the DO NOT
+  REGRESS floor requires, and it is recorded in the override table in `progress.md`.
+  Consequences already applied in **SW-16**: `Layout.cluster-w` is **64px**, not 88 —
+  every header layout derives from it, so nothing else needed moving. `Palette.plate-tone`
+  and the `tone` column in `window_positions` are **kept**: a note already carrying a tone
+  still renders it, there is simply no control to change it. Reinstating colour means
+  putting `colour-btn` back and returning `cluster-w` to 88px.
 
 **Still open**
 
@@ -1270,11 +1368,6 @@ protocol, the storage schema, or a design token not already specified.
 7. **Is the Spreadsheet's default size 640×400 like the Kanban, or wider?** No spec value
    exists — `canvas-storage`'s `default_size` needs a real number for a new `KIND_SHEET`,
    and §12 says size by type at creation. *Blocks:* SW-14.
-8. **Do the other widget types need their own header controls?** The note has four
-   (colour · pin · delete · close). Colour-as-grey-tone makes sense on a note; whether a
-   Kanban or Calendar wants it is undecided. *Blocks:* SW-05 onward — decide once, apply
-   to all types, rather than per widget.
-
 9. **How should the palette search note bodies — a `text` column on `widgets`, or FTS5?**
    S1-34 matches titles only. Matching bodies the obvious way costs a `get_document` plus
    a `StickyNoteDoc::load` for **every** note **on every keystroke**, which is exactly the

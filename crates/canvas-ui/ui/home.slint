@@ -143,6 +143,7 @@ export component HomeWindow inherits Window {
     in property <int> open-count: 0;
 
     callback create-note();
+    callback create-todo();
     callback open-row(string);
     callback delete-row(string);
     callback window-moved(length, length);
@@ -275,7 +276,7 @@ export component HomeWindow inherits Window {
                 x: 0;
                 y: empty-title.y + empty-title.height + 12px;
                 width: parent.width;
-                text: "Press NEW NOTE to create your first note.";
+                text: "Press NEW NOTE or NEW TODO to create your first widget.";
                 color: Palette.dim;
                 horizontal-alignment: center;
                 font-family: Typography.body-face;
@@ -339,12 +340,17 @@ export component HomeWindow inherits Window {
                 variant: ButtonVariant.primary;
                 clicked => { root.create-note(); }
             }
+            Button {
+                label: "NEW TODO";
+                variant: ButtonVariant.default;
+                clicked => { root.create-todo(); }
+            }
         }
 
         Text {
             x: parent.width - Layout.pad - self.width;
             y: parent.height - 40px;
-            text: root.rows.length + " NOTES · " + root.open-count + " OPEN";
+            text: root.rows.length + " WIDGETS · " + root.open-count + " OPEN";
             color: Palette.dim;
             font-family: Typography.interface-face;
             font-size: Typography.label-size;

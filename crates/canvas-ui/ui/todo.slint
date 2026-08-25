@@ -1,0 +1,527 @@
+import { Palette } from "theme/palette.slint";
+import { Typography } from "theme/typography.slint";
+import { Motion, Ease } from "theme/motion.slint";
+import { Layout } from "theme/layout.slint";
+import { Panel } from "theme/surface.slint";
+import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
+import { IconPin, IconTrash, IconX, IconPlus } from "theme/icons.slint";
+import { IconButton, Button, ButtonVariant, ScrollBar, Checkbox, Tag } from "theme/controls.slint";
+
+export struct TodoItemData {
+    id: string,
+    text: string,
+    done: bool,
+    due: string,
+}
+
+component ItemRow inherits Rectangle {
+    in property <TodoItemData> item;
+    in property <bool> editing: false;
+    callback toggled();
+    callback text-edited(string);
+    callback commit();
+    callback remove();
+    callback begin-edit();
+
+    height: Layout.todo-row-h;
+
+    out property <bool> hovered: touch.has-hover || del.hovered || del.focused;
+
+    touch := TouchArea {
+        x: 0;
+        y: 0;
+        width: parent.width - Layout.todo-row-tail;
+        height: parent.height;
+        enabled: !root.editing;
+        double-clicked => { root.begin-edit(); }
+    }
+
+    if !root.editing: Checkbox {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: parent.width - Layout.todo-row-tail;
+        label: root.item.text;
+        checked: root.item.done;
+        completed: root.item.done;
+        toggled => { root.toggled(); }
+    }
+
+    if root.editing: Rectangle {
+        x: Layout.checkbox-size + Layout.checkbox-gap;
+        y: 0;
+        width: parent.width - self.x - Layout.todo-row-tail;
+        height: parent.height;
+        background: Palette.elev-recessed;
+        border-radius: Layout.radius-control;
+        border-width: 1px;
+        border-color: Palette.edge;
+
+        edit-input := TextInput {
+            x: 6px;
+            y: 0;
+            width: parent.width - 12px;
+            height: parent.height;
+            text: root.item.text;
+            single-line: true;
+            vertical-alignment: center;
+            color: Palette.text;
+            selection-background-color: Palette.edge;
+            selection-foreground-color: Palette.text;
+            text-cursor-width: 2px;
+            font-family: Typography.body-face;
+            font-size: Typography.body-size;
+            init => { self.focus(); self.select-all(); }
+            edited => { root.text-edited(self.text); }
+            accepted => { root.commit(); }
+            key-pressed(event) => {
+                if (event.text == Key.Escape) {
+                    root.commit();
+                    return accept;
+                }
+                return reject;
+            }
+        }
+    }
+
+    if root.item.due != "" && !root.editing: Tag {
+        x: parent.width - Layout.todo-row-tail - self.width - Layout.icon-gap;
+        y: (parent.height - self.height) / 2;
+        label: root.item.due;
+    }
+
+    del := IconButton {
+        x: parent.width - Layout.icon-size;
+        y: (parent.height - Layout.header-h) / 2;
+        width: Layout.icon-size;
+        revealed: root.hovered;
+        activated => { root.remove(); }
+        IconTrash { stroke-color: del.glyph-color; }
+    }
+}
+
+export component TodoWindow inherits Window {
+    in-out property <string> note-title: "UNTITLED";
+    in property <[TodoItemData]> items: [];
+    in property <int> open-count: 0;
+    in property <int> done-count: 0;
+    in property <WidgetState> strip-state: WidgetState.idle;
+    in property <int> peer-count: 0;
+    in-out property <bool> pinned: false;
+    in property <bool> keyboard-focused: false;
+
+    in-out property <string> editing-id: "";
+
+    callback window-moved(length, length);
+    callback drag-started();
+    callback drag-ended();
+    callback item-toggled(string);
+    callback item-text-edited(string, string);
+    callback item-removed(string);
+    callback item-added(string);
+    callback edit-committed();
+    callback pin-toggled(bool);
+    callback delete-confirmed();
+    callback title-edited(string);
+    callback close-requested();
+    callback palette-requested();
+
+    preferred-width: Layout.todo-w + 2 * Layout.plate-margin;
+    preferred-height: Layout.todo-h + 2 * Layout.plate-margin;
+    min-width: Layout.note-min-w + 2 * Layout.plate-margin;
+    min-height: Layout.note-min-h + 2 * Layout.plate-margin;
+    no-frame: true;
+    in-out property <length> resize-border: Layout.resize-border;
+    resize-border-width: root.resize-border;
+    background: transparent;
+    title: "Canvas";
+
+    in-out property <bool> opened: false;
+    in-out property <bool> closing: false;
+
+    property <bool> dragging: false;
+    property <bool> confirming-delete: false;
+    property <bool> editing-title: false;
+
+    property <WidgetState> effective-state:
+        (root.strip-state == WidgetState.idle && (root.editing-id != "" || new-input.has-focus))
+            ? WidgetState.focused
+            : root.strip-state;
+
+    property <bool> controls-visible:
+        drag-area.has-hover
+        || pin-btn.hovered || pin-btn.focused
+        || trash-btn.hovered || trash-btn.focused
+        || close-btn.hovered || close-btn.focused
+        || root.editing-title;
+
+    property <length> confirm-h: 75px;
+    property <length> footer-h: 40px;
+    property <length> compose-h: 48px;
+
+    plate := Panel {
+        x: Layout.plate-margin;
+        y: Layout.plate-margin + (root.opened ? 0px : Motion.open-rise);
+        width: parent.width - 2 * Layout.plate-margin;
+        height: parent.height - 2 * Layout.plate-margin;
+        corner-radius: Layout.radius-plate;
+        dragging: root.dragging;
+
+        opacity: root.closing ? 0.0 : (root.opened ? 1.0 : 0.0);
+        animate y { duration: Motion.open; easing: Ease.standard; }
+        animate opacity {
+            duration: root.closing ? Motion.close : Motion.open;
+            easing: Ease.standard;
+        }
+
+        if root.keyboard-focused: Rectangle {
+            x: -(Layout.focus-offset + Layout.focus-width);
+            y: -(Layout.focus-offset + Layout.focus-width);
+            width: parent.width + 2 * (Layout.focus-offset + Layout.focus-width);
+            height: parent.height + 2 * (Layout.focus-offset + Layout.focus-width);
+            background: transparent;
+            border-width: Layout.focus-width;
+            border-color: Palette.text;
+            border-radius: Layout.radius-plate + Layout.focus-offset + Layout.focus-width;
+        }
+
+        list-area := Rectangle {
+            x: Layout.pad;
+            y: Layout.header-band + 1px + Layout.pad;
+            width: parent.width - 2 * Layout.pad;
+            height: parent.height - self.y - Layout.pad - root.compose-h - root.footer-h
+                - (root.confirming-delete ? root.confirm-h : 0px);
+            clip: true;
+
+            if root.items.length == 0: Text {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                text: "NOTHING HERE YET";
+                color: Palette.text;
+                opacity: Layout.placeholder-opacity;
+                font-family: Typography.body-face;
+                font-size: Typography.body-size;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+
+            rows-scroll := Flickable {
+                x: 0;
+                y: 0;
+                width: parent.width - Layout.scroll-gutter;
+                height: 100%;
+                viewport-height: max(rows.preferred-height, self.height);
+
+                rows := VerticalLayout {
+                    width: 100%;
+                    alignment: start;
+                    spacing: Layout.todo-row-gap;
+
+                    for entry in root.items: ItemRow {
+                        item: entry;
+                        editing: root.editing-id == entry.id;
+                        toggled => { root.item-toggled(entry.id); }
+                        text-edited(value) => { root.item-text-edited(entry.id, value); }
+                        commit => { root.edit-committed(); }
+                        remove => { root.item-removed(entry.id); }
+                        begin-edit => { root.editing-id = entry.id; }
+                    }
+                }
+            }
+
+            ScrollBar {
+                x: parent.width - Layout.scroll-gutter;
+                y: 0;
+                height: 100%;
+                view-height: rows-scroll.height;
+                viewport-height: rows-scroll.viewport-height;
+                viewport-y <=> rows-scroll.viewport-y;
+            }
+        }
+
+        compose := Rectangle {
+            x: Layout.pad;
+            y: list-area.y + list-area.height + Layout.icon-gap;
+            width: parent.width - 2 * Layout.pad;
+            height: Layout.checkbox-row-h;
+            visible: !root.confirming-delete;
+
+            IconPlus {
+                x: 0;
+                y: (parent.height - Layout.checkbox-size) / 2;
+                size: Layout.checkbox-size;
+                stroke-color: new-input.has-focus ? Palette.text : Palette.dim;
+            }
+
+            new-input := TextInput {
+                x: Layout.checkbox-size + Layout.checkbox-gap;
+                y: 0;
+                width: parent.width - self.x;
+                height: parent.height;
+                single-line: true;
+                vertical-alignment: center;
+                color: Palette.text;
+                selection-background-color: Palette.edge;
+                selection-foreground-color: Palette.text;
+                text-cursor-width: 2px;
+                font-family: Typography.body-face;
+                font-size: Typography.body-size;
+                accepted => {
+                    if (self.text != "") {
+                        root.item-added(self.text);
+                        self.text = "";
+                    }
+                }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        new-input.clear-focus();
+                        return accept;
+                    }
+                    if (event.modifiers.control && event.text == "k") {
+                        root.palette-requested();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+
+            if new-input.text == "" && !new-input.has-focus: Text {
+                x: Layout.checkbox-size + Layout.checkbox-gap;
+                y: 0;
+                width: parent.width - self.x;
+                height: parent.height;
+                vertical-alignment: center;
+                text: "Add an item";
+                color: Palette.text;
+                opacity: Layout.placeholder-opacity;
+                font-family: Typography.body-face;
+                font-size: Typography.body-size;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+        }
+
+        footer-rule := Rectangle {
+            x: 0;
+            y: parent.height - root.footer-h;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        Text {
+            x: Layout.pad;
+            y: footer-rule.y;
+            width: parent.width - 2 * Layout.pad;
+            height: root.footer-h;
+            vertical-alignment: center;
+            text: root.open-count + " OPEN · " + root.done-count + " DONE";
+            color: Palette.dim;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        pin-btn := IconButton {
+            x: parent.width - Layout.pad - 64px;
+            y: Layout.header-y;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            activated => {
+                root.pinned = !root.pinned;
+                root.pin-toggled(root.pinned);
+            }
+            IconPin {
+                stroke-color: root.pinned ? Palette.text : pin-btn.glyph-color;
+            }
+        }
+
+        trash-btn := IconButton {
+            x: parent.width - Layout.pad - 40px;
+            y: Layout.header-y;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            activated => { root.confirming-delete = true; }
+            IconTrash { stroke-color: trash-btn.glyph-color; }
+        }
+
+        close-btn := IconButton {
+            x: parent.width - Layout.pad - Layout.icon-size;
+            y: Layout.header-y;
+            width: Layout.icon-size;
+            revealed: root.controls-visible;
+            activated => { root.close-requested(); }
+            IconX { stroke-color: close-btn.glyph-color; }
+        }
+
+        drag-area := TouchArea {
+            x: 16px;
+            y: 6px;
+            width: parent.width - Layout.pad - Layout.cluster-w - 16px;
+            height: Layout.header-band - 6px;
+            moved => {
+                if (!root.dragging) {
+                    root.dragging = true;
+                    root.drag-started();
+                }
+                root.window-moved(
+                    self.mouse-x - self.pressed-x,
+                    self.mouse-y - self.pressed-y
+                );
+            }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up && root.dragging) {
+                    root.dragging = false;
+                    root.drag-ended();
+                }
+            }
+            double-clicked => { root.editing-title = true; }
+        }
+
+        Rectangle {
+            x: Layout.pad;
+            y: Layout.header-y;
+            width: Layout.strip-w;
+            height: Layout.header-h;
+            GlyphStrip {
+                x: 0;
+                y: (Layout.header-h - Layout.strip-h) / 2;
+                width: Layout.strip-w;
+                height: Layout.strip-h;
+                state: root.effective-state;
+                peer-count: root.peer-count;
+            }
+        }
+
+        if !root.editing-title: Text {
+            x: Layout.title-x;
+            y: Layout.header-y;
+            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            height: Layout.header-h;
+            text: root.note-title;
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+            letter-spacing: Typography.title-tracking;
+            vertical-alignment: center;
+            horizontal-alignment: left;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        if root.editing-title: Rectangle {
+            x: Layout.title-x - 6px;
+            y: Layout.header-y;
+            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            height: Layout.header-h;
+            background: Palette.elev-recessed;
+            border-radius: Layout.radius-control;
+            border-width: 1px;
+            border-color: Palette.edge;
+
+            title-input := TextInput {
+                x: 6px;
+                y: 0;
+                width: parent.width - 12px;
+                height: parent.height;
+                text: root.note-title;
+                single-line: true;
+                vertical-alignment: center;
+                color: Palette.text;
+                selection-background-color: Palette.edge;
+                selection-foreground-color: Palette.text;
+                text-cursor-width: 2px;
+                font-family: Typography.interface-face;
+                font-size: Typography.title-size;
+                letter-spacing: Typography.title-tracking;
+                init => { self.focus(); self.select-all(); }
+                edited => { root.title-edited(self.text); }
+                accepted => {
+                    root.editing-title = false;
+                    new-input.focus();
+                }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.editing-title = false;
+                        new-input.focus();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+        }
+
+        Rectangle {
+            x: 0;
+            y: Layout.header-band;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        if root.confirming-delete: Rectangle {
+            x: 0;
+            y: parent.height - Layout.pad - root.confirm-h;
+            width: parent.width;
+            height: root.confirm-h;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.edge;
+            }
+
+            Text {
+                x: Layout.pad;
+                y: 13px;
+                text: "DELETE — CANNOT BE UNDONE";
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                wrap: no-wrap;
+            }
+
+            HorizontalLayout {
+                x: Layout.pad;
+                y: 41px;
+                height: 34px;
+                spacing: 8px;
+                alignment: start;
+
+                Button {
+                    label: "DELETE LIST";
+                    variant: ButtonVariant.destructive;
+                    clicked => { root.delete-confirmed(); }
+                }
+                Button {
+                    label: "CANCEL";
+                    variant: ButtonVariant.default;
+                    clicked => {
+                        root.confirming-delete = false;
+                        new-input.focus();
+                    }
+                }
+            }
+
+            FocusScope {
+                width: 0px;
+                height: 0px;
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.confirming-delete = false;
+                        new-input.focus();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+        }
+    }
+
+    init => { new-input.focus(); }
+}

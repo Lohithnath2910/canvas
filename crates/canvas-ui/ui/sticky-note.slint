@@ -4,7 +4,7 @@ import { Motion, Ease } from "theme/motion.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
-import { IconPalette, IconPin, IconTrash, IconX } from "theme/icons.slint";
+import { IconPin, IconTrash, IconX } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant, ScrollBar } from "theme/controls.slint";
 
 export { WidgetState }
@@ -22,7 +22,6 @@ export component StickyNoteWindow inherits Window {
     callback drag-started();
     callback drag-ended();
     callback text-edited(string);
-    callback tone-changed(int);
     callback pin-toggled(bool);
     callback delete-confirmed();
     callback title-edited(string);
@@ -78,7 +77,6 @@ export component StickyNoteWindow inherits Window {
 
     property <bool> controls-visible:
         drag-area.has-hover
-        || colour-btn.hovered || colour-btn.focused
         || pin-btn.hovered || pin-btn.focused
         || trash-btn.hovered || trash-btn.focused
         || close-btn.hovered || close-btn.focused
@@ -193,18 +191,6 @@ export component StickyNoteWindow inherits Window {
                 viewport-height: body-scroll.viewport-height;
                 viewport-y <=> body-scroll.viewport-y;
             }
-        }
-
-        colour-btn := IconButton {
-            x: parent.width - Layout.pad - 88px;
-            y: Layout.header-y;
-            width: Layout.icon-size + Layout.icon-gap;
-            revealed: root.controls-visible;
-            activated => {
-                root.tone = root.tone >= 4 ? 0 : root.tone + 1;
-                root.tone-changed(root.tone);
-            }
-            IconPalette { stroke-color: colour-btn.glyph-color; }
         }
 
         pin-btn := IconButton {
