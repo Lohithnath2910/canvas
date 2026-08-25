@@ -5,7 +5,7 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-31` — the five palette icons
+**Current task:** `S1-32` — palette overlay shell
 **Stage:** 1 — Sticky note + app shell
 **Done:** 21 ticked, 44 open (5 dropped, 4 added — S1-46, S1-47 and the two Spreadsheet tasks)
 **Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping) — see the verification queue
@@ -528,11 +528,17 @@ Still built, per your "both together" — home for browsing and managing, ⌘K f
 keyboard creation from anywhere. This is also what keeps Stage 1's "creatable with no
 mouse" bar reachable.
 
-- [ ] **S1-31 · The five palette icons** — `S`
+- [ ] **S1-31 · The five palette icons** — `S` — 🟡 built, verify with S1-32
   Needs: S1-05. `search`, `plus`, `check`, `settings`, `enter`, same construction rules,
   rendered at **24px — a size that exists nowhere else in the product**.
   *DoD:* all five render correctly at 24px.
   *Refs:* §5.6, §9
+  All five glyphs already existed from S1-05. What this task actually added is the
+  **24px size**: `IconGlyph` now takes a `size`, and the stroke scales with it
+  (`Layout.icon-stroke * size / icon-size` = 2.25px at 24px), because §5.6 draws the
+  glyphs on a 16-unit grid and Slint does **not** scale `stroke-width` with the viewbox.
+  **Nothing renders at 24px until the palette exists**, so this box can only honestly be
+  ticked alongside S1-32.
 
 - [ ] **S1-32 · Palette overlay shell** — `M`
   Needs: S1-31. 640px wide, radius 28, `plate` fill, 1px `edge`, drag-depth shadow.

@@ -42,17 +42,20 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-31` — the five palette icons.** ([TASKS.md](TASKS.md), section 1i.) `search`, `plus`,
-`check`, `settings` and `enter`, built the same way as the eight icons already in
-`theme/icons.slint`: one component per glyph, `Path` children, the exact command strings
-from CLAUDE.md §5.6's table, 1.5px stroke, square caps and joins on a 16-unit viewbox.
-`IconPlus` and `IconCheck` **already exist** — home uses both — so the real work is
-`search`, `settings` and `enter`, plus rendering all five at **24px, a size that exists
-nowhere else in the product** (§9). `IconBase` is fixed at 16×16, so the 24px case needs
-a size that the icon components take rather than hardcode; check how `stroke-color` is
-already threaded through before inventing a second mechanism.
+**`S1-32` — palette overlay shell.** ([TASKS.md](TASKS.md), section 1i.) 640px wide,
+`Layout.radius-overlay` (28px), `plate` fill, 1px `edge`, the drag-depth shadow. Centred
+horizontally with its top at ~15% of screen height, over the `scrim` token — **flat, no
+blur**, and the one deliberate translucency exception in the product, only while the
+palette is open (§5.1, §9).
 
-After it: `S1-32` onward in `TASKS.md`, in numeric order.
+The real decision is what the palette *is* as a window. Every existing window is
+`no-frame` with a 24px transparent `plate-margin`; a scrim that covers the screen means a
+full-screen transparent window instead, and on Windows that also has to not steal the
+desktop-layer behaviour pinned notes rely on. `crate::screen::virtual_bounds()` (added in
+S1-30) already gives the screen rect needed to size and place it. `IconGlyph` takes a
+`size` as of S1-31, so `Layout.icon-size-palette` is ready for the 24px row icons.
+
+After it: `S1-33` onward in `TASKS.md`, in numeric order.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -214,6 +217,44 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   as S1-47 rather than done on the way past.
 - **The tray icon is white on transparent**, which reads on the default dark Windows 11
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
+
+---
+
+### 2026-08-25 — S1-31: icons can render at 24px
+
+- 🟡 **`IconGlyph` takes a `size`, and everything inside it scales.** Written and
+  clippy-clean. **Nothing renders at 24px yet**, because the palette does not exist — so
+  this is verifiable only alongside S1-32, and the box stays open until then.
+
+**All five palette glyphs already existed.** `search`, `plus`, `check`, `settings` and
+`enter` were built in S1-05 along with the other eight, from §5.6's command table. So the
+only thing S1-31 genuinely still owed was the **24px size** (§9 — a size that exists
+nowhere else in the product).
+
+**Slint does not scale `stroke-width` with the viewbox.** Worth recording, because it is
+not what you would assume: `Path::fitted_path_events` (`i-slint-core-1.17.1/items/path.rs`)
+fits the path *geometry* into the element bounds minus the stroke width, but passes
+`stroke_width` through in logical pixels untouched. A `Path` at 24px with
+`stroke-width: 1.5px` therefore draws a *thinner-looking* line than the same glyph at
+16px, not a proportional one.
+
+So `IconGlyph` now computes it: `size` in, `scale = size / Layout.icon-size`,
+`stroke-w = Layout.icon-stroke * scale`. At 16px that is 1.5px — every existing call site
+is byte-identical, since none of them pass a `size`. At 24px it is 2.25px.
+
+**The assumption that needs the user's eye:** §5.6 says "1.5px stroke … drawn on a 16-unit
+grid", which does not say outright whether the stroke scales at 24px. Scaling it is the
+reading taken — the numbers in the command table are grid units and 1.5 is the same kind
+of number, and an unscaled stroke would make the palette's icons visibly lighter than the
+header's, which breaks a monoline set. If the user wants a flat 1.5px at both sizes, it is
+one line in `IconGlyph`.
+
+`IconSearch` was the only glyph that needed more than the stroke change — its circle is a
+`Rectangle` with hardcoded px, not a `Path`, so its x/y/size/radius are now multiplied by
+`scale` too. Two new tokens in `theme/layout.slint`, both straight out of §5.6/§9 rather
+than invented: `icon-size-palette: 24px` and `icon-stroke: 1.5px`.
+
+Nothing on DO NOT REGRESS is touched. 28 tests, clippy clean.
 
 ---
 
