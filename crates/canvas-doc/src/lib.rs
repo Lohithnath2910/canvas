@@ -1,3 +1,5 @@
+pub mod calendar;
+pub use calendar::{CalendarDoc, CalendarEvent};
 pub mod todo;
 pub use todo::{TodoItem, TodoListDoc};
 

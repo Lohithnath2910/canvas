@@ -102,7 +102,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 57 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 75 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -265,6 +265,47 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 
 
 ---
+
+
+---
+
+### 2026-08-25 — SW-05 blocked on open question 8; SW-07 `CalendarDoc` done instead
+
+**SW-05, the Todo window, is the first task the loop could not take**, and the reason is
+recorded rather than guessed around. **Open question 8** — *do the other widget types get
+the note's four header controls?* — says in its own words *"Blocks: SW-05 onward — decide
+once, apply to all types, rather than per widget."* Three of the four are obvious on any
+type (pin, delete, close are window behaviours, not note behaviours). The fourth,
+**colour-as-grey-tone**, is genuinely undecided, and a previous session deliberately
+reserved it. Guessing costs one `IconButton` and would then be wrong on five more types.
+
+So the loop moved to the **doc-layer tasks, which nothing blocks**: SW-07 (`CalendarDoc`),
+SW-09 (`KanbanDoc`) and SW-11 (`WhiteboardDoc`) are pure CRDT work, fully specified in §11.3
+and §10.3/§10.5, and testable without eyes. Every remaining *window* task in Stage W —
+SW-05, SW-06, SW-08, SW-10, SW-12 — is behind the same question 8, and SW-12 is behind
+question 4 as well.
+
+- ✅ **`CalendarDoc` in `canvas-doc/src/calendar.rs`, 18 tests** — verified by
+  `cargo test --workspace`, 75 tests. Convergence covered three ways, including a
+  **concurrent move against a rename of the same event**, where both survive.
+
+**Four choices §11.3 does not make, made here and worth not re-deriving:**
+
+- **`start` and `end` are epoch milliseconds stored as `Any::BigInt`, not `Any::Number`.**
+  `Any::Number` is an `f64`; a real millisecond timestamp is around 1.75×10¹², which f64
+  holds exactly today but is the kind of thing that rots silently. `BigInt` is an `i64` and
+  matches `canvas_storage::now_millis()`, so the two layers agree. `int_field` still accepts
+  a `Number` if one ever appears in a document, so a foreign or hand-edited file degrades
+  instead of reading back 0.
+- **`events()` returns sorted by `(start, id)`.** SW-08 lays out seven day columns and
+  would otherwise sort on every render; the id tie-break keeps two events starting at the
+  same minute in the same order on every peer, which a sort by `start` alone would not.
+- **`events_between` selects anything *overlapping* the window**, not merely contained by
+  it. A meeting that starts before midnight and ends after it belongs to both days, and the
+  contained-only version would drop it from the day you are looking at.
+- **`add_event` and `set_span` clamp `end` up to `start`.** A negative span would make
+  SW-08's duration-driven chip height negative, and a widget cannot render its way out of
+  bad data. There is a test for it.
 
 ### 2026-08-25 — SW-04: `TodoListDoc`
 

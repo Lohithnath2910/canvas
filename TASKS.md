@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `SW-05` — the Todo widget window
+**Current task:** `SW-09` — `KanbanDoc` with fractional indexing (SW-05, SW-06, SW-08 are blocked on open question 8)
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 24 ticked, 45 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 57 tests pass.
+**Done:** 25 ticked, 44 open (5 dropped, 8 added — S1-46 to S1-51 and the two Spreadsheet tasks). 75 tests pass.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -1038,9 +1038,24 @@ because the app is currently hardcoded to a single type.
 
 ### Wd — Calendar
 
-- [ ] **SW-07 · `CalendarDoc`** — `M`
+- [x] **SW-07 · `CalendarDoc`** — `M`
   Needs: SW-04. Array of maps `{id, title, start, end, attendees}` (§11.3).
+  **Done 2026-08-25** in `canvas-doc/src/calendar.rs`, 18 tests. §11.3's field names exactly.
+  Decisions the spec leaves to the implementation, all recorded rather than assumed:
+  **`start`/`end` are epoch milliseconds as `Any::BigInt`**, matching
+  `canvas_storage::now_millis()` — deliberately **not** `Any::Number`, which is `f64` and
+  would round a real timestamp; `int_field` still reads a `Number` if one ever turns up, so
+  a hand-edited or foreign document degrades instead of returning 0.
+  **`attendees` is `Any::Array` of strings.** **`events()` returns sorted by
+  `(start, id)`** so SW-08's columns do not have to sort, and the tie-break on id keeps the
+  order stable across peers. `duration()` is the input SW-08 needs for its 24/32/40/56px
+  chip heights. `events_between(from, until)` selects anything **overlapping** the window,
+  not merely contained by it, so an event straddling a day boundary appears in that day.
+  `add_event` and `set_span` clamp `end` up to `start` rather than storing a negative span.
   *DoD:* same convergence and round-trip tests as `TodoListDoc`.
+  ✅ all of them — `cargo test --workspace`, 75 tests pass. Convergence covered by
+  concurrent adds, a three-way add, and a **concurrent move against a rename of the same
+  event** (both survive).
 
 - [ ] **SW-08 · Calendar widget window** — `L`
   Needs: SW-07. `480×360`. Seven equal day columns, gap 8. Day label interface-face-11
