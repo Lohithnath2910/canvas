@@ -4,10 +4,33 @@
 [progress.md](progress.md) first for the state of the project, then starts here at the
 first unticked box.
 
-**Last updated:** 2026-08-24
+**Last updated:** 2026-08-25
 **Current task:** `S1-27` — tray icon and app lifetime
 **Stage:** 1 — Sticky note + app shell
-**Done:** 18 of 55
+**Done:** 18 of 50 (5 tasks dropped, see below)
+
+## ⚠ BUILD ORDER OVERRIDDEN — 2026-08-25
+
+The user reordered the roadmap after reviewing what was left:
+
+> *"all these widgets etc should be functioning correctly first and then only we can add
+> the multiplayer stuff — so lets fix what's left with the current stage and then build
+> out all of the widgets then stage 2 etc"*
+
+**The order is now:**
+
+1. **Finish Stage 1** — everything that does not need a second machine. Tray, palette,
+   off-screen clamping, animation, reduced motion, and the whole verification queue.
+2. **Stage W — every widget type**, single-player and fully working: Todo, Kanban,
+   Calendar, Shared Document, Whiteboard. This is the old Stages 4 and 5, moved ahead
+   of the backend.
+3. **Stage 2 — backend skeleton**, then **Stage 3 — hardened sync**, then the two
+   deferred Stage 1 tasks (S1-36, S1-37) that genuinely need a peer.
+
+**Rich text is dropped** (S1-38 … S1-42). The user's call: Silkscreen ships Regular only,
+and they do not want bold or italic. This closes open question 2. Body stays plain text in
+one face. The tasks are struck through below rather than deleted, so the decision stays
+visible instead of looking like an oversight.
 
 ---
 
@@ -445,11 +468,14 @@ mouse" bar reachable.
   honestly in `progress.md`.
   *Refs:* §14 Stage 1 item 10
 
-### 1j — Network-reflecting states
+### 1j — Network-reflecting states — DEFERRED until after Stage 3
 
-These need a peer. Expect several to sit at `🟡` until Stage 3 — that is correct and
-expected, not a failure. Do not fake them, and do not animate anything that lies about the
-network.
+**Moved out of Stage 1 on 2026-08-25.** These two are the only Stage 1 tasks that
+genuinely need a peer, and the user's order puts all multiplayer work last. They are not
+cancelled — they come back immediately after Stage 3 lands. Until then the strip's
+syncing / offline / peers / error states stay reachable only through the Ctrl+G dev
+cycler, which is honest: nothing animates that would lie about a network that does not
+exist yet (rule 3).
 
 - [ ] **S1-36 · Sync / offline / error strip states + conflict UI** — `L`
   Needs: S1-04, S1-17. States 5, 6, and 8. `syncing` sweeps **only while sync is genuinely
@@ -473,60 +499,30 @@ network.
   both directions.
   *Refs:* §7.6 state 7, §6.8, §5.1 (peer-1..4)
 
-### 1k — The big one, and sign-off
+### 1k — Sign-off
 
-- [ ] **S1-38 · Rich text 1/5: delta model in `canvas-doc`** — `L`
-  Needs: S1-15. One `yrs::Text` carrying inline attributes (`bold` / `italic` / `code` /
-  `strike`) plus a block-level attribute marking list-item membership — the flat delta model
-  Yjs uses with Quill. **Not** an `XmlFragment` tree: no headings, tables, or nesting are
-  needed, so the tree is unnecessary extra engineering. Replace S1-15's whole-string replace
-  with a real diff here.
-  *DoD:* unit tests — attributes survive a snapshot round-trip, and two clients applying
-  overlapping formatting converge.
-  *Refs:* §7.7, §11.1
-
-- [ ] **S1-39 · Rich text 2/5: styled-run layout renderer** — `L`
-  Needs: S1-38. Slint has **no built-in support** for mixed formatting within one flow —
-  neither `Text` nor `TextInput`/`TextEdit` can do it. This is a custom wrapped flow of
-  styled runs, and it is the single largest piece of engineering in the sticky note.
-  Bold = weight 600 at the **same colour** — never a colour change. Strikethrough steps the
-  colour to `dim` plus a 1px line. Inline code: body face (**no monospace face exists in
-  this product**), `elev-recessed` fill, 1px `edge` border, radius 8, padding 1/5 — the
-  border is what makes it read; the fill alone is invisible against `plate`. Bullet markers
-  are 3×3 `dim` squares (the dot-cell shape, not a typographic bullet), 8px gap to text,
-  offset 9px from the item top. Block and paragraph gap 12.
-  *DoD:* a document containing every format renders correctly and rewraps on resize.
-  *Refs:* §7.7, §7.2
-
-- [ ] **S1-40 · Rich text 3/5: caret and selection** — `L`
-  Needs: S1-40. Caret 2×14 inline (2×18 on an empty line), colour `text`, 1000ms **2-step
-  hard switch — no fade**. Selection uses the `edge` background.
-  *DoD:* click-to-place, drag-to-select, shift-arrow selection, and Home/End all land on the
-  correct character across mixed-format runs.
-  *Refs:* §7.2, §5.5 (caret row)
-
-- [ ] **S1-41 · Rich text 4/5: input and editing** — `L`
-  Needs: S1-33. Insert, delete, backspace, paste-as-plain-text, Enter/paragraph splitting,
-  and list continuation — all routed through the delta model, never through a plain string.
-  *DoD:* editing mid-document preserves the surrounding formatting; the 12px paragraph gap
-  holds.
-  *Refs:* §7.7, §7.2
-
-- [ ] **S1-42 · Rich text 5/5: formatting shortcuts + persistence** — `M`
-  Needs: S1-41, S1-17. Ctrl+B, Ctrl+I, strikethrough, inline code, bullet toggle.
-  *DoD:* **format a note, restart the app, the formatting is still there** — this is a named
-  Stage 1 DoD item, not an implied one.
-  *Refs:* §14 Stage 1 DoD
+- [ ] ~~**S1-38 … S1-42 · Rich text, 5 tasks**~~ — **DROPPED 2026-08-25.**
+  Bold, italic, strikethrough, inline code and bulleted lists in the note body, on a flat
+  delta model. Dropped by the user: the body face is Silkscreen, which ships Regular only,
+  and they do not want the two formats it cannot render. The note body stays a single
+  plain-text flow in one face. `StickyNoteDoc` already diffs properly (S1-15), so nothing
+  else depended on this. **This closes open question 2.**
+  Reinstating it means reverting `Typography.body-face` to the system sans first —
+  see §7.2 and the override table in `progress.md`.
 
 - [ ] **S1-43 · Undo/redo backed by `revision_history`** — `L`
-  Needs: S1-42, S1-19. Backed by the stored revision history, **not** a local edit stack — a
-  local stack gives wrong results as soon as a remote edit interleaves.
-  *DoD:* undo is correct **after a remote edit arrives mid-session** (named Stage 1 DoD).
-  Drive the remote edit from the S1-36 harness.
+  Needs: S1-19. **Re-based 2026-08-25** — used to need S1-42, which is dropped, so this now
+  operates on the plain-text doc. Backed by the stored revision history, **not** a local
+  edit stack — a local stack gives wrong results as soon as a remote edit interleaves, and
+  building it as a stack now would only have to be thrown away at Stage 3.
+  *DoD:* undo/redo correct across a restart, single-player. The named Stage 1 DoD bullet
+  — *"undo works correctly after a remote edit arrives mid-session"* — **cannot be
+  satisfied until Stage 3 exists.** Mark that half 🟡 with this reason; do not tick it and
+  do not fake a remote edit.
   *Refs:* §14 Stage 1 item 12 and DoD
 
 - [ ] **S1-44 · Reduced motion** — `M`
-  Needs: S1-43. All travel, stepping, and shadow motion off; a 100ms crossfade replaces
+  Needs: S1-29. All travel, stepping, and shadow motion off; a 100ms crossfade replaces
   them; dots hold their final state. **Required for sign-off**, not a deferred nice-to-have.
   *DoD:* with the OS reduced-motion setting on, no widget travels, steps, or shifts shadow.
   *Refs:* §5.5
@@ -537,16 +533,157 @@ network.
   (must be 5–15 MB) and cold launch. Re-check the five rules line by line — especially that
   `signal` red appears in exactly two places in the entire product, and that no dot cell
   ever fades.
-  *DoD:* every Stage 1 DoD bullet in §14 is **truthfully** satisfiable. Anything that isn't
-  becomes a new numbered task here rather than a generous tick.
+  *DoD:* every Stage 1 DoD bullet in §14 is **truthfully** satisfiable **except the three
+  now known to be out of reach** — rich text (dropped), states 5/6/7/8 (need a peer,
+  deferred to 1j), and undo-after-a-remote-edit (needs Stage 3). Those three are recorded
+  as deferred, not ticked. Anything else that isn't satisfiable becomes a new numbered
+  task here rather than a generous tick.
   *Refs:* §14 Stage 1 DoD, §1 (the five rules)
 
 ---
 
-## Stages 2–5 — not yet broken down
+## Stage W — every widget type, single-player
 
-Deliberately coarse. Expand each into numbered tasks **when it is reached** — breaking them
-down now would only mean rewriting them, since the earlier stages will change what's true.
+**Created 2026-08-25 by the build-order override at the top of this file.** This is the
+old Stages 4 and 5, pulled ahead of the backend. Every widget type gets built and made to
+work correctly on one machine before any multiplayer work starts.
+
+Broken down now rather than left coarse, because it is the next stage to be reached.
+
+Stage DoD: all five widget types create, open, edit, close, delete and persist from home ·
+each within the 5–15 MB per-widget budget · every type wears the same 32px header and
+glyph strip (rule 3) · no second accent colour anywhere (rules 1 and 2).
+
+### Wa — make the shell type-aware
+
+Nothing else in this stage can start until these three land. Every one of them exists
+because the app is currently hardcoded to a single type.
+
+- [ ] **SW-01 · Generalise the runtime to any widget type** — `L`
+  Needs: S1-20. `app.rs:50` filters boot to `KIND_STICKY_NOTE`, and `Note` is a concrete
+  struct holding a `StickyNoteWindow` and a `StickyNoteDoc`. Both need to become
+  type-dispatched: one live-widget registry that can hold any window/doc pair, spawned by
+  `widget_type`. Keep the flush timer, the placement tracking and the pending-update
+  buffer shared — they are type-agnostic already and must not be duplicated per type.
+  *DoD:* a row of a non-note type in the database opens its own window at boot instead of
+  being silently skipped. Verified with a hand-inserted row before any real second type
+  exists.
+
+- [ ] **SW-02 · Home: a create control per type** — `M`
+  Needs: SW-01. `NEW NOTE` becomes a create control per built type, each using its own
+  §5.6 glyph — the row glyphs in `home.slint` already exist and already pick correctly by
+  kind, so the list side needs no work. New widgets get their own type's default size
+  (already correct in `canvas-storage`) and the title `UNTITLED`.
+  *DoD:* each type creatable from home, appears in the list with the right glyph, opens
+  its own window, and survives a restart.
+
+- [ ] **SW-03 · The four missing library components** — `M`
+  Needs: S1-13. `controls.slint` currently has `IconButton` and `Button` only.
+  Build `Checkbox` (§6.4 — radius **2px**, not 8px: 8px on a 16×16 box renders as a disc,
+  and there is **no tick glyph**, the fill *is* the state), `Tag` (§6.5), `Divider` (§6.7),
+  `TextField` (§6.6).
+  *DoD:* each rendered against its §6 table by eye, in every state the table lists.
+
+### Wb — Todo
+
+- [ ] **SW-04 · `TodoListDoc` in `canvas-doc`** — `M`
+  Needs: S0-2. §11.2's array-of-maps pattern, which is already verified-compiling against
+  yrs 0.19.2 — use it as written. `{id, text, done}` only; **do not** build `due` or
+  `assignee` speculatively. **Remember the trap:** yrs indexes by UTF-8 byte offset, so any
+  text indexing inside an item must walk to a `char_boundary`.
+  *DoD:* unit tests matching `StickyNoteDoc`'s — two docs adding and toggling concurrently
+  converge, snapshot round-trips, garbage bytes rejected without a panic.
+
+- [ ] **SW-05 · Todo widget window** — `L`
+  Needs: SW-02, SW-03, SW-04. `340×360`. Row gap 12, `Checkbox` + 12px gap. Completed rows:
+  `dim` label + 1px strike. Due date as a `Tag` on the right, gap 8. Footer: 1px `edge`
+  rule + `N OPEN · N DONE` in interface face 11 `dim`.
+  **Counts are computed in Rust and passed in as `in property<int>`** — a Slint binding
+  cannot run an imperative loop, that is a parse error not a runtime limit (§13.6).
+  *DoD:* add, toggle, edit and delete items; restart and they are all still there.
+
+### Wc — Shared Document
+
+- [ ] **SW-06 · Shared Document widget** — `M`
+  Needs: SW-02. `520×420`, **24px padding** (the only type that is not 16), paragraph gap
+  16. Single-player this is a sticky note at a larger size with wider padding, so it reuses
+  `StickyNoteDoc` and most of `sticky-note.slint`.
+  **The collaborator cursors (§10.2) are NOT in this task** — they need a peer and land
+  after Stage 3, via relative positions, never absolute offsets.
+  *DoD:* creates, edits, persists. Cursor work explicitly recorded as deferred.
+
+### Wd — Calendar
+
+- [ ] **SW-07 · `CalendarDoc`** — `M`
+  Needs: SW-04. Array of maps `{id, title, start, end, attendees}` (§11.3).
+  *DoD:* same convergence and round-trip tests as `TodoListDoc`.
+
+- [ ] **SW-08 · Calendar widget window** — `L`
+  Needs: SW-07. `480×360`. Seven equal day columns, gap 8. Day label interface-face-11
+  `dim`; **today's label steps to `text` with a 1px `text` rule above it, and every other
+  day gets a 1px `edge` rule in the same spot — it is a rule, not a wash.**
+  Event chips: radius 8, height by duration (24/32/40/56px), fill from the peer-grey steps,
+  vertical position = offset from column top.
+  **Chips carry the 24-hour start time only, never the event name** — at a ~52px column an
+  11px Silkscreen label holds five characters and a truncated name reads worse than none.
+  Grey level carries duration. A day view is what is needed if names are ever required.
+  *DoD:* a week renders with correctly positioned and sized chips; today is marked; events
+  survive a restart.
+
+### We — Kanban
+
+- [ ] **SW-09 · `KanbanDoc` with fractional indexing** — `L`
+  Needs: SW-04. Columns as an array of maps; cards keyed by id with a **fractional-index**
+  position field. **Never nested-array reordering** — it is a known CRDT failure mode that
+  duplicates and loses cards under concurrent moves, and it must not ship even as a
+  single-player shortcut, because it would have to be rewritten at Stage 3 anyway.
+  *DoD:* unit tests — a card moved between columns keeps its identity; two docs moving the
+  same card concurrently converge with no duplication and no loss.
+
+- [ ] **SW-10 · Kanban widget window + card drag** — `L`
+  Needs: SW-09. `640×400`. Three equal columns, gap 12. Column header interface-face-11
+  `text` + count `dim`, gap 8, then a 1px `edge` rule. Cards: `elev-raised`, 1px `edge`,
+  radius 8, padding 12, gap 8, title body-face-14, meta interface-face-11 `dim`
+  (`ASSIGNEE · DATE` or `UNASSIGNED`). Dragged card gets `shadow-drag` **only** — no tilt,
+  no scale (rule 5).
+  **The drop target is a 1px `text` outline around the whole column. No fill, no tint.**
+  Card drag needs disjoint `TouchArea`s per §13.3 — do not layer one over the column.
+  *DoD:* cards drag between columns, land in the right order, and survive a restart.
+
+### Wf — Whiteboard
+
+- [ ] **SW-11 · `WhiteboardDoc`** — `L`
+  Needs: SW-04. Map of shapes `{type, x, y, w, h, rotation, style}` + arrays of point lists
+  for strokes. **Strokes must be appended incrementally as points arrive**, never
+  re-encoded as a full canvas — that shape is what makes Stage 3 traffic scale with stroke
+  length instead of canvas size, so it has to be right from the start.
+  *DoD:* unit tests — appending 1000 points produces updates proportional to the points
+  added, not to the canvas contents.
+
+- [ ] **SW-12 · Whiteboard widget window** — `L`
+  Needs: SW-11. **No artboard exists for this one** — §10.5 is the only reference, so
+  expect real design questions and ask rather than guess (§4.1). Infinite canvas, shapes,
+  freehand strokes. Floating pill-shaped tool dock near the working area, **not** a docked
+  toolbar. An 8px dot grid at `edge` opacity — the one place in the product where the
+  underlying grid is deliberately made visible.
+  *DoD:* draw, pan, zoom, erase; strokes survive a restart. Anything §10.5 does not answer
+  becomes an open question below, not a guess.
+
+### Wg — sign-off
+
+- [ ] **SW-13 · Stage W sign-off audit** — `M`
+  Needs: SW-12. Walk all five types against `handoff/screenshots/widget-types.png` side by
+  side. Re-measure per-widget RSS for each type (5–15 MB each) and app total (< 50 MB).
+  Re-check the five rules across every new surface — especially that `signal` red still
+  appears in exactly **two** places in the whole product, and that no dot cell fades.
+  *DoD:* every Stage W DoD bullet truthfully satisfiable; anything that is not becomes a
+  new numbered task rather than a generous tick.
+
+---
+
+## Stages 2, 3 — after Stage W
+
+Deliberately coarse. Expand into numbered tasks when reached.
 
 - [ ] **Stage 2 · Backend skeleton** — Axum, Postgres, Redis, object storage, Docker Compose
   for local dev, OAuth, workspaces, permissions. *Refs:* §14 Stage 2
@@ -554,17 +691,10 @@ down now would only mean rewriting them, since the earlier stages will change wh
   `SyncMessage`, offline-then-reconnect replay, snapshot compaction (**required before this
   stage ships**, not optional), convergence tests with N ≥ 4 simulated peers.
   *Refs:* §14 Stage 3
-- [ ] **Stage 4 · Todo, Shared Document, Calendar** — Todo first (§10.1: simplest, and the
-  proof that a second widget type works; the array-of-maps code in §11.2 is already
-  verified). Shared Document cursors via **relative positions** — absolute offsets break
-  under concurrent inserts and must not ship even as a placeholder. This stage also lands
-  the rest of the component library: Checkbox (§6.4 — radius **2px**, since 8px on a 16×16
-  box renders as a disc), Tag (§6.5), TextField (§6.6), Divider (§6.7).
-  *Refs:* §14 Stage 4, §10.1–10.4, §11.3
-- [ ] **Stage 5 · Whiteboard and Kanban** — Kanban cards positioned by **fractional index**,
-  never nested-array reordering (a known CRDT failure mode: duplication and loss under
-  concurrent moves). Whiteboard strokes sync **incrementally** as points are added, never as
-  full-canvas resends. *Refs:* §14 Stage 5, §10.3, §10.5
+- [ ] **Then the deferred multiplayer tasks**, in this order: **S1-36** (sync / offline /
+  error strip states + conflict UI), **S1-37** (presence pills), the Shared Document's
+  collaborator cursors from SW-06 via **relative positions**, and the remote-edit half of
+  **S1-43**'s undo DoD. All four were deferred, not cancelled.
 
 ---
 
@@ -582,26 +712,31 @@ protocol, the storage schema, or a design token not already specified.
 - ~~Is a stopgap global hotkey acceptable?~~ **No longer needed as a stopgap.**
   `windows-sys` is already a dependency, so `RegisterHotKey` gives a real OS-global
   hotkey at S1-35.
+- ~~Rich text vs the dot-matrix body face?~~ **Dropped, 2026-08-25.** The user does not
+  want bold or italic, so Silkscreen shipping Regular only stops being a problem. The
+  note body is plain text in one face. S1-38 … S1-42 are struck through above.
+- ~~Which widget type comes after the sticky note?~~ **All of them, before multiplayer.**
+  The user reordered the roadmap on 2026-08-25 — see the override at the top of this file.
+  Todo is still first within Stage W, for the reason §10.1 gives.
 
 **Still open**
 
 1. **What should pin do beyond the desktop layer?** Every note is now non-floating, so
    pin's only current effect is the bottom z-order. Should a pinned note also be exempt
    from close, or always reopen at launch? *Blocks:* nothing yet; decide by S1-27.
-2. **Rich text vs the dot-matrix body face.** Silkscreen ships Regular only — no bold, no
-   italic — but §7.2 requires both. Either revert `Typography.body-face` to the system
-   sans, express emphasis some other way, or drop those two formats. **Must be answered
-   before S1-39.**
-3. **Is light mode in scope, or dark only?** Both token sets are built and the three
+2. **Is light mode in scope, or dark only?** Both token sets are built and the three
    documented light corrections are applied. The open part is only whether a switcher
    ships, and where its control lives now that a home window exists.
-4. **`handoff/screenshots/light-mode.png` contains "the written verdict on what breaks"**
+3. **`handoff/screenshots/light-mode.png` contains "the written verdict on what breaks"**
    (§15) and has still not been read. Read it before shipping light mode.
-5. **Which widget type comes after the sticky note?** §14 Stage 4 says Todo first, and
-   §11.2 already carries verified array-of-maps code for it. The home window's rows
-   already render per-type glyphs, so a second type needs no home work. Confirm Todo is
-   the right next type before Stage 4 starts.
-
+4. **Does the Whiteboard have a design?** §10.5 describes it in one paragraph and there is
+   **no artboard for it** — `widget-types.png` covers Todo, Shared Document, Kanban and
+   Calendar only. Tool dock contents, shape set, and the stroke style are all unspecified.
+   *Blocks:* SW-12. Ask before starting it, do not invent a tool palette.
+5. **Do the other widget types need their own header controls?** The note has four
+   (colour · pin · delete · close). Colour-as-grey-tone makes sense on a note; whether a
+   Kanban or Calendar wants it is undecided. *Blocks:* SW-05 onward — decide once, apply
+   to all types, rather than per widget.
 
 ---
 

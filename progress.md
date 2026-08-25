@@ -1,8 +1,11 @@
 # Canvas — Progress Log
 
-**Last updated:** 2026-08-24
+**Last updated:** 2026-08-25
 **Current task:** `S1-27` — tray icon and app lifetime.
 **Before starting it:** run the verification pass at the top of [TASKS.md](TASKS.md).
+**Build order changed 2026-08-25** — finish Stage 1, then build every widget type
+single-player (Stage W), then the backend and sync. Rich text is dropped. See the
+override block at the top of [TASKS.md](TASKS.md).
 
 ---
 
@@ -74,6 +77,8 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 | §8/§9 bare desktop + ⌘K palette only | **A home window too**, plus the palette | Notes need a place to be created and managed from |
 | §12 `window_positions` columns | **Plus `pinned`, `tone`, `open`** | `open` is what makes closing ≠ deleting |
 | §11.1 whole-string replace per keystroke | **Real prefix/suffix diffing** | Spec's own comment says to do this |
+| §7.2/§7.7 rich text in the note body | **Dropped. Plain text, one face.** | Silkscreen has no bold or italic and the user does not want them |
+| §14 stage order: sync (2–3) before widgets (4–5) | **All widget types first, backend and sync after** | User: get every widget working single-player before multiplayer |
 
 ### Traps already hit — do not repeat these
 
@@ -103,14 +108,65 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   This is what S1-27 (tray icon) fixes, and it is why that task is next.
 - `canvas-sync` is an empty stub. No networking exists, so the strip's syncing / offline
   / peers / error states are only reachable through the Ctrl+G dev cycler.
-- No rich text. The body is plain text in one face.
-- **Silkscreen ships Regular only — no bold, no italic.** §7.2 needs both for rich text
-  (S1-39). Decide before starting it: revert the body face, express emphasis another way,
-  or drop those two formats.
+- **No rich text, and there will not be any** — dropped 2026-08-25. The body is plain text
+  in one face. Silkscreen ships Regular only, and the user does not want bold or italic.
 - Only sticky notes exist. Todo, kanban, calendar and document are types in the storage
-  layer with correct default sizes and row glyphs, but no widget implementations.
+  layer with correct default sizes and row glyphs, but **no doc types and no windows**,
+  and `app.rs:50` will not even open a non-note row. That is Stage W, and it starts by
+  generalising the runtime (SW-01) before any widget gets built.
+- **The Whiteboard has no artboard.** §10.5 is one paragraph and `widget-types.png` does
+  not cover it. Ask before SW-12 rather than inventing a tool dock.
 
 ---
+
+### 2026-08-25 — Roadmap reordered; rich text dropped
+
+Two user decisions, both taken after reviewing what was left in the backlog. No code
+changed in this pass — this is a planning entry only.
+
+**1. Rich text is dropped (S1-38 … S1-42).**
+- The body face is Silkscreen, which ships Regular only. Rather than revert the body face
+  to the system sans to get bold and italic, the user chose to drop the formats.
+- The note body stays a single plain-text flow in one face. **This closes open question 2**,
+  which had been blocking S1-39.
+- Nothing else depended on it: `StickyNoteDoc` already does real prefix/suffix diffing
+  (S1-15), which was the one thing rich text would have needed from the doc layer.
+- **S1-43 (undo/redo) was re-based** off S1-42 onto S1-19, and now targets the plain-text
+  doc. Its "correct after a remote edit" DoD bullet is explicitly unreachable until
+  Stage 3 and is recorded as deferred rather than quietly dropped.
+- Reinstating rich text later means reverting `Typography.body-face` first.
+
+**2. Build order: all widgets before any multiplayer.**
+- §14 puts the backend at Stage 2 and sync at Stage 3, with the other widget types not
+  arriving until Stages 4 and 5. The user reversed that: *"all these widgets etc should be
+  functioning correctly first and then only we can add the multiplayer stuff."*
+- `TASKS.md` now carries a **Stage W** — Todo, Shared Document, Calendar, Kanban and
+  Whiteboard, all single-player — broken into 13 numbered tasks (SW-01 … SW-13), sitting
+  between the end of Stage 1 and the old Stage 2.
+- **S1-36 (sync/offline/error strip states) and S1-37 (presence) are deferred out of
+  Stage 1**, since they are the only two tasks in it that genuinely need a peer. Deferred,
+  not cancelled — they are listed to return immediately after Stage 3, along with the
+  Shared Document's collaborator cursors and the remote-edit half of S1-43.
+
+**What Stage W actually costs, measured against the code rather than guessed:**
+- ❌ `canvas-doc` has `StickyNoteDoc` only. No todo, calendar, kanban or whiteboard doc.
+- ❌ No `todo.slint`, `kanban.slint`, `calendar.slint` or `document.slint` exists.
+- ❌ `app.rs:50` filters boot to `KIND_STICKY_NOTE`, and `Note` is a concrete struct
+  bound to `StickyNoteWindow`/`StickyNoteDoc`. **A second type cannot open at all until
+  that is generalised** — SW-01, and the reason the stage starts there.
+- ❌ Home has one create control, `NEW NOTE`, and one `create-note()` callback.
+- ❌ `controls.slint` has `IconButton` and `Button` only. **Checkbox, Tag, TextField and
+  Divider are all unbuilt**, and Todo needs two of them.
+- ✅ Already done and reusable: all five type constants and their correct default sizes in
+  `canvas-storage` (with a test proving `documents` holds two types side by side), and
+  the per-type row glyphs in `home.slint`, which already pick correctly by kind.
+- ✅ §11.2's array-of-maps code for the todo doc is verified-compiling against yrs 0.19.2
+  and can be used as written.
+
+**Gap worth flagging before SW-12:** there is **no artboard for the Whiteboard.**
+`widget-types.png` covers Todo, Shared Document, Kanban and Calendar only; §10.5 is a
+single paragraph. Tool dock contents, the shape set and the stroke style are all
+unspecified. Logged as open question 4.
 
 ## Standing update rule
 
