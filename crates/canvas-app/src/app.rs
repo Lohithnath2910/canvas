@@ -14,6 +14,52 @@ use canvas_ui::{
 const PLATE_MARGIN: f32 = 24.0;
 const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
 const PIN_POLL_INTERVAL: Duration = Duration::from_millis(700);
+const OPEN_DELAY: Duration = Duration::from_millis(16);
+const CLOSE_FADE: Duration = Duration::from_millis(100);
+
+trait Fadeable: ComponentHandle + 'static {
+    fn set_opened_flag(&self, value: bool);
+    fn set_closing_flag(&self, value: bool);
+}
+
+impl Fadeable for StickyNoteWindow {
+    fn set_opened_flag(&self, value: bool) {
+        self.set_opened(value);
+    }
+    fn set_closing_flag(&self, value: bool) {
+        self.set_closing(value);
+    }
+}
+
+impl Fadeable for HomeWindow {
+    fn set_opened_flag(&self, value: bool) {
+        self.set_opened(value);
+    }
+    fn set_closing_flag(&self, value: bool) {
+        self.set_closing(value);
+    }
+}
+
+fn play_open<T: Fadeable>(window: &T) {
+    window.set_closing_flag(false);
+    window.set_opened_flag(false);
+    let weak = window.as_weak();
+    slint::Timer::single_shot(OPEN_DELAY, move || {
+        if let Some(window) = weak.upgrade() {
+            window.set_opened_flag(true);
+        }
+    });
+}
+
+fn play_close<T: Fadeable>(window: T, done: impl FnOnce() + 'static) {
+    window.set_closing_flag(true);
+    slint::Timer::single_shot(CLOSE_FADE, move || {
+        let _ = window.hide();
+        window.set_closing_flag(false);
+        window.set_opened_flag(false);
+        done();
+    });
+}
 
 struct Note {
     window: StickyNoteWindow,
@@ -75,7 +121,9 @@ impl App {
     }
 
     pub fn open_home(app: &SharedApp) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(home) = &app.borrow().home {
+        let existing = app.borrow().home.as_ref().map(|h| h.clone_strong());
+        if let Some(home) = existing {
+            play_open(&home);
             home.show()?;
             return Ok(());
         }
@@ -132,12 +180,8 @@ impl App {
                 let Some(app) = weak.upgrade() else {
                     return;
                 };
-                if let Some(home) = &app.borrow().home {
-                    let _ = home.hide();
-                }
                 App::flush_all(&app);
-                App::sync_tray(&app);
-                crate::maybe_quit(&app);
+                App::hide_home(&app);
             });
         }
 
@@ -162,15 +206,15 @@ impl App {
             home.window().on_close_requested(move || {
                 if let Some(app) = weak.upgrade() {
                     App::flush_all(&app);
-                    App::sync_tray(&app);
-                    crate::maybe_quit(&app);
+                    App::hide_home(&app);
                 }
-                slint::CloseRequestResponse::HideWindow
+                slint::CloseRequestResponse::KeepWindowShown
             });
         }
 
         app.borrow_mut().home = Some(home.clone_strong());
         App::refresh_home(app);
+        play_open(&home);
         home.show()?;
         let scale = home.window().scale_factor();
         home.set_resize_border(home.get_resize_border() * scale);
@@ -233,8 +277,10 @@ impl App {
     }
 
     pub fn open_note(app: &SharedApp, id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(note) = app.borrow().notes.get(id) {
-            note.window.show()?;
+        let existing = app.borrow().notes.get(id).map(|n| n.window.clone_strong());
+        if let Some(window) = existing {
+            play_open(&window);
+            window.show()?;
             return Ok(());
         }
 
@@ -286,6 +332,7 @@ impl App {
         );
 
         wire_note(app, id, &window);
+        play_open(&window);
         window.show()?;
         let scale = window.window().scale_factor();
         window.set_resize_border(window.get_resize_border() * scale);
@@ -295,7 +342,7 @@ impl App {
     pub fn close_note(app: &SharedApp, id: &str) {
         let mut a = app.borrow_mut();
         if let Some(mut note) = a.notes.remove(id) {
-            let _ = note.window.hide();
+            play_close(note.window, || {});
             for update in note.pending_updates.drain(..) {
                 let _ = a.store.append_revision(id, &update);
             }
@@ -310,7 +357,7 @@ impl App {
     pub fn delete_note(app: &SharedApp, id: &str) {
         let mut a = app.borrow_mut();
         if let Some(note) = a.notes.remove(id) {
-            let _ = note.window.hide();
+            play_close(note.window, || {});
         }
         let _ = a.store.delete_widget(id);
     }
@@ -508,7 +555,7 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
                 App::refresh_home(&app);
                 crate::maybe_quit(&app);
             }
-            slint::CloseRequestResponse::HideWindow
+            slint::CloseRequestResponse::KeepWindowShown
         });
     }
 
@@ -665,6 +712,19 @@ impl App {
         if let Some(tray) = &a.tray {
             tray.set_home_open(visible);
         }
+    }
+
+    pub fn hide_home(app: &SharedApp) {
+        let Some(home) = app.borrow().home.as_ref().map(|h| h.clone_strong()) else {
+            return;
+        };
+        let weak = Rc::downgrade(app);
+        play_close(home, move || {
+            if let Some(app) = weak.upgrade() {
+                App::sync_tray(&app);
+                crate::maybe_quit(&app);
+            }
+        });
     }
 
     pub fn show_home(app: &SharedApp) {

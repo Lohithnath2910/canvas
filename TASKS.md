@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-29` — open/close animation
+**Current task:** `S1-30` — off-screen clamping
 **Stage:** 1 — Sticky note + app shell
 **Done:** 21 ticked, 44 open (5 dropped, 4 added — S1-46, S1-47 and the two Spreadsheet tasks)
-**Left 🟡 for the user to look at:** `S1-28` (home empty state) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -134,6 +134,14 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
       list area, and disappears the moment the first note exists → **S1-28**
 - [ ] Open three notes at once — all independently draggable and editable → confirms **S1-20**
 - [ ] Home `x` closes home and leaves notes running
+
+**Open/close animation** → **S1-29**
+- [ ] `NEW NOTE` — the new note's plate fades up over ~160ms and rises 6px into place.
+      Nothing scales, tilts or bounces
+- [ ] Click `x` on a note — the plate fades out over ~100ms and does **not** travel
+      downward on the way out
+- [ ] Same two checks on the home window: tray → `Open home` fades it up, `x` fades it out
+- [ ] Delete a note from its own trash icon — same 100ms fade, not an instant vanish
 
 **Tray** → **S1-27** ✅ confirmed 2026-08-25
 - [x] A Canvas icon (five dots) sits in the notification area at launch
@@ -481,11 +489,14 @@ and `raw-window-handle-06` features (inside it — build flags only).
   became `if root.rows.length > 0:` so an empty list has nothing on top of the message.
   Verified only that a genuinely fresh `%APPDATA%/Canvas` boots clean into this branch.
 
-- [ ] **S1-29 · Open/close animation** — `S`
+- [ ] **S1-29 · Open/close animation** — `S` — 🟡 built, needs eyes
   Needs: S1-20. Open 160ms, opacity 0→1 plus a 6px rise. Close 100ms, fade only.
   **No scale, no bounce, no tilt** (rule 5).
   *DoD:* both visible and correct; nothing scales.
   *Refs:* §8, §5.5
+  Built on both windows: the **plate** animates, not the OS window, so the 6px rise runs
+  inside the 24px transparent margin and never clips. `opened`/`closing` are Rust-driven
+  so a re-shown home window replays the open. Close is a real 100ms delay before `hide()`.
 
 - [ ] **S1-30 · Off-screen clamping** — `M`
   Needs: S1-20. Clips at the boundary, radius and border simply cut — **no push-back, no

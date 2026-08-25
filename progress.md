@@ -42,13 +42,17 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-29` — open/close animation.** ([TASKS.md](TASKS.md), section 1h.) Widget open is
-160ms, opacity 0→1 plus a 6px rise; close is 100ms, fade only. No scale, no bounce
-(rule 5). `Motion.open` / `Motion.close` / `Motion.open-rise` already exist in
-`theme/motion.slint` and already collapse correctly when `Motion.reduced` is set, so
-S1-44 mostly falls out of this one. The plate is the thing that moves, not the window.
+**`S1-30` — off-screen clamping.** ([TASKS.md](TASKS.md), section 1h.) A note dragged past
+a screen edge clips at the boundary — radius and border simply cut. **No push-back, no
+bounce, no snap-in** (§8). At least 120px of width plus the full 32px header has to stay
+on screen so the note can always be grabbed again, so the clamp belongs in
+`wire_note`'s `on_window_moved` in `app.rs`, where the new physical position is already
+being computed. The display-change case ("fully off-screen after a monitor change moves
+to the nearest edge on next launch") belongs in `App::open_note`, against the placement
+read from disk. That second half may not be testable here — if not, `🟡` it and do not
+tick the box.
 
-After it: `S1-30` onward in `TASKS.md`, in numeric order.
+After it: `S1-31` onward in `TASKS.md`, in numeric order.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -210,6 +214,55 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   as S1-47 rather than done on the way past.
 - **The tray icon is white on transparent**, which reads on the default dark Windows 11
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
+
+---
+
+### 2026-08-25 — S1-29: open and close animation
+
+- 🟡 **The plate fades and rises on open, fades on close.** Open is 160ms, opacity 0→1
+  plus a 6px rise; close is 100ms, opacity only. Written and clippy-clean; **not watched
+  working**, so the box stays open and four lines went into the VERIFICATION QUEUE.
+
+**The plate animates, not the OS window.** Both windows already sit inside a 24px
+transparent `plate-margin`, so a 6px rise runs entirely inside that margin and never
+clips at the window edge — and it costs no window-move calls, which matters because
+`on_window_moved` is also the drag path. Two new properties on `StickyNoteWindow` and
+`HomeWindow`:
+
+- `opened` drives both `opacity` and `y` (`plate-margin + (opened ? 0px : open-rise)`).
+- `closing` drives `opacity` only, so **the close is a pure fade with no travel** — the
+  plate does not sink back down on the way out. `opened` deliberately stays true for the
+  whole fade so `y` cannot move.
+- The opacity animation picks its own duration: `closing ? Motion.close : Motion.open`.
+  A binding on an `animate` duration is re-read when the animation starts, so one
+  `animate opacity` block covers both directions at their two different speeds.
+
+**Both flags are driven from Rust, not from a Slint `init` or an in-tree `Timer`.** The
+home window is hidden and re-shown over and over by the tray, and an in-tree timer keyed
+off `!opened` would have fired its open animation while the window was still hidden — the
+user would then see it snap in fully lit. `play_open` therefore resets both flags, and a
+16ms `Timer::single_shot` sets `opened` a frame later, so the first painted frame is
+genuinely at opacity 0. `play_close` sets `closing`, then hides the window 100ms later
+and resets the flags for the next show. A small `Fadeable` trait keeps one copy of each
+for the two window types.
+
+**Close now genuinely takes 100ms, so three call sites had to stop hiding instantly:**
+`App::close_note` and `App::delete_note` hand their window to `play_close` instead of
+`hide()`, and both windows' native `on_close_requested` returns
+`CloseRequestResponse::KeepWindowShown` — `HideWindow` would have hidden the window
+under the fade. The home path is now `App::hide_home`, which runs `sync_tray` and
+`maybe_quit` **in the fade's completion callback**: during those 100ms the window is
+still visible, so calling them immediately would have told the tray home was open.
+
+`App::quit` still hides everything instantly and on purpose — the process is going away.
+
+**Reduced motion (S1-44) mostly falls out of this**, as expected: `Motion.open` is
+already 100ms and `Motion.open-rise` already 0px when `Motion.reduced` is set, so the
+open collapses to the required 100ms crossfade with no travel. Nothing sets
+`Motion.reduced` from the OS yet — that is still S1-44's job.
+
+Nothing on DO NOT REGRESS is touched: resize border, tray lifetime, the body scrollbar
+and the buffered-write path are all unchanged. 28 tests, clippy clean.
 
 ---
 

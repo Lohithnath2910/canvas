@@ -159,16 +159,26 @@ export component HomeWindow inherits Window {
     background: transparent;
     title: "Canvas";
 
+    in-out property <bool> opened: false;
+    in-out property <bool> closing: false;
+
     property <bool> dragging: false;
     property <string> pending-delete: "";
 
     plate := Panel {
         x: Layout.plate-margin;
-        y: Layout.plate-margin;
+        y: Layout.plate-margin + (root.opened ? 0px : Motion.open-rise);
         width: parent.width - 2 * Layout.plate-margin;
         height: parent.height - 2 * Layout.plate-margin;
         corner-radius: Layout.radius-plate;
         dragging: root.dragging;
+
+        opacity: root.closing ? 0.0 : (root.opened ? 1.0 : 0.0);
+        animate y { duration: Motion.open; easing: Ease.standard; }
+        animate opacity {
+            duration: root.closing ? Motion.close : Motion.open;
+            easing: Ease.standard;
+        }
 
         drag-area := TouchArea {
             x: 16px;
