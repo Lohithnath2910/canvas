@@ -1,11 +1,49 @@
 import { Palette } from "theme/palette.slint";
+import { Typography } from "theme/typography.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
+import { IconSearch, IconPlus, IconCheck, IconSettings, IconNote } from "theme/icons.slint";
+
+export struct PaletteRow {
+    id: string,
+    label: string,
+    meta: string,
+    icon: string,
+}
+
+component PaletteGlyph inherits Rectangle {
+    in property <string> icon;
+    in property <color> stroke-color: Palette.dim;
+    width: Layout.icon-size-palette;
+    height: Layout.icon-size-palette;
+
+    if root.icon == "plus": IconPlus {
+        size: Layout.icon-size-palette;
+        stroke-color: root.stroke-color;
+    }
+    if root.icon == "check": IconCheck {
+        size: Layout.icon-size-palette;
+        stroke-color: root.stroke-color;
+    }
+    if root.icon == "settings": IconSettings {
+        size: Layout.icon-size-palette;
+        stroke-color: root.stroke-color;
+    }
+    if root.icon == "note": IconNote {
+        size: Layout.icon-size-palette;
+        stroke-color: root.stroke-color;
+    }
+}
 
 export component PaletteWindow inherits Window {
     callback dismissed();
+    callback query-changed(string);
 
-    in property <length> overlay-height: Layout.palette-row-input;
+    in property <[PaletteRow]> rows: [];
+    in-out property <string> query: "";
+
+    property <length> overlay-height:
+        Layout.palette-row-input + root.rows.length * Layout.palette-row-result;
 
     no-frame: true;
     background: transparent;
@@ -27,21 +65,101 @@ export component PaletteWindow inherits Window {
         height: root.overlay-height;
         corner-radius: Layout.radius-overlay;
         dragging: true;
-    }
+        clip: true;
 
-    keys := FocusScope {
-        width: 0px;
-        height: 0px;
-        key-pressed(event) => {
-            if (event.text == Key.Escape) {
-                root.dismissed();
-                return accept;
+        IconSearch {
+            x: Layout.pad-doc;
+            y: (Layout.palette-row-input - Layout.icon-size-palette) / 2;
+            size: Layout.icon-size-palette;
+            stroke-color: Palette.dim;
+        }
+
+        if root.query == "": Text {
+            x: Layout.query-x;
+            y: 0;
+            width: parent.width - Layout.query-x - Layout.pad-doc;
+            height: Layout.palette-row-input;
+            text: "TYPE A COMMAND";
+            color: Palette.dim;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+
+        query-input := TextInput {
+            x: Layout.query-x;
+            y: 0;
+            width: parent.width - Layout.query-x - Layout.pad-doc;
+            height: Layout.palette-row-input;
+            text <=> root.query;
+            single-line: true;
+            vertical-alignment: center;
+            color: Palette.text;
+            selection-background-color: Palette.edge;
+            selection-foreground-color: Palette.text;
+            text-cursor-width: 2px;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+            letter-spacing: Typography.title-tracking;
+            edited => {
+                root.query-changed(self.text);
             }
-            return reject;
+            key-pressed(event) => {
+                if (event.text == Key.Escape) {
+                    root.dismissed();
+                    return accept;
+                }
+                return reject;
+            }
+        }
+
+        for row[i] in root.rows: Rectangle {
+            x: 0;
+            y: Layout.palette-row-input + i * Layout.palette-row-result;
+            width: parent.width;
+            height: Layout.palette-row-result;
+
+            PaletteGlyph {
+                x: Layout.pad-doc;
+                y: (Layout.palette-row-result - Layout.icon-size-palette) / 2;
+                icon: row.icon;
+                stroke-color: Palette.dim;
+            }
+
+            Text {
+                x: Layout.result-label-x;
+                y: 0;
+                width: parent.width - Layout.result-label-x - Layout.pad-doc - Layout.result-meta-w;
+                height: parent.height;
+                text: row.label;
+                color: Palette.text;
+                font-family: Typography.body-face;
+                font-size: Typography.body-size;
+                vertical-alignment: center;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+
+            Text {
+                x: parent.width - Layout.pad-doc - Layout.result-meta-w;
+                y: 0;
+                width: Layout.result-meta-w;
+                height: parent.height;
+                text: row.meta;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                vertical-alignment: center;
+                horizontal-alignment: right;
+                wrap: no-wrap;
+            }
         }
     }
 
     init => {
-        keys.focus();
+        query-input.focus();
     }
 }

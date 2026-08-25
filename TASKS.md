@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-33` — palette input row + empty-query actions
+**Current task:** `S1-34` — palette results, selection, footer
 **Stage:** 1 — Sticky note + app shell
 **Done:** 21 ticked, 44 open (5 dropped, 4 added — S1-46, S1-47 and the two Spreadsheet tasks)
-**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`/`S1-32` (the palette shell) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`/`S1-32`/`S1-33` (the palette) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -149,8 +149,14 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
       with a 28px radius sits centred, its top about 15% down the screen
 - [ ] Press **Esc** — the palette goes away and the note is still there
 - [ ] The scrim covers the whole primary monitor, including over other apps
-- [ ] 🟡 the plate is **empty at this stage** — the input row is S1-33 and the results
-      are S1-34. The five 24px icons (**S1-31**) can only be judged once S1-33 draws them
+- [ ] The plate shows a 24px `search` icon, `TYPE A COMMAND` in small dim caps, and three
+      rows — `New note` / `New todo` / `Settings` with `CTRL+N` / `CTRL+T` / `CTRL+,`
+      right-aligned, each with a 24px icon → **S1-33**
+- [ ] The four 24px icons (`search`, `plus`, `check`, `settings`) look like the header's
+      16px ones, just bigger — same stroke weight relative to the glyph → **S1-31**
+- [ ] Type anything — the placeholder goes, the query shows in big caps with a tall caret,
+      and the three rows disappear (results arrive in S1-34) → **S1-33**
+- [ ] 🟡 nothing is selectable or clickable yet, and there is no footer — that is S1-34
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -562,13 +568,18 @@ mouse" bar reachable.
   Opened by a **temporary** Ctrl+K in the note body so the shell can be seen at all;
   **S1-35 owns the real hotkey** and should replace it.
 
-- [ ] **S1-33 · Palette input row + empty-query actions** — `M`
+- [ ] **S1-33 · Palette input row + empty-query actions** — `M` — 🟡 built, needs eyes
   Needs: S1-32. Input row 56px, padding 0/24, 24px `search` icon + 12px gap + query in
   the interface face at 22px + a 2×22 caret. Empty placeholder `TYPE A COMMAND`.
   Default actions: **New note** (⌘N, `plus`), **New todo** (⌘T, `check`), **Settings**
   (⌘, `settings`).
   *DoD:* opens showing the three defaults; typing replaces them with results.
   *Refs:* §9
+  Shortcut meta reads `CTRL+N` / `CTRL+T` / `CTRL+,` — §9's ⌘ is macOS notation and this
+  build is Windows. The rows are **display-only here**: selection, ⏎, the footer and
+  searching notes are all S1-34, so typing currently empties the list rather than showing
+  results. The plate's height follows the row count, so it collapses to the 56px input
+  row alone.
 
 - [ ] **S1-34 · Palette results, selection, footer** — `M`
   Needs: S1-33. Rows 48px, 24px icon + 16px gap + body-14 label + right-aligned

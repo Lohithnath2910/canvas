@@ -8,9 +8,13 @@ use slint::ComponentHandle;
 use canvas_doc::StickyNoteDoc;
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
-    platform_system_sans, CanvasTray, HomeWindow, NoteRow, PaletteWindow, StickyNoteWindow,
-    Typography,
+    platform_system_sans, CanvasTray, HomeWindow, NoteRow, PaletteRow, PaletteWindow,
+    StickyNoteWindow, Typography,
 };
+
+pub const ACTION_NEW_NOTE: &str = "new-note";
+pub const ACTION_NEW_TODO: &str = "new-todo";
+pub const ACTION_SETTINGS: &str = "settings";
 
 const PLATE_MARGIN: f32 = 24.0;
 const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
@@ -691,6 +695,29 @@ pub fn dump() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn default_actions() -> Vec<PaletteRow> {
+    vec![
+        PaletteRow {
+            id: ACTION_NEW_NOTE.into(),
+            label: "New note".into(),
+            meta: "CTRL+N".into(),
+            icon: "plus".into(),
+        },
+        PaletteRow {
+            id: ACTION_NEW_TODO.into(),
+            label: "New todo".into(),
+            meta: "CTRL+T".into(),
+            icon: "check".into(),
+        },
+        PaletteRow {
+            id: ACTION_SETTINGS.into(),
+            label: "Settings".into(),
+            meta: "CTRL+,".into(),
+            icon: "settings".into(),
+        },
+    ]
+}
+
 fn first_line(text: &str) -> String {
     let line = text.lines().next().unwrap_or("").trim();
     if line.chars().count() > 60 {
@@ -796,16 +823,29 @@ impl App {
                 palette
                     .global::<Typography>()
                     .set_system_sans(platform_system_sans().into());
-                let weak = Rc::downgrade(app);
-                palette.on_dismissed(move || {
-                    if let Some(app) = weak.upgrade() {
-                        App::hide_palette(&app);
-                    }
-                });
+                {
+                    let weak = Rc::downgrade(app);
+                    palette.on_dismissed(move || {
+                        if let Some(app) = weak.upgrade() {
+                            App::hide_palette(&app);
+                        }
+                    });
+                }
+                {
+                    let weak = Rc::downgrade(app);
+                    palette.on_query_changed(move |query| {
+                        if let Some(app) = weak.upgrade() {
+                            App::refresh_palette(&app, query.as_ref());
+                        }
+                    });
+                }
                 app.borrow_mut().palette = Some(palette.clone_strong());
                 palette
             }
         };
+
+        palette.set_query(slint::SharedString::new());
+        App::refresh_palette(app, "");
 
         if let Some(bounds) = crate::screen::primary_bounds() {
             let win = palette.window();
@@ -819,6 +859,24 @@ impl App {
         if let Err(e) = palette.show() {
             eprintln!("canvas: palette failed to show: {e}");
         }
+    }
+
+    pub fn refresh_palette(app: &SharedApp, query: &str) {
+        let Ok(a) = app.try_borrow() else {
+            return;
+        };
+        let Some(palette) = a.palette.as_ref().map(|p| p.clone_strong()) else {
+            return;
+        };
+        drop(a);
+
+        let rows = if query.trim().is_empty() {
+            default_actions()
+        } else {
+            Vec::new()
+        };
+        let model: slint::VecModel<PaletteRow> = slint::VecModel::from(rows);
+        palette.set_rows(slint::ModelRc::new(model));
     }
 
     pub fn hide_palette(app: &SharedApp) {

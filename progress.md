@@ -42,23 +42,23 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-33` — palette input row + empty-query actions.** ([TASKS.md](TASKS.md), section 1i.)
-The shell from S1-32 is an empty 640px plate; this fills its top 56px. Input row: padding
-`0 24`, a 24px `search` icon (`IconSearch { size: Layout.icon-size-palette; }`), a 12px
-gap, the query in the interface face at 22px, and a 2×22 caret. Empty placeholder
-`TYPE A COMMAND` in the interface face at 11px, `dim`. Then the three empty-query default
-actions from §9 — **New note** (⌘N, `plus`), **New todo** (⌘T, `check`), **Settings**
-(⌘, `settings`) — which means `overlay-height` stops being a constant and starts being
-`56 + rows*48 + 32`.
+**`S1-34` — palette results, selection, footer.** ([TASKS.md](TASKS.md), section 1i.) The
+rows are drawn (S1-33) but inert. This task adds: **selection** — row fill steps to
+`elev-raised` and its icon to `text`, **no accent fill and no left bar** (§9, rule 2);
+**↑↓** to move it and **⏎** to activate; a **32px footer** with a 1px `edge` rule above,
+the result count on the left and `↑↓ MOVE · ⏎ OPEN · ESC CLOSE` on the right; and
+**searching existing notes**, which is what a non-empty query should show instead of the
+empty list it currently gives.
 
-Two things to carry in from the shell: use a bare `TextInput`, never `std-widgets`
-(trap 5), and **do not add a `TouchArea` that spans the plate** — the result rows in
-S1-34 need their own disjoint regions (trap 6). Note that **New todo** is a real create
-path that does not exist yet: `app.rs` only ever creates `KIND_STICKY_NOTE`, and Stage W's
-SW-01 is what generalises that. Wire it to a no-op with a note here rather than
-half-building a todo.
+`Layout.palette-footer-h` and `palette-row-result` already exist. Keys belong in
+`query-input`'s `key-pressed` — it holds focus, and `Key.UpArrow`/`Key.DownArrow`/
+`Key.Return` reach it before the `TextInput` uses them. Rows can take a `TouchArea` each
+since rows are disjoint from one another; the thing to avoid is one area spanning the
+plate (trap 6). Activating `new-note` should call the existing `App::create_note` and
+dismiss; `new-todo` has no create path until Stage W's SW-01 and `settings` has no screen
+at all — say so rather than faking either.
 
-After it: `S1-34` onward in `TASKS.md`, in numeric order.
+After it: `S1-35` onward in `TASKS.md`, in numeric order.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -220,6 +220,43 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   as S1-47 rather than done on the way past.
 - **The tray icon is white on transparent**, which reads on the default dark Windows 11
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
+
+---
+
+### 2026-08-25 — S1-33: palette input row and the three default actions
+
+- 🟡 **The palette plate now has a search icon, a query line and three action rows.**
+  Written and clippy-clean; **not watched working**, so the box stays open.
+
+Straight from §9: 56px input row, `pad-doc` (24px) either side, a 24px `search` icon, a
+12px gap to the query, the query in the interface face at 22px with a 2px caret, and
+`TYPE A COMMAND` in the interface face at 11px `dim` when it is empty. The rows are 48px,
+with a 24px icon at 24px in, a 16px gap, the label in the body face at 14px, and the
+shortcut right-aligned in the interface face at 11px `dim`.
+
+**The shortcuts read `CTRL+N` / `CTRL+T` / `CTRL+,`, not `⌘N` / `⌘T` / `⌘,`.** §9's
+notation is macOS; this build is Windows and the keys S1-35 will actually register are
+Ctrl. Showing a ⌘ that does nothing on this machine would be a lie in the UI.
+
+**The rows are display-only.** Selection, ↑↓, ⏎, the footer and searching notes are all
+S1-34, so a non-empty query currently yields an empty list rather than results. That is
+the honest half-state, not an oversight — §9's own DoD for S1-33 is "opens showing the
+three defaults; typing replaces them".
+
+Two smaller decisions:
+- The plate's height is computed from the row count
+  (`palette-row-input + rows.length * palette-row-result`) rather than fixed, so it
+  collapses to the bare 56px input row once a query empties the list. The footer will add
+  its 32px in S1-34.
+- The rows come from Rust (`default_actions()`), and so will the note search — §13.6 says
+  to compute derived list data in Rust rather than reactively in Slint.
+
+Three placement numbers went into `theme/layout.slint` rather than being inlined:
+`query-x` (60px = 24 + 24 + 12), `result-label-x` (64px = 24 + 24 + 16), both read
+straight off §9's own arithmetic, and `result-meta-w` (120px), which §9 does not give —
+it is the right-hand column the meta is aligned in, and it is on the 8px scale.
+
+Nothing on DO NOT REGRESS is touched. 28 tests, clippy clean.
 
 ---
 
