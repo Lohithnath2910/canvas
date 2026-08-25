@@ -8,7 +8,8 @@ use slint::ComponentHandle;
 use canvas_doc::StickyNoteDoc;
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
-    platform_system_sans, CanvasTray, HomeWindow, NoteRow, StickyNoteWindow, Typography,
+    platform_system_sans, CanvasTray, HomeWindow, NoteRow, PaletteWindow, StickyNoteWindow,
+    Typography,
 };
 
 const PLATE_MARGIN: f32 = 24.0;
@@ -108,6 +109,7 @@ pub struct App {
     store: Store,
     notes: HashMap<String, Note>,
     home: Option<HomeWindow>,
+    palette: Option<PaletteWindow>,
     tray: Option<CanvasTray>,
 }
 
@@ -123,6 +125,7 @@ impl App {
             store,
             notes: HashMap::new(),
             home: None,
+            palette: None,
             tray: None,
         }));
 
@@ -590,6 +593,15 @@ fn wire_note(app: &SharedApp, id: &str, window: &StickyNoteWindow) {
 
     {
         let weak = Rc::downgrade(app);
+        window.on_palette_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::show_palette(&app);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
         let id = owned_id.clone();
         window.on_delete_confirmed(move || {
             let Some(app) = weak.upgrade() else {
@@ -769,6 +781,52 @@ impl App {
         }
     }
 
+    pub fn show_palette(app: &SharedApp) {
+        let existing = app.borrow().palette.as_ref().map(|p| p.clone_strong());
+        let palette = match existing {
+            Some(palette) => palette,
+            None => {
+                let palette = match PaletteWindow::new() {
+                    Ok(palette) => palette,
+                    Err(e) => {
+                        eprintln!("canvas: palette failed to open: {e}");
+                        return;
+                    }
+                };
+                palette
+                    .global::<Typography>()
+                    .set_system_sans(platform_system_sans().into());
+                let weak = Rc::downgrade(app);
+                palette.on_dismissed(move || {
+                    if let Some(app) = weak.upgrade() {
+                        App::hide_palette(&app);
+                    }
+                });
+                app.borrow_mut().palette = Some(palette.clone_strong());
+                palette
+            }
+        };
+
+        if let Some(bounds) = crate::screen::primary_bounds() {
+            let win = palette.window();
+            win.set_size(slint::PhysicalSize::new(
+                bounds.width as u32,
+                bounds.height as u32,
+            ));
+            win.set_position(slint::PhysicalPosition::new(bounds.x, bounds.y));
+        }
+
+        if let Err(e) = palette.show() {
+            eprintln!("canvas: palette failed to show: {e}");
+        }
+    }
+
+    pub fn hide_palette(app: &SharedApp) {
+        if let Some(palette) = &app.borrow().palette {
+            let _ = palette.hide();
+        }
+    }
+
     pub fn hide_home(app: &SharedApp) {
         let Some(home) = app.borrow().home.as_ref().map(|h| h.clone_strong()) else {
             return;
@@ -799,6 +857,9 @@ impl App {
             }
             if let Some(home) = &a.home {
                 let _ = home.hide();
+            }
+            if let Some(palette) = &a.palette {
+                let _ = palette.hide();
             }
             if let Some(tray) = &a.tray {
                 let _ = tray.hide();

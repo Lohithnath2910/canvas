@@ -42,20 +42,23 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`S1-32` — palette overlay shell.** ([TASKS.md](TASKS.md), section 1i.) 640px wide,
-`Layout.radius-overlay` (28px), `plate` fill, 1px `edge`, the drag-depth shadow. Centred
-horizontally with its top at ~15% of screen height, over the `scrim` token — **flat, no
-blur**, and the one deliberate translucency exception in the product, only while the
-palette is open (§5.1, §9).
+**`S1-33` — palette input row + empty-query actions.** ([TASKS.md](TASKS.md), section 1i.)
+The shell from S1-32 is an empty 640px plate; this fills its top 56px. Input row: padding
+`0 24`, a 24px `search` icon (`IconSearch { size: Layout.icon-size-palette; }`), a 12px
+gap, the query in the interface face at 22px, and a 2×22 caret. Empty placeholder
+`TYPE A COMMAND` in the interface face at 11px, `dim`. Then the three empty-query default
+actions from §9 — **New note** (⌘N, `plus`), **New todo** (⌘T, `check`), **Settings**
+(⌘, `settings`) — which means `overlay-height` stops being a constant and starts being
+`56 + rows*48 + 32`.
 
-The real decision is what the palette *is* as a window. Every existing window is
-`no-frame` with a 24px transparent `plate-margin`; a scrim that covers the screen means a
-full-screen transparent window instead, and on Windows that also has to not steal the
-desktop-layer behaviour pinned notes rely on. `crate::screen::virtual_bounds()` (added in
-S1-30) already gives the screen rect needed to size and place it. `IconGlyph` takes a
-`size` as of S1-31, so `Layout.icon-size-palette` is ready for the 24px row icons.
+Two things to carry in from the shell: use a bare `TextInput`, never `std-widgets`
+(trap 5), and **do not add a `TouchArea` that spans the plate** — the result rows in
+S1-34 need their own disjoint regions (trap 6). Note that **New todo** is a real create
+path that does not exist yet: `app.rs` only ever creates `KIND_STICKY_NOTE`, and Stage W's
+SW-01 is what generalises that. Wire it to a no-op with a note here rather than
+half-building a todo.
 
-After it: `S1-33` onward in `TASKS.md`, in numeric order.
+After it: `S1-34` onward in `TASKS.md`, in numeric order.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
@@ -217,6 +220,49 @@ The user made these after seeing the app run. They win over CLAUDE.md.
   as S1-47 rather than done on the way past.
 - **The tray icon is white on transparent**, which reads on the default dark Windows 11
   taskbar and will read poorly on a light one. Worth revisiting if the user runs light.
+
+---
+
+### 2026-08-25 — S1-32: the command palette's overlay shell
+
+- 🟡 **`ui/palette.slint` exists and can be opened.** A full-screen scrim with a 640px,
+  28px-radius plate centred on it. Written and clippy-clean; **not watched working**, so
+  the box stays open.
+
+**What the palette is, as a window.** Every other window in the app is `no-frame` with a
+24px transparent `plate-margin` and is sized to its own content. The palette cannot be:
+§9 wants a `scrim` behind it covering what is on screen, so it has to be a window the size
+of the screen with a transparent background, painting the scrim itself.
+
+- `always-on-top: true`. This is **not** a contradiction of the user's "never
+  always-on-top" override — that override is about *notes*, which were intrusive floating
+  over every app. A command palette that another window can cover is simply broken.
+- Sized and positioned to the **primary monitor** via a new
+  `screen::primary_bounds()` (`SM_CXSCREEN`/`SM_CYSCREEN`), not the virtual desktop rect
+  S1-30 uses. §9 says "centred horizontally, top at ~15% of screen height" — one screen.
+  Spanning the scrim across every monitor would dim displays the user is not looking at.
+  Opening on whichever monitor currently has focus would be better; that needs a
+  per-monitor lookup and is not what this task asked for.
+- The plate is the existing `Panel` with `corner-radius: Layout.radius-overlay` and
+  `dragging: true`, which is how §9's drag-depth shadow is already expressed. Reusing
+  `Panel` also gets the `plate` fill and 1px `edge` for free.
+
+**No `TouchArea` anywhere in the palette.** Click-outside-to-dismiss is not in §9, and a
+full-window `TouchArea` for it would sit underneath every result row S1-34 adds — exactly
+trap 6, which Slint does not resolve by z-order. Dismissal is Esc, through a zero-size
+`FocusScope` that takes focus in `init`, which is what §9's own footer legend says.
+
+**The Ctrl+K that opens it is a stopgap and is S1-35's to replace.** It is bound in the
+note body's `key-pressed`, next to the existing Ctrl+G, so it only fires while a note has
+focus — not an OS-global hotkey. Without it the shell could not be put on screen at all,
+which would have left S1-33 and S1-34 building blind on top of an unseen thing.
+
+Five §9 numbers went into `theme/layout.slint` — `palette-w`, `palette-row-input`,
+`palette-row-result`, `palette-footer-h`, `palette-top-fraction`. The last three are for
+S1-33/S1-34; they are here because they come from the same paragraph of the spec.
+
+`App::quit` now hides the palette along with everything else. Nothing on DO NOT REGRESS is
+touched. 28 tests, clippy clean.
 
 ---
 

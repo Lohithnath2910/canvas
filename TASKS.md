@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-25
-**Current task:** `S1-32` — palette overlay shell
+**Current task:** `S1-33` — palette input row + empty-query actions
 **Stage:** 1 — Sticky note + app shell
 **Done:** 21 ticked, 44 open (5 dropped, 4 added — S1-46, S1-47 and the two Spreadsheet tasks)
-**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping) — see the verification queue
+**Left 🟡 for the user to look at:** `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`/`S1-32` (the palette shell) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -142,6 +142,15 @@ are confirmed — leave them ticked. Do not re-open a ticked line to "make sure"
       downward on the way out
 - [ ] Same two checks on the home window: tray → `Open home` fades it up, `x` fades it out
 - [ ] Delete a note from its own trash icon — same 100ms fade, not an instant vanish
+
+**Command palette** → **S1-31**, **S1-32**
+- [ ] Click into a note's body and press **Ctrl+K** — the screen dims to a flat scrim
+      (dimmed, **not** blurred — text behind it must stay sharp) and a 640px-wide plate
+      with a 28px radius sits centred, its top about 15% down the screen
+- [ ] Press **Esc** — the palette goes away and the note is still there
+- [ ] The scrim covers the whole primary monitor, including over other apps
+- [ ] 🟡 the plate is **empty at this stage** — the input row is S1-33 and the results
+      are S1-34. The five 24px icons (**S1-31**) can only be judged once S1-33 draws them
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -540,12 +549,18 @@ mouse" bar reachable.
   **Nothing renders at 24px until the palette exists**, so this box can only honestly be
   ticked alongside S1-32.
 
-- [ ] **S1-32 · Palette overlay shell** — `M`
+- [ ] **S1-32 · Palette overlay shell** — `M` — 🟡 built, needs eyes
   Needs: S1-31. 640px wide, radius 28, `plate` fill, 1px `edge`, drag-depth shadow.
   Centred horizontally, top at ~15% of screen height. `scrim` behind it — **flat, no
   blur**; the one deliberate translucency exception, and only while the palette is open.
   *DoD:* appears centred with the scrim; nothing behind it is blurred.
   *Refs:* §9, §5.1
+  `ui/palette.slint` — a frameless, transparent, always-on-top window sized to the
+  **primary monitor**, drawing the scrim plus a `Panel` at `dragging: true` for the
+  drag-depth shadow. Esc dismisses. **No `TouchArea` anywhere in it** — click-outside is
+  not in §9, and a full-window one would sit under every row S1-34 adds (trap 6).
+  Opened by a **temporary** Ctrl+K in the note body so the shell can be seen at all;
+  **S1-35 owns the real hotkey** and should replace it.
 
 - [ ] **S1-33 · Palette input row + empty-query actions** — `M`
   Needs: S1-32. Input row 56px, padding 0/24, 24px `search` icon + 12px gap + query in
