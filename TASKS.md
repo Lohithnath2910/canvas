@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** the **VERIFICATION QUEUE walk-through** — every buildable Stage W task is done, and the user asked on 2026-08-26 for the queue to be cleared once they were. `SW-12`, `SW-13` and `SW-14` are blocked on open questions 4, 5, 6 and 7.
-**Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 28 ticked, 43 open (5 dropped, 10 added — S1-46 to S1-51, SW-16, SW-17, and the two Spreadsheet tasks). 150 tests pass.
+**Current task:** `SW-22` — typing into a Kanban card or Todo row dies after one character. Then **Stage W2** in order: SW-23, SW-18, SW-19, SW-20, SW-21, SW-13, SW-14.
+**Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
+**Done:** 28 ticked. 150 tests pass. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -111,11 +111,17 @@ This queue is how the loop keeps moving without the user in it: anything a sessi
 see gets committed, logged 🟡, and listed here with exactly what to click. Ticked lines
 are confirmed — leave them ticked. Do not re-open a ticked line to "make sure".
 
-**⚠ The user asked on 2026-08-26 for this queue to be CLEARED — walked end to end and
-ticked or turned into numbered bugs — once the Stage W widgets are all wired and working.**
-So it is not an indefinite parking lot. When the SW tasks run out, the next unit of work is
-the walk-through, with the user at the keyboard, not another feature. Say so in the
-end-of-run report every time until it happens.
+**⚠ The user asked on 2026-08-26 for this queue to be CLEARED** — walked end to end and
+ticked or turned into numbered bugs — **once the widgets are wired and working.** They then
+walked the app themselves and found that the Kanban is not working (SW-22, SW-21), so the
+clearing is now gated on **Stage W2** rather than Stage W. It is still not an indefinite
+parking lot: when Stage W2 is done, the walk-through is the next unit of work, not another
+feature. Say so in the end-of-run report every time until it happens.
+
+**A session can now take its own screenshots** — the recipe is in `progress.md`'s START HERE.
+It is not a substitute for the user's eyes on *"is this beautiful"*, but it does settle
+alignment, spacing and "did it render at all", so **check the queue lines you can check
+yourself before handing the list over.**
 
 **Note window**
 - [ ] **Drag the header — the plate must stay glued to the grab point for the whole
@@ -1461,52 +1467,278 @@ because the app is currently hardcoded to a single type.
   drawing at once keeping both strokes whole, and **two peers extending the same stroke
   losing no points** (20 points survive, none duplicated).
 
-- [ ] **SW-12 · Whiteboard widget window** — `L`
-  Needs: SW-11. **No artboard exists for this one** — §10.5 is the only reference, so
-  expect real design questions and ask rather than guess (§4.1). Infinite canvas, shapes,
-  freehand strokes. Floating pill-shaped tool dock near the working area, **not** a docked
-  toolbar. An 8px dot grid at `edge` opacity — the one place in the product where the
-  underlying grid is deliberately made visible.
-  *DoD:* draw, pan, zoom, erase; strokes survive a restart. Anything §10.5 does not answer
-  becomes an open question below, not a guess.
 
-### Wg — Spreadsheet
+- [ ] **SW-12 · Whiteboard widget window**, **SW-13 · `SheetDoc`**, **SW-14 · Spreadsheet
+  widget window** — all three **moved to Stage W2 below**, rewritten on 2026-08-26 with the
+  user's answers to open questions 4, 5, 6 and 7. Do not build from this section.
 
-**Requested by the user 2026-08-25**, after the widget list was reviewed. It is **not in
-CLAUDE.md at all** — there is no §10 subsection and no artboard for it, so it carries more
-unanswered design questions than any other type here. Open questions 5 and 6 below must be
-answered before SW-13 starts.
+## Stage W2 — the rework the user asked for on 2026-08-26
+
+The user walked the running app and answered ten questions. Three things came out of it:
+**two live bugs**, **a whole editing layer that did not exist** (§10.3 and §10.4 specify
+readouts and no way to put anything into them), and **the Spreadsheet unblocked**. The
+Whiteboard is explicitly deferred.
+
+Work these in order. `SW-22` first because it is small and it is the same root cause that
+would otherwise be re-introduced three more times.
+
+### W2a — the bug that is already shipped
+
+- [ ] **SW-22 · Typing into a repeater row dies after one character** — `S`
+  Needs: nothing. **Reported by the user 2026-08-26**, on the Kanban:
+  > *"each card is only letting me type a single letter and nothing more than that"*
+
+  **Root cause, and it is not specific to the Kanban.** Every keystroke fires
+  `on_card_title_edited` → `kanban_edit` → `refresh_kanban`, which builds a **new
+  `VecModel` and calls `set_cards`**. Slint's repeater tears down and rebuilds its items,
+  so the `TextInput` the cursor was in is destroyed and recreated with `text: card.title`.
+  Focus is lost and the next keypress goes nowhere.
+  **The Todo widget has the identical shape** — `on_item_text_edited` → `todo_edit` →
+  `refresh_todo` → `set_items`. It has never been watched, so assume it is broken the same
+  way and fix both in this task.
+  **The fix is to stop rebuilding the model while a row is being edited.** Write the
+  keystroke into the CRDT (that part is right and must not change — Hard Constraint 2 says
+  the local doc applies first), but skip the `set_*` call whenever `editing-id` is non-empty,
+  and do one refresh on commit. Do **not** fix it by debouncing or by making the model
+  mutable in place — a repeater rebuild under a live caret is the thing to avoid, not to
+  make faster.
+  *DoD:* type a full sentence into a Kanban card and into a Todo row without losing the
+  caret; the text is in the document afterwards; a restart still shows it.
+  ⚠ A regression test is hard here (it needs an event loop). At minimum add a test that
+  `editing-id` suppresses the refresh path, and put the click-through in the queue.
+
+### W2b — the editing layer
+
+- [ ] **SW-18 · `Sheet` — the in-widget overlay every editor uses** — `M`
+  Needs: SW-03 (`TextField`, `Button`). **Answering open question 10**, user 2026-08-26:
+  > *"overlay inside widget but seamless and awesome"*
+
+  A form that slides over the widget's own plate. **Not a separate window and not a modal
+  over the desktop** — §7.6 state 10 already establishes the in-widget pattern for delete
+  confirm ("no modal, no desktop dimming") and this is the same idea at full height.
+  Anatomy, all from tokens that already exist:
+  - Covers the plate **below the 32px header band**, so the glyph strip, title and the
+    three controls stay visible and the widget still reads as itself.
+  - Fill `plate` **opaque** — it must fully hide the board/grid behind it, not veil it.
+    No scrim, no blur, no dimming (rule 5).
+  - 1px `edge` hairline along its top, flush with the header rule already there.
+  - Opens over 160ms, opacity 0→1 **plus the 6px rise** (§5.5's widget-open values — reuse
+    `Motion.open` and `Motion.open-rise`, do not invent a new duration). Closes at 100ms,
+    opacity only.
+  - Body: a `VerticalLayout` of `TextField`s (§6.6) at 16px padding, `field-gap` between.
+  - Footer row pinned to the bottom: `SAVE` (`primary`) + `CANCEL` (`default`), gap 8, and
+    `DELETE` (`destructive`) **right-aligned and only when editing something that exists**.
+  - `Esc` cancels, `Enter` in any single-line field saves. Focus starts in the first field.
+  **The sizing decision, made here so nothing re-derives it:** five fields plus a button row
+  is ~320px of content and the Calendar plate is 360px tall. **The sheet scrolls** — wrap
+  the field column in a `Flickable` with the existing `ScrollBar` from `theme/controls.slint`
+  (the same 4px thumb the note body and home list use). **The widget must not resize itself
+  to fit the form** — a window that grows under the pointer is a surprise, and §7.3 gives
+  the user the resize border if they want more room.
+  Build it generic — `in property <[SheetField]>` is tempting but a typed component per
+  editor is less indirection; what belongs in `Sheet` is the **chrome**: the slide-over
+  rectangle, the hairline, the scroll, the footer buttons and the key handling.
+  *DoD:* a throwaway sheet with three fields opens over the Kanban, scrolls, saves, cancels
+  on `Esc`, and never lets the board behind it show through.
+
+- [ ] **SW-19 · Date and time pickers in this design language** — `L`
+  Needs: SW-18. **Answering the user's Q3, 2026-08-26**, who sent two Android screenshots
+  (Material 3 clock face and month grid) and said:
+  > *"i want time to be selected like android widget, like in the images, use how you want
+  > but style should be matching our app"*
+
+  So: **that interaction, none of that skin.** The reference images are purple-on-grey with
+  large type; both of those are ours to replace.
+  **`TimePicker`** — the Material layout, monochrome:
+  - Two tapping targets at the top, `HH` and `MM`, split by a `:`. The **selected** one is
+    filled `text` with `base` numerals; the other is `elev-recessed` with `text` numerals,
+    1px `edge`. This is the checkbox language (§6.4) — *the fill is the state*, no accent.
+  - **Numerals at 22px interface face.** The reference shows them much larger; §5.2 allows
+    the interface face at **11px and 22px only** and no new size gets invented (§5). 22px is
+    the ceiling and it is what the widget title already uses.
+  - A circular face below: 24-hour double ring like the screenshot — outer ring `00`–`11`,
+    inner ring `12`–`23` — labels at 11px interface face `dim`. The selected hour is a
+    filled `text` disc with a `base` numeral; the hand is a **1px `text` line** from centre
+    to that disc, and a 3px `text` dot at the centre (the dot-cell shape again).
+  - Minutes ring in 5s, same treatment, with in-between minutes snapping to the nearest
+    label but keeping their real value in the readout.
+  - Footer: `CANCEL` (`default`) + `OK` (`primary`), gap 8. The reference's keyboard-entry
+    toggle is worth having as a fourth thing later; not in v1.
+  **`DatePicker`** — the month grid:
+  - Header: the full date in 22px interface face (`WED, 26 AUG`), a 1px `edge` rule under it.
+  - Month name + year at 11px interface face, `‹` and `›` stepping months. Use the existing
+    16px glyph geometry rather than a new chevron if one fits; otherwise this is the **one**
+    place a new §5.6 glyph is justified — draw it on the 16-unit grid, 1.5px, square caps.
+  - `S M T W T F S` column heads at 11px interface face `dim`.
+  - Day numbers at **body face 14** — they are content, not labels.
+  - **Today** gets the Calendar widget's own treatment: label steps to `text` with a 1px
+    `text` rule above it (§10.4), so the two surfaces agree.
+  - The **selected** day is a filled `text` disc with a `base` numeral. Nothing else fills.
+  ⚠ **Verify before writing the face:** the circular layout needs `sin()`/`cos()` in Slint
+  expressions. Confirm they exist in **1.17.1** and what unit they take (`deg` vs `rad`)
+  before building on them — §4.1's rule. If they are missing, precompute the 12/24 label
+  positions as a constant table in Rust and pass them in; do not fake a circle with a
+  rotated `HorizontalLayout`.
+  *DoD:* pick a time and a date, both round-trip to epoch millis correctly across a
+  timezone (reuse `calendar_time`, do not write a second date conversion), and neither
+  picker introduces a colour, radius, duration or font size not already in §5.
+
+### W2c — Calendar, made usable
+
+- [ ] **SW-20 · Calendar: event editor, live event, and the info bar** — `L`
+  Needs: SW-18, SW-19. **Answering open question 10**, user 2026-08-26:
+  > *"they should be able to click on a day or something and then it should open a popup of
+  > similar style of the rest of app to ask us like google calendar, name, timings, location
+  > etc etc all important stuff, and then all will be placed exactly, we can have sparky or
+  > highlighted card if currently that is going on based on the time and day and like at the
+  > top or bottom of the widget we can see the info, like name, timings and what time is
+  > left etc etc, something really cool"*
+
+  **Fields: `name`, `start`, `end`, `location`, `notes`.** Confirmed by the user. `name`,
+  `start` and `end` are required; `location` and `notes` are optional and render nothing
+  when empty. `CalendarDoc` already stores `{id, title, start, end, attendees}` — **add
+  `location` and `notes` as string fields**; `attendees` stays in the document unused rather
+  than being removed, since §11.3 names it and Stage 3 will want it.
+  **Creating:** click anywhere in a day column → the sheet opens with `start` pre-filled to
+  the clicked position rounded to the nearest 30 minutes on that day, and `end` at +1 hour.
+  Clicking an existing chip opens the same sheet on that event, with `DELETE` shown.
+  ⚠ **Hit-testing: one `TouchArea` per day column and resolve chip-vs-empty in Rust from the
+  pointer's y, or the chips get their own areas and overlap each other.** Chips at nearby
+  times *do* overlap — that is why SW-08 deleted the chip handler in the first place. This
+  is §13.3 and it is the single most likely thing to be got wrong here.
+  **The live event.** An event whose `start ≤ now < end` on today's column gets:
+  a **`signal` 3×3 dot** at the chip's leading edge, the same 3×3 cell the glyph strip uses,
+  plus the chip's border stepping from `edge` to `text`.
+  ⚠ **This is a deliberate override of rule 2** ("red appears twice in the whole product").
+  The user was told and asked for it anyway — 2026-08-26, *"can use red etc to show the dot
+  or something unique, i want it to be visually beautiful"*. It is **override 15** in
+  `progress.md`. Do not extend it: red on the live dot, the error strip and the destructive
+  button, and nowhere else.
+  **The info bar** sits **at the bottom of the plate**, above the 16px padding, 1px `edge`
+  rule above it — the same slot and the same rule as the Todo widget's `N OPEN · N DONE`
+  footer, so the two widgets agree. Two states:
+  - Something running: `NOW` in `text`, then the name, then `09:30–10:00`, then
+    `12 MIN LEFT`, all 11px interface face. `NOW` and the name at `text`, the rest `dim`.
+  - Nothing running: `NEXT UP` in **`dim`** rather than `text`, then the same three parts.
+    That is the *"slightly different visual"* the user asked for — the label's weight of
+    attention changes, nothing moves and nothing else recolours.
+  - Nothing today and nothing ahead this week: the bar holds `NOTHING SCHEDULED` in `dim`.
+  It must **tick** — the minutes-left number is wrong the moment it is painted otherwise.
+  Reuse the existing 700ms poll in `wire_calendar` (which already recomputes `today`);
+  refresh the bar when the displayed minute changes, not every tick.
+  *DoD:* create an event by clicking a day, it lands on the right day at the right height,
+  survives a restart, is editable and deletable from the same sheet; a currently-running
+  event shows the red dot and the outline; the bar counts down and flips to `NEXT UP`.
+
+### W2d — Kanban, fixed and finished
+
+- [ ] **SW-21 · Kanban: drag that actually tracks, and a card editor** — `L`
+  Needs: SW-18, SW-19, SW-22. **Three defects the user reported 2026-08-26:**
+  > *"its too glitchy to move the cards around etc and the text alignments etc too and its
+  > not smooth at all to move the cards around"*
+
+  **(1) The drag. Root cause is known and it is the same one `S1-51` already fixed once for
+  window drag.** The card's `TouchArea` is *on the card*, and the card moves by `held-dx`.
+  So `self.mouse-x - self.pressed-x` measures the pointer against a target that is running
+  away from it — the delta feeds back into the thing it is measured from and the card
+  stutters and drifts.
+  **The fix: the touch region must not move.** Leave the card `Rectangle` at its model
+  position (drop it to `dim` or hide it while held) and draw a **separate floating card at
+  board level** that follows the pointer. The `TouchArea` stays where it was, so
+  `mouse-x - pressed-x` stays honest for the whole gesture. Do **not** try to fix this by
+  anchoring to `absolute-position` or by accumulating smaller deltas — trap 4 and `S1-51`
+  are both about exactly that and it is written down twice already.
+  **(2) Text alignment — the user says the column header is what looked wrong.** Check the
+  title/count row: the count is right-aligned into a `Text` whose width is intrinsic, and
+  the title's width subtracts `count-text.width`, so a two-digit count shifts the title. Also
+  check the card title against its 22px line box and the meta against its 16px one.
+  **(3) The card editor.** Same `Sheet` as the Calendar: **`title`, `assignee`, `due date`,
+  `description`** — confirmed by the user. Opening it replaces the inline `TextInput`
+  entirely, which also retires the single-letter bug on this widget (`SW-22` still has to fix
+  the Todo). `KanbanDoc` has `set_title`/`set_assignee`/`set_due` already; **add
+  `description`**. The meta line keeps §10.3's `ASSIGNEE · DATE` / `UNASSIGNED`.
+  *DoD:* drag a card across three columns without a stutter and drop it exactly where the
+  outline says; the column header holds still as counts change; a card's four fields are
+  editable from the sheet and survive a restart.
+
+### W2e — Spreadsheet, unblocked
+
+Open questions 5, 6 and 7 were answered by the user on 2026-08-26. All three answers are
+folded into the two tasks below; the questions are closed.
 
 - [ ] **SW-13 · `SheetDoc`** — `L`
-  Needs: SW-04. **The data shape is an open question — do not guess it** (§4.1: ask on
-  anything touching a CRDT data shape). The likely answer is a **sparse map keyed by cell
-  address**, not an array of row arrays: a nested-array grid has the same concurrent-move
-  failure mode as Kanban's columns, and inserting a row or column mid-sheet would rewrite
-  every key below it. If row and column insertion is in scope, both axes need
-  **fractional indices**, exactly as SW-09 does for cards.
-  *DoD:* unit tests — two docs editing different cells converge; two docs editing the
-  **same** cell converge without either edit being silently dropped.
+  Needs: SW-04. **Answer to open question 6 — the one that decides the shape:**
+  > *"yes can do anything possible"* — rows and columns can be inserted **mid-sheet**.
+
+  So a cell can **not** be keyed by `(row_index, col_index)`: inserting row 3 would have to
+  rewrite every key below it, and two peers inserting at once would collide. The shape is:
+  - `rows`: a **`yrs::Array` of maps `{id}`** in visual order. Insertion anywhere is an array
+    insert, and `yrs::Array` is already a sequence CRDT — **this is why no fractional index
+    is needed here**, unlike the Kanban, where cards live in a `Map` precisely because they
+    move *between* parents. Rows and columns never change parent, only position.
+  - `cols`: the same.
+  - `cells`: a **`yrs::Map` keyed by `"<row_id>:<col_id>"`** → `{value}`. A cell's key never
+    changes when the sheet is reshaped, which is the whole point.
+  - `merges`: a `yrs::Map` keyed by the **anchor** cell key → `{rows, cols}` span. Covered
+    cells keep their values in `cells` and are simply not painted.
+  - `col_w` / `row_h`: `yrs::Map`s keyed by col/row id → pixels. Absent means the default.
+  **Answer to open question 5:** *"for now let it be just normal values and later we can
+  expand to formulas etc"* — **values only.** Store `value` as a plain string and do not add
+  a `formula` field speculatively; the shape above takes one without disturbance later.
+  *DoD:* insert a row in the middle of a filled sheet and every cell below keeps its value ·
+  two docs inserting rows at the same index converge with no loss · a merge survives a
+  reload · deleting a row does not orphan a merge anchored on it.
 
 - [ ] **SW-14 · Spreadsheet widget window** — `L`
-  Needs: SW-03, SW-13. Grid of cells with row and column headers.
-  What the design language already settles, without needing a new token:
-  - Grid lines are 1px `edge` hairlines (§6.7's divider rule — the gap positions them).
-  - Row/column headers are interface face 11 UPPERCASE `dim`, like every other metadata
-    label in the product.
-  - Cell contents are body face 14/22.
-  - **The selected cell is a 1px `text` outline — no fill, no tint**, the same decision
-    §10.3 already makes for the Kanban drop target. There is no accent colour to select
-    with (rules 1 and 2), and `signal` red is spoken for.
-  - The editing cell reuses `TextField`'s focus treatment from SW-03.
-  - Scrolling uses a `Flickable` with **no visible scrollbar track**, per §7.3.
-  **Cell hit-testing must use one `TouchArea` over the grid that resolves the cell from
-  `mouse-x`/`mouse-y`, not one `TouchArea` per cell** — per-cell areas would be
-  thousands of overlapping regions, which is the §13.3 failure mode at scale, and a
-  per-cell allocation the 5–15 MB budget will not absorb.
-  *DoD:* type into cells, navigate with arrows/Tab/Enter, resize the window, restart —
-  contents and grid geometry intact. Formula support is **out of scope** unless open
-  question 5 says otherwise.
+  Needs: SW-13, SW-18. **Answer to open question 7:**
+  > *"can have something decent enough to have 6-7 rows and columns and of course should be
+  > able to merge them or expand the cells and correspondingly the size of widget as well"*
 
+  **Default `640×360`, a `7×7` grid** — 7 columns at 80px plus a 36px row gutter is 596,
+  which inside 16px padding wants a 628px plate; 640 is the number already on the scale and
+  already used by the Kanban. 7 rows at 28px under a 24px column-head band fits 360 with the
+  48px header. Add `sheet-w`/`sheet-h`/`sheet-col-w`/`sheet-row-h`/`sheet-gutter-w` to
+  `theme/layout.slint`; invent no numbers elsewhere.
+  - Row/column headers: interface face 11 UPPERCASE `dim`, `A B C…` and `1 2 3…`.
+  - Cell contents: body face 14/22.
+  - **The selected cell is a 1px `text` outline — no fill, no tint**, matching §10.3's
+    Kanban drop target. There is no accent colour to select with.
+  - The editing cell reuses `TextField`'s focus treatment from SW-03.
+  - Scrolling: `Flickable` plus the existing `ScrollBar`.
+  - **Merge and resize are in scope for v1** — the user said *"do all those now only"*.
+    Merge: select a range, a `MERGE` control in the sheet's own footer or on a right-click
+    equivalent. Resize: drag the boundary in the row/column header band.
+  ⚠ **Cell hit-testing must use ONE `TouchArea` over the grid** that resolves the cell from
+  `mouse-x`/`mouse-y`, never one per cell — 49 cells is fine, a scrolled sheet is thousands,
+  and that is §13.3's failure mode at scale plus a per-cell allocation the 5–15 MB budget
+  will not absorb. The **column-boundary resize handles are the exception that needs care**:
+  give them their own thin band in the header, disjoint from the grid area, the same way
+  SW-10's `+` row had to move out of the columns.
+  *DoD:* type into cells, navigate with arrows/Tab/Enter, merge a range, drag a column
+  wider, resize the window, restart — contents, merges and geometry all intact.
+
+### W2f — deferred by the user
+
+- [ ] **SW-12 · Whiteboard widget window** — `L`
+  **Deferred 2026-08-26 at the user's request** — *"for now ignore whiteboard, it would be
+  done later, no need of that right now"*, and the same for its tool set.
+  `WhiteboardDoc` is built and tested (SW-11) and stays unreachable from the app; it is
+  deliberately absent from `BUILT` in `widget_types.rs`. **Open question 4 stays open** — it
+  still has no artboard, and that is the first thing to settle when it comes back.
+
+### W2g — making a session able to check its own work
+
+- [ ] **SW-23 · `--open` dev flag, so a session can put a widget on screen to photograph** — `S`
+  Needs: nothing. **Screenshots now work** (see the recipe in `progress.md`'s START HERE),
+  but a session can only photograph what is already on screen, and the only ways to open a
+  widget are a mouse click on home or the palette — neither of which a session has.
+  Add `cargo run -p canvas-app -- --open <widget-id>` and `--open-kind <kind>` (creating one
+  first if none of that kind exists), which set the open flag and launch normally.
+  This is the difference between "I built a Kanban and cannot see it" and "here is a picture
+  of the Kanban". It should be built **before** SW-20 and SW-21, not after, because both of
+  those are visual tasks whose whole risk is on-screen.
+  *DoD:* `--open-kind kanban` launches with a board on screen; the screenshot recipe
+  captures it; the flag never changes what a normal launch does.
 ### Wh — sign-off
 
 - [ ] **SW-15 · Stage W sign-off audit** — `M`
@@ -1579,57 +1811,64 @@ protocol, the storage schema, or a design token not already specified.
    ships, and where its control lives now that a home window exists.
 3. **`handoff/screenshots/light-mode.png` contains "the written verdict on what breaks"**
    (§15) and has still not been read. Read it before shipping light mode.
-4. **Does the Whiteboard have a design?** §10.5 describes it in one paragraph and there is
-   **no artboard for it** — `widget-types.png` covers Todo, Shared Document, Kanban and
-   Calendar only. Tool dock contents, shape set, and the stroke style are all unspecified.
-   *Blocks:* SW-12. Ask before starting it, do not invent a tool palette.
-5. **Does the Spreadsheet support formulas?** A spreadsheet that only holds literal values
-   is a table; one that evaluates `=SUM(A1:A9)` needs a parser, a dependency graph and a
-   recalculation order, and that is a larger piece of engineering than any other widget in
-   Stage W. It also has a CRDT consequence: a formula cell stores its *source*, and the
-   computed value must be derived locally, never synced as a value — otherwise two peers
-   can disagree about a cell neither of them typed. *Blocks:* SW-13. **Ask before starting.**
-6. **Can Spreadsheet rows and columns be inserted and deleted mid-sheet, or is the grid a
-   fixed size?** Fixed size makes the CRDT a flat map keyed by cell address, which is
-   simple. Insertion needs fractional indices on **both** axes and is substantially more
-   work. *Blocks:* SW-13, and it decides the data shape, so it cannot be deferred and
-   retrofitted later.
-7. **Is the Spreadsheet's default size 640×400 like the Kanban, or wider?** No spec value
-   exists — `canvas-storage`'s `default_size` needs a real number for a new `KIND_SHEET`,
-   and §12 says size by type at creation. *Blocks:* SW-14.
+4. ~~**Does the Whiteboard have a design?**~~ **DEFERRED by the user, 2026-08-26** —
+   *"for now ignore whiteboard, it would be done later, no need of that right now"*, and the
+   same answer for its tool set. The question itself is **still unanswered** and still real:
+   §10.5 describes the Whiteboard in one paragraph and there is **no artboard** for it —
+   `widget-types.png` covers Todo, Shared Document, Kanban and Calendar only. Tool dock
+   contents, shape set and stroke style remain unspecified.
+   *Blocks:* SW-12, which is parked. **Ask again when the Whiteboard comes back; do not
+   invent a tool palette in the meantime.**
+
+5. ~~**Does the Spreadsheet support formulas?**~~ **ANSWERED 2026-08-26** —
+   *"for now let it be just normal values and later we can expand to formulas etc"*.
+   **Values only.** `SheetDoc` stores `value` as a plain string and gets **no** speculative
+   `formula` field; the cell shape in SW-13 takes one later without disturbance. Folded into
+   SW-13. Closed.
+
+6. ~~**Can Spreadsheet rows and columns be inserted and deleted mid-sheet?**~~
+   **ANSWERED 2026-08-26** — *"yes can do anything possible"*. **Mid-sheet insertion and
+   deletion are in.** This was the one that decides the CRDT shape, and it rules out keying
+   cells by `(row_index, col_index)`: rows and columns become `yrs::Array`s of `{id}` and
+   cells a `yrs::Map` keyed by `"<row_id>:<col_id>"`, so a cell's key survives any reshape.
+   Full reasoning and the merge/size maps are in SW-13. Closed.
+
+7. ~~**What is the Spreadsheet's default size?**~~ **ANSWERED 2026-08-26** — *"something
+   decent enough to have 6-7 rows and columns and of course should be able to merge them or
+   expand the cells and correspondingly the size of widget as well"*.
+   **`640×360`, a `7×7` grid, with merge and drag-resize in v1** (*"do all those now only"*).
+   The arithmetic behind 640×360 is in SW-14. Closed.
+
+8. **What should pin do beyond holding a widget at the desktop layer?** Asked 2026-08-26;
+   the user said *"i have no idea yet"*. Still open, still not blocking anything.
+
 9. **How should the palette search note bodies — a `text` column on `widgets`, or FTS5?**
-   S1-34 matches titles only. Matching bodies the obvious way costs a `get_document` plus
-   a `StickyNoteDoc::load` for **every** note **on every keystroke**, which is exactly the
-   disk-I/O-on-the-typing-path that Hard Constraint 2 and trap 7 exist to stop. It needs a
-   cheap searchable copy of the text, and both ways of getting one are schema changes that
-   rule 6 says not to make unsupervised:
+   Asked again 2026-08-26; the user said *"i have no idea yet"*, so the recommendation
+   stands unclaimed. S1-34 matches titles only. Matching bodies the obvious way costs a
+   `get_document` plus a `StickyNoteDoc::load` for **every** note **on every keystroke**,
+   which is the disk-I/O-on-the-typing-path that Hard Constraint 2 and trap 7 exist to stop.
    **(a)** a plain `text` column on `widgets`, written by the same 500ms flush that already
    writes the snapshot — a few lines, no new table, and it doubles as the home list's
-   preview source; or **(b)** an FTS5 virtual table, which is a real index and scales to
-   thousands of notes but is a second copy of the data to keep in step and pulls in an
-   extension the bundled SQLite may or may not have compiled in. **(a) is the
-   recommendation** — 200 notes is the stated target, not 200,000.
+   preview source; or **(b)** an FTS5 virtual table, a real index that scales to thousands
+   but is a second copy to keep in step and needs an extension the bundled SQLite may not
+   have compiled in. **(a) is still the recommendation** — 200 notes is the stated target.
    *Blocks:* S1-48. **Ask before starting.**
 
-10. **How does a Calendar event get created, moved or deleted from inside the widget?**
-   SW-08 renders the week correctly, but §10.4 specifies **only the readout** — seven
-   columns, a time-labelled chip, grey by duration. It gives no form, no fields, no
-   affordance for a title or a start time, and the chip deliberately carries no name to
-   click on. Three things need a decision, and all of them are interaction, not tokens:
-   **(a)** what a click on empty column space does — nothing, or create a default-length
-   event at that time; **(b)** what a click on a chip does — a chip is at most 56×52px and
-   shows only `14:00`, so there is very little to aim at, and a single click that deletes
-   is destructive with no confirm; **(c)** where a title is typed, given the chip is
-   forbidden from showing one. §10.4's own escape hatch — *"a day view is needed if names
-   are required"* — is a fourth option and a much larger task.
-   The **column-wide `TouchArea` route is a trap either way**: chips at nearby times
-   overlap each other, and §13.3's rule is that two `TouchArea`s must never share a region.
-   Any answer here has to be built from disjoint regions, or from Rust-side hit-testing
-   against one region per column.
-   `CalendarDoc` already has `add_event`, `set_title`, `set_span` and `delete_event`, so
-   **nothing is blocked on the CRDT** — only on the interaction.
-   *Blocks:* nothing in the current backlog. SW-08 is finished without it, and the seeding
-   example covers verification. **Ask before building event editing.**
+10. ~~**How does a Calendar event get created, moved or deleted from inside the widget?**~~
+   **ANSWERED 2026-08-26**, and it grew into most of Stage W2. The user asked for a
+   **click-a-day → in-widget overlay editor** (*"overlay inside widget but seamless and
+   awesome"*) with **name, start, end, location, notes**; **Android-style date and time
+   pickers restyled to this design language**; a **live-event highlight**; and a **bottom
+   info bar** showing what is on now or next and how long is left.
+   Split across **SW-18** (the `Sheet` overlay), **SW-19** (the two pickers) and **SW-20**
+   (the Calendar work itself). The same `Sheet` covers the Kanban card editor in **SW-21**.
+   Closed.
+
+11. **Is `CTRL+T` meant to exist?** The palette prints `CTRL+T` against `New todo` but only
+   Ctrl+K and Ctrl+N are registered in `hotkey.rs`. It is §9's own text, so the label is not
+   a mistake — the missing registration might be. Asked 2026-08-26; the user said *"i have
+   no idea yet"*. Either register it or drop the label; do not leave it printed and dead
+   once someone decides. Not blocking.
 ---
 
 ## Session-end checklist

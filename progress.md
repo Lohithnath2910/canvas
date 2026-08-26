@@ -50,72 +50,75 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**The VERIFICATION QUEUE walk-through — with the user at the keyboard.** This is not a
-fallback because the backlog ran dry; the user asked for it directly on 2026-08-26:
+**Stage W2, in order. Start with `SW-22`.** The user walked the running app on 2026-08-26,
+answered ten questions, and the answers are all folded into `TASKS.md`'s **Stage W2**
+section — every one of them, with the quote that produced it. **Nothing below is blocked and
+nothing needs asking again.** Build straight through:
 
-> *"i want to clear the verification queue also after all these SW tasks and its proper
-> functioning etc is wired in and is working"*
+| # | Task | Why it is in this position |
+|---|---|---|
+| 1 | **SW-22** — typing dies after one character | Small, and it is a live bug in shipped code. Same root cause would be re-introduced three more times below |
+| 2 | **SW-23** — `--open-kind <kind>` dev flag | Cheap, and it is what lets you photograph your own work on tasks 4 and 5 |
+| 3 | **SW-18** — the `Sheet` overlay | Everything after it needs it |
+| 4 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
+| 5 | **SW-20** — Calendar editor, live event, info bar | The big one |
+| 6 | **SW-21** — Kanban drag fix, header alignment, card editor | Three reported defects plus the editor |
+| 7 | **SW-13 / SW-14** — Spreadsheet | Unblocked; open questions 5, 6 and 7 are answered |
 
-Every Stage W task that can be built without the user is now built. What is left in the
-backlog is `SW-12` (blocked on **open question 4** — the Whiteboard has no artboard) and
-`SW-13`/`SW-14` (blocked on **open questions 5, 6 and 7** — Spreadsheet formulas, mid-sheet
-insertion, default size). Those are genuine blocks, not soft ones: the mid-sheet-insertion
-answer decides the CRDT shape and cannot be retrofitted.
+**Then the VERIFICATION QUEUE walk-through**, which the user asked for directly and which is
+gated on the above.
 
-So the next session should **not** hunt for a fourth thing to build. It should open
-`TASKS.md`'s VERIFICATION QUEUE and walk it, top to bottom, with the user driving, ticking
-what passes and opening a numbered task for what does not. Everything needed is already
-written down: each section says exactly what to click and what should happen.
+**`SW-12` (Whiteboard) is parked at the user's request** — *"for now ignore whiteboard"*.
+`WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
 
-**Start the walk here, in this order** — it goes cheapest-to-set-up first:
+### Three things that will bite, all already paid for once
 
-1. **The create control** (SW-17). It is the gateway to everything else — if the footer
-   glyph strip does not work, nothing below can be reached. The one line most likely to be
-   wrong is the hover label, driven by Slint's `changed hovered`, which has never been run.
-2. **The Calendar** (SW-08). A seeded `THIS WEEK` board is already in the database flagged
-   open, so it should appear on launch with eight chips in the artboard's own layout.
-3. **The Kanban board** (SW-10). Create one from the board glyph; it arrives with three
-   columns. The drag is the whole task and the whole risk.
-4. **The Todo widget** (SW-05/SW-02), then the older Stage 1 sections — three header
-   controls, undo/redo, reduced motion, the home scrollbar, the palette and its global
-   hotkey, the open/close animation, the screen clamp, the drag feel.
+1. **`SW-22`'s root cause is a repeater rebuild under a live caret.** Every keystroke calls
+   `refresh_*`, which calls `set_cards`/`set_items`, which tears down and rebuilds the
+   `TextInput` the cursor is in. Fix by **not rebuilding the model while `editing-id` is
+   set** — not by debouncing.
+2. **`SW-21`'s drag is the same bug `S1-51` already fixed for window drag.** The card's
+   `TouchArea` moves *with* the card, so `mouse-x - pressed-x` measures against a target
+   that is running away. **The touch region must not move**: leave the card where the model
+   puts it and draw a separate floating card at board level.
+3. **§13.3, overlapping `TouchArea`s.** This project has hit it three times (note header,
+   Calendar chips, the Kanban `+` button). Stage W2 has two more chances: the Calendar's
+   click-a-day handler (chips at nearby times overlap — **one area per column, resolve in
+   Rust**) and the Spreadsheet's cell hit-testing (**one area over the grid, never one per
+   cell**). Both are called out in their task entries.
 
-`S1-45` — Stage 1 sign-off — cannot honestly close until this walk happens.
+### You can take your own screenshots now
+
+The recipe is in **START HERE** below and it works — minimise all, restore only the Canvas
+windows, capture, undo. It settles alignment, spacing and "did it render at all". It does
+**not** settle beauty, hover, focus, drag feel or animation; those still need the user.
+Read the three "not optional" notes before using it — one of them stops you reporting a
+phantom bug, which nearly happened the day it was written.
 
 ### What is real and what is not
 
-**Wired into the running app and reachable by a user:** the sticky note, the **Todo**
-widget, the **Shared Document**, the **Calendar**, and the **Kanban board**. All five are
-creatable from home's footer glyph strip *and* from the command palette, both driven by one
-`BUILT` table in `canvas-app/src/widget_types.rs`. A seeded `THIS WEEK` calendar is sitting
-in the database flagged open.
+**Reachable by a user:** sticky note, Todo, Shared Document, Calendar, Kanban — all five
+creatable from home's footer glyph strip and from the palette, both driven by `BUILT` in
+`canvas-app/src/widget_types.rs`.
 
-**Built, tested, and NOT reachable from the app:** `WhiteboardDoc` only. It is deliberately
-absent from `BUILT` — the table hides a type until it has a window, and a test fails if a
-kind gains a document without gaining a table row.
+**Confirmed on screen (2026-08-26, by screenshot):** home renders, the footer glyph strip
+renders with all five glyphs and the `NEW` label, the row list shows the right glyph per
+kind, and the footer count is correct.
 
-**Only in `--gallery`:** the four §6 components (SW-03).
+**Built but never watched:** everything else. 150 passing tests say the documents converge
+and the maths is right; they say nothing about what is on screen.
 
-**None of it has been watched working.** 150 passing tests say the documents converge and
-the maths is right. They say nothing about what is on screen.
+**Known broken, reported by the user:** the Kanban — card drag is glitchy and not smooth,
+the column header alignment is wrong, and typing into a card stops after one character.
 
-### Questions worth raising in the end-of-run report — but never worth stalling for
+### Open questions — none of them block Stage W2
 
-- **Open question 4** — the Whiteboard has no artboard. `SW-12` needs one.
-- **Open questions 5, 6, 7** — Spreadsheet formulas, mid-sheet row/column insertion,
-  default size. The second decides the CRDT shape and cannot be retrofitted, so `SW-13` is
-  genuinely blocked.
-- **Open question 10** — how a Calendar event is created, moved or deleted from inside the
-  widget. §10.4 specifies the readout and no editing UI at all. `CalendarDoc` already has
-  every method needed, so nothing is blocked on the CRDT, only the interaction.
-- **Nothing sets an assignee or a due date on a Kanban card**, so every card reads
-  `UNASSIGNED`. Same shape as the Todo widget's unset due-date `Tag`: the field exists, the
-  meta line renders it correctly, there is no UI for it.
-- What pin should do beyond holding a note at the desktop layer.
-- `CTRL+T` is shown against `New todo` in the palette but has never been registered — only
-  Ctrl+K and Ctrl+N are. §9's own text, not a regression, but it is a small lie on screen.
+- **4** — the Whiteboard still has no artboard. Parked with SW-12; ask again when it returns.
+- **8** — what pin should do beyond the desktop layer. User: *"no idea yet"*.
+- **9** — palette body search, `text` column vs FTS5. User: *"no idea yet"*; (a) recommended.
+- **11** — `CTRL+T` is printed in the palette and never registered. User: *"no idea yet"*.
 
-All of them are in **Open questions** at the bottom of [TASKS.md](TASKS.md).
+Questions **5, 6, 7 and 10 are closed** — answered 2026-08-26 and folded into Stage W2.
 ---
 
 ## 🔒 DO NOT REGRESS
@@ -189,6 +192,50 @@ cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never d
 
 Database lives at `%APPDATA%/Canvas/canvas_local.db`. Delete that folder for a clean slate.
 
+### 📸 Taking your own screenshots — this works, as of 2026-08-26
+
+§13.7 says a session cannot verify visually. **That is now only half true**, and the half
+that changed is worth real time on every remaining task.
+
+**Why the obvious approaches fail.** All three were tried and all three lie:
+- **Plain full-screen capture** returns whatever is on top, which is the user's editor. It
+  looks like a successful screenshot of a broken app.
+- **`SetForegroundWindow`** is refused — Windows will not let a background process steal
+  focus, so the call returns and nothing moves.
+- **`PrintWindow` (even `PW_RENDERFULLCONTENT`) returns `true` and gives a solid black
+  image.** Slint's software-rendered frameless window does not answer `WM_PRINT`. This is
+  the single most dangerous one: it succeeds, so it reads as "the widget renders nothing".
+
+**What works: minimise everything, restore only Canvas, capture, undo.**
+
+```powershell
+$shell = New-Object -ComObject Shell.Application
+$shell.MinimizeAll()                 # this minimises the Canvas windows too
+Start-Sleep -Milliseconds 900
+# ... EnumWindows for the canvas-app pid, then ShowWindow(h, 9) then ShowWindow(h, 5)
+#     on each of its windows to bring just those back ...
+# ... CopyFromScreen over SystemInformation::VirtualScreen ...
+$shell.UndoMinimizeALL()             # ALWAYS restore, even on failure
+```
+
+Three things that are not optional:
+1. **Restore the Canvas windows explicitly after `MinimizeAll()`.** The first attempt
+   minimised them along with everything else and photographed bare wallpaper.
+2. **Always call `UndoMinimizeALL()`**, including on the error path. This is the user's live
+   desktop and every one of their windows is down while the shot is taken.
+3. **Kill every previous instance first.** A stray window from an earlier launch showed up
+   as an unstyled white `Slint Window` and was very nearly written up as a rendering bug. It
+   was a second process. `Get-Process canvas-app` should return exactly one.
+
+**What it is good for:** did it render at all, alignment, spacing, elision, whether a
+control is where the spec's `x` says it is, whether the right glyph is on the right row.
+**What it is not good for:** *"is it beautiful"*, hover, focus, drag feel, animation — all
+of which still need the user. Photograph what you can, then hand over the rest.
+
+**The blocker it does not solve:** a session can only photograph what is already on screen,
+and the only ways to open a widget are a mouse click on home or the palette. That is what
+**SW-23** (`--open-kind <kind>`) is for, and it should be built before the visual tasks.
+
 ### Ground rules that are NOT in the spec — carried over from this session
 
 1. **Do not write code comments.** The user asked for none, anywhere. All reasoning goes
@@ -227,6 +274,10 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 | §14 stage order: sync (2–3) before widgets (4–5) | **All widget types first, backend and sync after** | User: get every widget working single-player before multiplayer |
 | §10 lists five widget types | **Plus a Spreadsheet** — not in the spec at all | User asked for it 2026-08-25; no artboard, no §10 section, so it carries real open questions |
 | §7.3 "no visible scrollbar track" | **A visible scrollbar in the note body** — thumb only, no track | User asked for one directly; wheel scrolling alone gave no sense of position |
+| **Rule 2 / §5.1: red appears in exactly TWO places in the whole product** | **A third: a `signal` 3×3 dot on a currently-running Calendar event** | User, 2026-08-26, after being told it breaks one of the five rules: *"can use red etc to show the dot or something unique, i want it to be visually beautiful"*. **Do not extend it further** — red is now the live-event dot, the error strip and the destructive button, and nothing else. |
+| §10.3 / §10.4 specify a Kanban and a Calendar **readout with no editing UI** | **Both get an in-widget overlay editor** (`Sheet`), plus date and time pickers | User, 2026-08-26: a readout you cannot put anything into is not usable. Fields confirmed: Calendar `name/start/end/location/notes`, Kanban `title/assignee/due/description` |
+| §9: the palette's three default actions are the create surface | **Home also carries a glyph strip, one glyph per built type** | User, 2026-08-26: two labelled buttons do not scale to seven types. Both lists come from one `BUILT` table |
+| §13.7: a session cannot verify visually | **It can, partially** — minimise-all, restore only Canvas, capture, undo | Proven 2026-08-26. Settles alignment and "did it render"; still cannot judge beauty, hover, drag or animation. Recipe in START HERE |
 
 ### Traps already hit — do not repeat these
 
@@ -2057,3 +2108,69 @@ question 4 (the Whiteboard has no artboard) and `SW-13`/`SW-14` need open questi
 7. So the next unit of work is the one the user asked for on 2026-08-26: **walk the
 VERIFICATION QUEUE and clear it.** The GO block at the top of this file says where to start
 and why that order.
+
+---
+
+### 2026-08-26 — the user walked the app: Stage W2 planned, screenshots solved
+
+No code this pass. The user opened the running app, found real defects, answered ten
+questions, and asked for all of it to be written down so a cold session can start on `GO`.
+That is what this entry and `TASKS.md`'s new **Stage W2** section are.
+
+**Reported broken — the Kanban.** *"its too glitchy to move the cards around etc and the
+text alignments etc too and its not smooth at all"*, and *"each card is only letting me type
+a single letter and nothing more than that"*. Both root causes were found without a debugger
+and both are bugs this project has already paid for once:
+- **One character then nothing** — every keystroke calls `refresh_kanban` → `set_cards`,
+  and Slint's repeater tears down the `TextInput` the caret is in. **The Todo widget has the
+  identical shape** and has never been watched, so assume it too. `SW-22`.
+- **The glitchy drag** — the card's `TouchArea` is on the card, and the card moves by
+  `held-dx`, so `mouse-x - pressed-x` measures the pointer against a target running away
+  from it. This is `S1-51`'s bug in a new place. `SW-21`.
+
+**Answered — the editing layer that never existed.** §10.3 and §10.4 specify a Kanban and a
+Calendar you can *read* and gave no way to put anything in. The user asked for a
+**click-a-day → in-widget overlay editor**, *"seamless and awesome"*, with **name, start,
+end, location, notes**; **Android-style date and time pickers restyled to this language**; a
+**live-event highlight**; and a **bottom info bar** with what is on now or next and how long
+is left. Split into `SW-18` (`Sheet`), `SW-19` (pickers), `SW-20` (Calendar), `SW-21`
+(Kanban card editor). Open question 10 closed.
+
+**Answered — the Spreadsheet, and question 6 earned its place.** *"yes can do anything
+possible"* on mid-sheet insertion is the answer that decides the CRDT shape: cells **cannot**
+be keyed by `(row_index, col_index)`, because inserting a row would rewrite every key below
+it and two peers inserting at once would collide. So rows and columns become `yrs::Array`s
+of `{id}` and cells a `yrs::Map` keyed by `"<row_id>:<col_id>"` — a key that survives any
+reshape. Note the contrast with the Kanban, which needs a fractional index *because* cards
+change parent; rows and columns never do, so the array's own sequence CRDT is enough.
+Values only for now, merge and drag-resize in v1, `640×360` on a `7×7` grid. Questions 5, 6
+and 7 closed.
+
+**Deferred — the Whiteboard.** *"for now ignore whiteboard, it would be done later"*.
+Question 4 stays open and unanswered; `WhiteboardDoc` stays built and out of `BUILT`.
+
+**Override 15, taken with the conflict stated first.** The user asked for red on the
+live-event dot. Rule 2 says red appears in exactly two places in the whole product; this
+makes three. They were told and asked for it anyway, so it is built and recorded — along
+with three other overrides from today — in the table below. Red is now the live-event dot,
+the error strip and the destructive button, **and nothing else.**
+
+**Solved — a session can take its own screenshots.** This is the change with the widest
+reach, so the full recipe and its three failure modes are in START HERE. The short version:
+plain screen capture returns the user's editor, `SetForegroundWindow` is refused to a
+background process, and **`PrintWindow` returns `true` while producing a solid black image**
+— that last one is the dangerous one, because it reads as "the widget renders nothing".
+What works is minimise-all → restore only the Canvas windows → capture → undo.
+It settled `SW-17` on the spot: home, the footer glyph strip, all five glyphs, the `NEW`
+label and the per-kind row glyphs are all confirmed rendering. It is **not** a substitute
+for the user on beauty, hover, drag or animation.
+
+**And the trap it set, immediately.** The first good capture showed an unstyled white
+`Slint Window` behind the home plate, which looked exactly like a rendering bug worth
+reporting. It was a **second process** left from an earlier launch. A clean relaunch showed
+one window, correctly titled. §13.7's warning survives contact: **kill every previous
+instance and re-check before writing a screenshot finding down.**
+
+- ❌ No code changed. `TASKS.md` gained Stage W2 (SW-18 … SW-23) and closed four open
+  questions; `progress.md` gained the screenshot recipe, four overrides and a rewritten GO
+  block. 150 tests still pass, clippy still clean — neither was touched.
