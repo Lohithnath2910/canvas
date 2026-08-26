@@ -16,6 +16,7 @@ export component Sheet inherits Rectangle {
 
     property <bool> hold: false;
     property <length> footer-h: Layout.sheet-footer-h;
+    property <length> ring: Layout.focus-offset + Layout.focus-width;
 
     public function focus-body() { keys.focus(); }
 
@@ -40,6 +41,9 @@ export component Sheet inherits Rectangle {
     animate y { duration: Motion.open; easing: Ease.standard; }
 
     background: Palette.plate;
+    border-bottom-left-radius: Layout.radius-plate;
+    border-bottom-right-radius: Layout.radius-plate;
+    clip: true;
     opacity: root.open ? 1.0 : 0.0;
     animate opacity {
         duration: root.open ? Motion.open : Motion.close;
@@ -69,16 +73,20 @@ export component Sheet inherits Rectangle {
         }
 
         scroll := Flickable {
-            x: Layout.pad;
-            y: Layout.pad - 1px;
-            width: parent.width - 2 * Layout.pad - Layout.scroll-gutter;
-            height: parent.height - Layout.pad;
+            x: Layout.pad - root.ring;
+            y: 0;
+            width: parent.width - 2 * Layout.pad - Layout.scroll-gutter + root.ring;
+            height: parent.height;
             viewport-height: max(fields.preferred-height, self.height);
 
             fields := VerticalLayout {
                 width: 100%;
                 alignment: start;
                 spacing: Layout.field-gap;
+                padding-left: root.ring;
+                padding-right: root.ring;
+                padding-top: Layout.pad;
+                padding-bottom: Layout.pad;
 
                 @children
             }
@@ -86,8 +94,8 @@ export component Sheet inherits Rectangle {
 
         ScrollBar {
             x: parent.width - Layout.pad - Layout.scroll-gutter;
-            y: scroll.y;
-            height: scroll.height;
+            y: Layout.pad;
+            height: scroll.height - 2 * Layout.pad;
             view-height: scroll.height;
             viewport-height: scroll.viewport-height;
             viewport-y <=> scroll.viewport-y;

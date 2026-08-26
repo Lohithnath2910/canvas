@@ -50,7 +50,23 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-22`, `SW-23` and `SW-18` are done. Start with `SW-24`** — the user asked mid-run on 2026-08-26 for the `document` type to be ripped out, and said so after being told there is no difference worth a type. Then the rest of Stage W2 in order. The user walked the running app on 2026-08-26,
+**`SW-22`, `SW-23` and `SW-18` are done. Start with `SW-24`, then `SW-25`.**
+
+**The run of 2026-08-26 stopped on the usage limit, not the backlog** — the user said so:
+*"first fill the details etc of current task and update all the mds etc as the limit is almost
+finished for this 5 hour window we will see about this later"*. Nothing is half-built; the
+tree is committed and clean.
+
+| Next | Task | Why |
+|---|---|---|
+| 1 | **SW-24** — rip out the `document` widget type | **The user's decision, 2026-08-26.** They asked *"no point of having document widget… if no difference rip it off completely"*, were told the honest answer (it is a note with 24px padding, a delete label and a 520×420 default — a preset, not a type), and chose to remove it. Their database has no `document` rows, so nothing of theirs is lost |
+| 2 | **SW-25** — the whole-app alignment and border pass | **They asked for this directly** and named the reviewer: *"all the alignments go through once in all the componenets of the full app and be thorough as codex is going to check the output"*. The root cause and the fix pattern are already found — read `SW-25`'s entry before touching a plate |
+| 3 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
+| 4 | **SW-20** — Calendar editor, live event, info bar | The big one |
+| 5 | **SW-21** — Kanban drag fix, header alignment, card editor | Three reported defects plus the editor |
+| 6 | **SW-13 / SW-14** — Spreadsheet | Unblocked |
+
+The user walked the running app on 2026-08-26,
 answered ten questions, and the answers are all folded into `TASKS.md`'s **Stage W2**
 section — every one of them, with the quote that produced it. **Nothing below is blocked and
 nothing needs asking again.** Build straight through:
@@ -60,7 +76,7 @@ nothing needs asking again.** Build straight through:
 | ~~1~~ | ~~**SW-22** — typing dies after one character~~ | **Done 2026-08-26**, 🟡 not watched. The lock is `rows_locked_by_editor`; read the entry below before writing any other repeater |
 | ~~2~~ | ~~**SW-23** — `--open-kind <kind>` dev flag~~ | **Done and watched 2026-08-26.** `--open-kind kanban` puts a board on screen; use it on every visual task below |
 | ~~3~~ | ~~**SW-18** — the `Sheet` overlay~~ | **Done 2026-08-26**, photographed. Read its **two caller contracts** in `TASKS.md` before building any editor on it |
-| 3.5 | **SW-24** — rip out the `document` type | The user's call mid-run. Small, and it shrinks what SW-15 has to audit |
+| ~~3.5~~ | **SW-24** — rip out the `document` type | Approved by the user, **not started**. See the table above |
 | 4 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
 | 5 | **SW-20** — Calendar editor, live event, info bar | The big one |
 | 6 | **SW-21** — Kanban drag fix, header alignment, card editor | Three reported defects plus the editor |
@@ -129,6 +145,10 @@ character was `SW-22` and is fixed in code, unwatched.
 - **8** — what pin should do beyond the desktop layer. User: *"no idea yet"*.
 - **9** — palette body search, `text` column vs FTS5. User: *"no idea yet"*; (a) recommended.
 - **11** — `CTRL+T` is printed in the palette and never registered. User: *"no idea yet"*.
+- **12** — **the CPU software renderer.** The user is right that scrolling is not 60 Hz, and
+  the cause is §3 and Hard Constraint 5, not the scroll code. Three routes were put to them;
+  they said *"we will see about this later"*. **Never change the default renderer without
+  their word.**
 
 Questions **5, 6, 7 and 10 are closed** — answered 2026-08-26 and folded into Stage W2.
 ---
@@ -2366,3 +2386,54 @@ type. `KIND_DOCUMENT` shares `StickyNoteDoc` and `StickyNoteWindow` with the not
 differs only by `set_pad(24px)`, a `DELETE DOCUMENT` label and a 520×420 default size.
 §10.2's real Shared Document is Stage 3 work that does not exist. They chose to rip it out;
 that is **SW-24**, and it is the next task.
+
+---
+
+### 2026-08-26 — SW-18 follow-up: focus rings were being clipped, everywhere
+
+The user looked at the `Sheet` the moment it landed and sent two screenshots back:
+*"you see the alignment and the borders etc etc and not so smooth scrolling meaning its not
+even 60 hz etc"*, then *"all the alignments go through once in all the componenets of the
+full app and be thorough as codex is going to check the output and going to critisize you
+else not"*.
+
+**One root cause explained most of what they were pointing at.** A `TextField`'s focus ring
+is drawn **outside** its own frame — §6.9, 2px wide at 2px offset — so it reaches 4px past
+the control on every side. Every `Flickable` in this app sized its content column to its own
+full width, so the ring was **clipped at the left edge** and, on the right, **collided with
+the 4px scroll thumb**. Both are visible in the screenshots they sent: the red `ERROR`
+field's white ring is sliced down its left side, and in the sheet the ring on `DUE` runs
+straight into the thumb.
+
+**The fix pattern, and it is the one to copy everywhere else.** Pull the `Flickable` out by
+`ring` (= `Layout.focus-offset + Layout.focus-width` = 4px) and give the inner
+`VerticalLayout` `padding-left`/`padding-right` of `ring`, so the content lands back on the
+plate's own 16px padding and the ring lives in the slack. Applied here to `Sheet` and to the
+gallery's left panel. **The Todo's `rows-scroll`, the home list and the note body still have
+it** — that is `SW-25`.
+
+Two more things fixed in the same pass: the sheet's **bottom corners** now follow the
+plate's 20px radius (`border-bottom-left-radius` / `border-bottom-right-radius`, plus
+`clip`, which are real properties in Slint 1.17), and the field column gained 16px of top and
+bottom padding so the first field clears the hairline and the last can scroll clear of the
+footer.
+
+- ✅ **Photographed after the fix.** The thumb no longer touches any field or its ring, the
+  first field sits 16px under the hairline, and the ring on the gallery's `ERROR` field is
+  whole.
+- 🟡 Still visible and written into `SW-25`: the sheet's scroll region ends **flush** against
+  the footer hairline, so a field caught mid-scroll is sliced through its border with no
+  visual break; and the gallery's left `stack` has no `padding-bottom`, so its last field
+  sits 4px off the plate's own padding.
+
+**On the scrolling not being 60 Hz — they are right, and it is a decision, not a defect.**
+`select_backend` forces `SLINT_BACKEND=winit-software` on every launch. §3 makes GPU opt-in
+only and Hard Constraint 5 ties the memory budgets to software rendering. Three routes were
+put to the user — measure GPU first, default to GPU outright, or stay on software and cut
+repaint cost. Their answer: *"we will see about this later"*. It is **open question 12** in
+`TASKS.md`. **Do not change the default renderer without their word.**
+
+**This run stopped on the usage limit, not the backlog.** The user said so directly:
+*"first fill the details etc of current task and update all the mds etc as the limit is
+almost finished for this 5 hour window"*. Everything above is committed; `SW-24` and `SW-25`
+are written up and unstarted.

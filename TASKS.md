@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-24` — rip out the `document` widget type, the user's call on 2026-08-26. Then **Stage W2** in order: SW-19, SW-20, SW-21, SW-13, SW-14.
+**Current task:** `SW-24` — rip out the `document` widget type, the user's call on 2026-08-26. Then `SW-25` — the whole-app alignment pass they asked for in the same breath. Then **Stage W2** in order: SW-19, SW-20, SW-21, SW-13, SW-14.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 29 ticked. 160 tests pass. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 29 ticked. 160 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -1845,6 +1845,46 @@ folded into the two tasks below; the questions are closed.
   *DoD:* home's footer strip and the palette both offer four types, not five; the tests
   still pass; a fresh launch still opens every remaining type.
 
+- [ ] **SW-25 · Alignment and border pass over every surface in the app** — `L`
+  Needs: nothing, but it wants **SW-23**'s `--open-kind` and the screenshot recipe.
+  **The user, mid-run on 2026-08-26, looking at two screenshots of the `Sheet`:**
+  > *"you see the alignment and the borders etc etc"* … *"all the alignments go through once
+  > in all the componenets of the full app and be thorough as codex is going to check the
+  > output and going to critisize you else not"*
+
+  **This is a whole-app pass, not a bug list.** Every surface, checked against §5's numbers
+  and against itself, with a screenshot of each before and after. Do not fix one plate and
+  call it done.
+
+  **The root cause already found, and the fix pattern to copy.** A `TextField`'s focus ring
+  is drawn **outside** its own frame — 2px wide at 2px offset, so it reaches 4px past the
+  control on every side. Every `Flickable` in this app clipped it, and where the field ran
+  to the Flickable's right edge the ring also collided with the 4px scroll thumb. The fix,
+  applied to `Sheet` and the gallery on 2026-08-26 and **still to be applied everywhere
+  else**: pull the `Flickable` out by `ring` (= `focus-offset + focus-width` = 4px), and
+  give the inner `VerticalLayout` `padding-left`/`padding-right` of `ring` so the content
+  lands back on the plate's 16px padding with the ring in the slack.
+
+  Surfaces to walk, each with `--open-kind` where it exists:
+  - **Home** — row glyph, title, preview line and delete icon column; the overlaid scrollbar
+    against the row hover highlight; the footer strip's glyphs and the count on the right
+  - **Sticky note** — title baseline against the glyph strip, the three controls' right
+    edge at `width − 16`, the body's left edge sharing the strip's left edge (§5.3), the
+    body scrollbar
+  - **Todo** — checkbox to label gap of 12, the due `Tag`'s right edge, the compose row,
+    the footer count. `rows-scroll` has the un-fixed ring clipping
+  - **Calendar** — seven column gaps of 8, the day labels, the chips' left edges
+  - **Kanban** — **the user already reported the column header alignment is wrong**
+    (`SW-21`); check it here too and make sure the two tasks agree
+  - **Palette** — the 24px icon, the 12px gap, the query line, the right-aligned meta
+    column, the footer
+  - **Gallery + Sheet** — the left panel's `stack` still has no `padding-bottom`, so the
+    last field sits 4px off the plate's own 16px; and the `Sheet`'s scroll region ends
+    **flush against the footer hairline**, so a field mid-scroll is sliced through its
+    border with no visual break
+  *DoD:* a screenshot of every surface, a written line per surface saying what was measured
+  against which token, and no number introduced that is not already in §5.
+
 ### Wh — sign-off
 
 - [ ] **SW-15 · Stage W sign-off audit** — `M`
@@ -1975,6 +2015,23 @@ protocol, the storage schema, or a design token not already specified.
    a mistake — the missing registration might be. Asked 2026-08-26; the user said *"i have
    no idea yet"*. Either register it or drop the label; do not leave it printed and dead
    once someone decides. Not blocking.
+
+12. **Does Canvas keep the CPU software renderer?** Raised 2026-08-26 when the user said the
+   scrolling *"is not so smooth … its not even 60 hz"*. **They are right, and the cause is a
+   deliberate choice, not a bug in the scroll code.** `select_backend` forces
+   `SLINT_BACKEND=winit-software` on every launch; §3 says GPU is opt-in only and Hard
+   Constraint 5 ties the 5–15 MB per-widget and < 50 MB total budgets to software rendering.
+   A software renderer repaints the whole dirty region on the CPU every frame, and at
+   1240×760 that is what the user is feeling.
+   Three ways out were put to them: **(a)** build `--features gpu`, run the same surfaces on
+   `winit-femtovg`, measure RSS against the budget and decide on the numbers — the
+   recommendation; **(b)** make GPU the default outright, which overrides Hard Constraint 5;
+   **(c)** stay on software and cut repaint cost instead — smaller scroll regions, fewer
+   full-viewport invalidations — which is cheaper on memory but has a lower ceiling.
+   The user's answer, 2026-08-26: *"we will see about this later"*. **Still open.** Do not
+   change the default renderer without their word — that is Hard Constraint 5.
+   *Blocks:* nothing yet, but it will shape **SW-14**, whose grid is the heaviest surface in
+   the app.
 ---
 
 ## Session-end checklist
