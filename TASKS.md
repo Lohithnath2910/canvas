@@ -2028,8 +2028,26 @@ protocol, the storage schema, or a design token not already specified.
    recommendation; **(b)** make GPU the default outright, which overrides Hard Constraint 5;
    **(c)** stay on software and cut repaint cost instead — smaller scroll regions, fewer
    full-viewport invalidations — which is cheaper on memory but has a lower ceiling.
-   The user's answer, 2026-08-26: *"we will see about this later"*. **Still open.** Do not
-   change the default renderer without their word — that is Hard Constraint 5.
+   **Half of this closed the same day.** The user reported *"in release build i was getting
+   around 20 mb"* — which is **inside §2's 20–40 MB idle budget**, on the CPU software
+   renderer, with no changes. So **route (b) is dead**: turning on GPU would trade a working
+   20 MB for a driver stack that costs more than the entire budget, to fix something that
+   may not be broken. Do not raise it again unless the memory picture changes.
+   **What is still open is one measurement, and only the user can take it: is the *release*
+   build's scrolling smooth?** Everything a session has photographed so far — every
+   screenshot in this repo dated 2026-08-26 — was built with a plain `cargo build`, i.e.
+   **debug**, where the software rasteriser runs 5–20× slower than release. The jank in
+   those frames is expected and proves nothing.
+   - **Release scrolls fine** → close this question. Nothing to build.
+   - **Release still stutters** → it is route (c), repaint *scope*, not renderer choice. The
+     prime suspect is the 24px transparent `plate-margin`: a window with real alpha cannot
+     take the cheap opaque partial-redraw path, so every scroll frame may be repainting the
+     whole window instead of the rows that moved. The arithmetic says a CPU should manage a
+     640×400 plate at 60 fps easily — about 1 MB of fill per frame — so stutter points at
+     redrawing too much, not at raster throughput.
+   The user, 2026-08-26: *"i dont know, will test later"*. **Ask for that one result before
+   doing anything here.** Do not change the default renderer without their word — that is
+   Hard Constraint 5.
    *Blocks:* nothing yet, but it will shape **SW-14**, whose grid is the heaviest surface in
    the app.
 ---

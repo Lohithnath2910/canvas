@@ -145,10 +145,13 @@ character was `SW-22` and is fixed in code, unwatched.
 - **8** — what pin should do beyond the desktop layer. User: *"no idea yet"*.
 - **9** — palette body search, `text` column vs FTS5. User: *"no idea yet"*; (a) recommended.
 - **11** — `CTRL+T` is printed in the palette and never registered. User: *"no idea yet"*.
-- **12** — **the CPU software renderer.** The user is right that scrolling is not 60 Hz, and
-  the cause is §3 and Hard Constraint 5, not the scroll code. Three routes were put to them;
-  they said *"we will see about this later"*. **Never change the default renderer without
-  their word.**
+- **12** — **the CPU software renderer.** Half closed on 2026-08-26: the user measured the
+  **release** build at **~20 MB**, inside §2's budget, so **GPU is off the table** — it would
+  cost more than the whole budget to fix something that may not be broken. What is left is
+  one measurement only they can take: *is release scrolling smooth?* Every frame in this repo
+  is a **debug** build, where the rasteriser runs 5–20× slower, so none of them settle it.
+  User: *"i dont know, will test later"*. **Ask for that result before building anything
+  here, and never change the default renderer without their word.**
 
 Questions **5, 6, 7 and 10 are closed** — answered 2026-08-26 and folded into Stage W2.
 ---
@@ -263,10 +266,17 @@ Three things that are not optional:
    as an unstyled white `Slint Window` and was very nearly written up as a rendering bug. It
    was a second process. `Get-Process canvas-app` should return exactly one.
 
+**⚠ Every screenshot a session takes is of a DEBUG build unless you say otherwise.**
+`cargo run` and `cargo build` are debug, and a software rasteriser runs **5–20× slower**
+there than in release. That makes the recipe fine for geometry and useless for speed:
+**never judge scrolling, animation smoothness or frame rate from a debug frame, and never
+report one as a performance defect.** The user measured the release build at **~20 MB**,
+inside §2's budget, on the same software renderer — see open question 12.
+
 **What it is good for:** did it render at all, alignment, spacing, elision, whether a
 control is where the spec's `x` says it is, whether the right glyph is on the right row.
-**What it is not good for:** *"is it beautiful"*, hover, focus, drag feel, animation — all
-of which still need the user. Photograph what you can, then hand over the rest.
+**What it is not good for:** *"is it beautiful"*, hover, focus, drag feel, animation, and
+**anything to do with speed** — all of which still need the user. Photograph what you can, then hand over the rest.
 
 **`--open-kind` solves the last blocker** (SW-23, 2026-08-26). A session can now put any
 built widget type on screen from the command line and photograph it, with no click.
@@ -2437,3 +2447,33 @@ repaint cost. Their answer: *"we will see about this later"*. It is **open quest
 *"first fill the details etc of current task and update all the mds etc as the limit is
 almost finished for this 5 hour window"*. Everything above is committed; `SW-24` and `SW-25`
 are written up and unstarted.
+
+---
+
+### 2026-08-26 — the release build measures ~20 MB, which closes half of open question 12
+
+No code. One number from the user, and it changes what the renderer question is about.
+
+**They ran the release build and got ~20 MB.** That is inside §2's 20–40 MB idle budget, on
+the CPU software renderer, with nothing changed. So the GPU route is **dead**: switching to
+`winit-femtovg` loads a GL driver stack into the process — on Windows that is tens of MB of
+driver residency before a pixel is drawn, and on integrated graphics the texture memory is
+carved out of system RAM anyway, so "use the iGPU to stay cheap" does not work. It would
+trade a working 20 MB for 50–80 MB to fix something that may not be broken.
+
+**What is left is one measurement, and only the user can take it: is the *release* build's
+scrolling smooth?** Every screenshot in this repo dated 2026-08-26 was a plain `cargo build`
+— **debug** — where a software rasteriser runs 5–20× slower than release. The jank in those
+frames is expected and settles nothing. That warning is now in the screenshot recipe in
+START HERE, because it is exactly the shape of mistake §13.7 exists to prevent: a frame that
+looks like evidence and is not.
+
+- If release scrolls fine, question 12 closes and nothing gets built.
+- If it still stutters, the suspect is repaint **scope**, not renderer choice — most likely
+  the 24px transparent `plate-margin`, since a window with real alpha cannot take the cheap
+  opaque partial-redraw path and may be repainting whole windows per scroll frame. A 640×400
+  plate is about 1 MB of fill per frame; a CPU should do that at 60 fps without effort, so
+  stutter means we are drawing too much, not drawing too slowly.
+
+- ✅ Recorded in open question 12, in the START HERE screenshot recipe, and in the GO block's
+  open-questions list. User: *"i dont know, will test later"*.
