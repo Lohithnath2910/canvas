@@ -2,10 +2,13 @@ use std::time::Duration;
 
 use slint::ComponentHandle;
 
-use canvas_doc::{CalendarDoc, StickyNoteDoc, TodoListDoc, UndoHistory};
-use canvas_storage::{WindowPlacement, KIND_CALENDAR, KIND_DOCUMENT, KIND_STICKY_NOTE, KIND_TODO};
+use canvas_doc::{CalendarDoc, KanbanDoc, StickyNoteDoc, TodoListDoc, UndoHistory};
+use canvas_storage::{
+    WindowPlacement, KIND_CALENDAR, KIND_DOCUMENT, KIND_KANBAN, KIND_STICKY_NOTE, KIND_TODO,
+};
 use canvas_ui::{
-    platform_system_sans, CalendarWindow, Motion, StickyNoteWindow, TodoWindow, Typography,
+    platform_system_sans, CalendarWindow, KanbanWindow, Motion, StickyNoteWindow, TodoWindow,
+    Typography,
 };
 
 const OPEN_DELAY: Duration = Duration::from_millis(16);
@@ -16,6 +19,7 @@ pub enum WidgetDoc {
     StickyNote(StickyNoteDoc),
     Todo(TodoListDoc),
     Calendar(CalendarDoc),
+    Kanban(KanbanDoc),
 }
 
 impl WidgetDoc {
@@ -32,6 +36,10 @@ impl WidgetDoc {
             KIND_CALENDAR => Some(WidgetDoc::Calendar(match snapshot {
                 Some(bytes) if !bytes.is_empty() => CalendarDoc::load(bytes),
                 _ => CalendarDoc::new(),
+            })),
+            KIND_KANBAN => Some(WidgetDoc::Kanban(match snapshot {
+                Some(bytes) if !bytes.is_empty() => KanbanDoc::load(bytes),
+                _ => KanbanDoc::seeded(),
             })),
             _ => None,
         }
@@ -52,13 +60,26 @@ impl WidgetDoc {
                 .map(|e| e.title)
                 .collect::<Vec<String>>()
                 .join(", "),
+            WidgetDoc::Kanban(doc) => doc
+                .cards()
+                .into_iter()
+                .map(|c| c.title)
+                .collect::<Vec<String>>()
+                .join(", "),
         }
     }
 
     pub fn set_text(&self, text: &str) -> Option<Vec<u8>> {
         match self {
             WidgetDoc::StickyNote(doc) => doc.set_text(text),
-            WidgetDoc::Todo(_) | WidgetDoc::Calendar(_) => None,
+            WidgetDoc::Todo(_) | WidgetDoc::Calendar(_) | WidgetDoc::Kanban(_) => None,
+        }
+    }
+
+    pub fn seed(kind: &str) -> Option<Self> {
+        match kind {
+            KIND_KANBAN => Some(WidgetDoc::Kanban(KanbanDoc::seeded())),
+            _ => None,
         }
     }
 
@@ -67,6 +88,7 @@ impl WidgetDoc {
             WidgetDoc::StickyNote(doc) => doc.snapshot(),
             WidgetDoc::Todo(doc) => doc.snapshot(),
             WidgetDoc::Calendar(doc) => doc.snapshot(),
+            WidgetDoc::Kanban(doc) => doc.snapshot(),
         }
     }
 
@@ -75,6 +97,7 @@ impl WidgetDoc {
             WidgetDoc::StickyNote(doc) => doc.state_vector(),
             WidgetDoc::Todo(doc) => doc.state_vector(),
             WidgetDoc::Calendar(doc) => doc.state_vector(),
+            WidgetDoc::Kanban(doc) => doc.state_vector(),
         }
     }
 }
@@ -83,6 +106,7 @@ pub enum WidgetWindow {
     StickyNote(StickyNoteWindow),
     Todo(TodoWindow),
     Calendar(CalendarWindow),
+    Kanban(KanbanWindow),
 }
 
 impl Clone for WidgetWindow {
@@ -91,6 +115,7 @@ impl Clone for WidgetWindow {
             WidgetWindow::StickyNote(window) => WidgetWindow::StickyNote(window.clone_strong()),
             WidgetWindow::Todo(window) => WidgetWindow::Todo(window.clone_strong()),
             WidgetWindow::Calendar(window) => WidgetWindow::Calendar(window.clone_strong()),
+            WidgetWindow::Kanban(window) => WidgetWindow::Kanban(window.clone_strong()),
         }
     }
 }
@@ -123,6 +148,13 @@ impl WidgetWindow {
                 window.global::<Motion>().set_reduced(reduced_motion);
                 WidgetWindow::Calendar(window)
             })),
+            KIND_KANBAN => Some(KanbanWindow::new().map(|window| {
+                window
+                    .global::<Typography>()
+                    .set_system_sans(platform_system_sans().into());
+                window.global::<Motion>().set_reduced(reduced_motion);
+                WidgetWindow::Kanban(window)
+            })),
             _ => None,
         }
     }
@@ -132,6 +164,7 @@ impl WidgetWindow {
             WidgetWindow::StickyNote(window) => window.window(),
             WidgetWindow::Todo(window) => window.window(),
             WidgetWindow::Calendar(window) => window.window(),
+            WidgetWindow::Kanban(window) => window.window(),
         }
     }
 
@@ -140,6 +173,7 @@ impl WidgetWindow {
             WidgetWindow::StickyNote(window) => window.show(),
             WidgetWindow::Todo(window) => window.show(),
             WidgetWindow::Calendar(window) => window.show(),
+            WidgetWindow::Kanban(window) => window.show(),
         }
     }
 
@@ -154,6 +188,9 @@ impl WidgetWindow {
             WidgetWindow::Calendar(window) => {
                 let _ = window.hide();
             }
+            WidgetWindow::Kanban(window) => {
+                let _ = window.hide();
+            }
         }
     }
 
@@ -162,6 +199,7 @@ impl WidgetWindow {
             WidgetWindow::StickyNote(window) => window.global::<Motion>().set_reduced(reduced),
             WidgetWindow::Todo(window) => window.global::<Motion>().set_reduced(reduced),
             WidgetWindow::Calendar(window) => window.global::<Motion>().set_reduced(reduced),
+            WidgetWindow::Kanban(window) => window.global::<Motion>().set_reduced(reduced),
         }
     }
 
@@ -170,13 +208,14 @@ impl WidgetWindow {
             WidgetWindow::StickyNote(window) => window.set_note_title(title.into()),
             WidgetWindow::Todo(window) => window.set_note_title(title.into()),
             WidgetWindow::Calendar(window) => window.set_note_title(title.into()),
+            WidgetWindow::Kanban(window) => window.set_note_title(title.into()),
         }
     }
 
     pub fn set_text(&self, text: &str) {
         match self {
             WidgetWindow::StickyNote(window) => window.set_note_text(text.into()),
-            WidgetWindow::Todo(_) | WidgetWindow::Calendar(_) => {}
+            WidgetWindow::Todo(_) | WidgetWindow::Calendar(_) | WidgetWindow::Kanban(_) => {}
         }
     }
 
@@ -188,6 +227,7 @@ impl WidgetWindow {
             }
             WidgetWindow::Todo(window) => window.set_pinned(placement.pinned),
             WidgetWindow::Calendar(window) => window.set_pinned(placement.pinned),
+            WidgetWindow::Kanban(window) => window.set_pinned(placement.pinned),
         }
     }
 
@@ -205,6 +245,10 @@ impl WidgetWindow {
                 let scale = window.window().scale_factor();
                 window.set_resize_border(window.get_resize_border() * scale);
             }
+            WidgetWindow::Kanban(window) => {
+                let scale = window.window().scale_factor();
+                window.set_resize_border(window.get_resize_border() * scale);
+            }
         }
     }
 
@@ -213,6 +257,7 @@ impl WidgetWindow {
             WidgetWindow::StickyNote(window) => window.set_opened(value),
             WidgetWindow::Todo(window) => window.set_opened(value),
             WidgetWindow::Calendar(window) => window.set_opened(value),
+            WidgetWindow::Kanban(window) => window.set_opened(value),
         }
     }
 
@@ -221,6 +266,7 @@ impl WidgetWindow {
             WidgetWindow::StickyNote(window) => window.set_closing(value),
             WidgetWindow::Todo(window) => window.set_closing(value),
             WidgetWindow::Calendar(window) => window.set_closing(value),
+            WidgetWindow::Kanban(window) => window.set_closing(value),
         }
     }
 
@@ -243,6 +289,14 @@ impl WidgetWindow {
                 })
             }
             WidgetWindow::Calendar(window) => {
+                let weak = window.as_weak();
+                Box::new(move || {
+                    if let Some(window) = weak.upgrade() {
+                        window.set_opened(true);
+                    }
+                })
+            }
+            WidgetWindow::Kanban(window) => {
                 let weak = window.as_weak();
                 Box::new(move || {
                     if let Some(window) = weak.upgrade() {

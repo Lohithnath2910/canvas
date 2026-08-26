@@ -1,4 +1,4 @@
-use canvas_storage::{KIND_CALENDAR, KIND_DOCUMENT, KIND_STICKY_NOTE, KIND_TODO};
+use canvas_storage::{KIND_CALENDAR, KIND_DOCUMENT, KIND_KANBAN, KIND_STICKY_NOTE, KIND_TODO};
 
 pub struct WidgetType {
     pub kind: &'static str,
@@ -32,6 +32,12 @@ pub const BUILT: &[WidgetType] = &[
         label: "NEW CALENDAR",
         shortcut: "",
     },
+    WidgetType {
+        kind: KIND_KANBAN,
+        name: "board",
+        label: "NEW BOARD",
+        shortcut: "",
+    },
 ];
 
 pub const NEW_PREFIX: &str = "new:";
@@ -59,7 +65,7 @@ mod tests {
         KIND_TODO,
         KIND_DOCUMENT,
         KIND_CALENDAR,
-        canvas_storage::KIND_KANBAN,
+        KIND_KANBAN,
     ];
 
     #[test]
@@ -108,7 +114,7 @@ mod tests {
             None
         );
         assert_eq!(kind_for_action("settings"), None);
-        assert_eq!(kind_for_action("new:kanban"), None);
+        assert_eq!(kind_for_action("new:spreadsheet"), None);
     }
 
     #[test]
@@ -116,7 +122,13 @@ mod tests {
         let labels: Vec<String> = BUILT.iter().map(palette_label).collect();
         assert_eq!(
             labels,
-            ["New note", "New todo", "New document", "New calendar"]
+            [
+                "New note",
+                "New todo",
+                "New document",
+                "New calendar",
+                "New board"
+            ]
         );
     }
 

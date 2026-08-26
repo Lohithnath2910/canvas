@@ -23,6 +23,27 @@ pub fn day_fraction(ts_ms: i64, offset_ms: i64) -> f32 {
     minute_of_day(ts_ms, offset_ms) as f32 / 1440.0
 }
 
+pub fn day_stamp(ts_ms: i64, offset_ms: i64) -> String {
+    const MONTHS: [&str; 12] = [
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    ];
+    let (_, month, day) = civil_from_days((ts_ms + offset_ms).div_euclid(DAY_MS));
+    format!("{day} {}", MONTHS[(month - 1) as usize])
+}
+
+pub fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
 pub fn hhmm(ts_ms: i64, offset_ms: i64) -> String {
     let minutes = minute_of_day(ts_ms, offset_ms);
     format!("{:02}:{:02}", minutes / 60, minutes % 60)
@@ -165,5 +186,33 @@ mod tests {
             assert!(current.1 >= previous.1);
             previous = current;
         }
+    }
+
+    #[test]
+    fn civil_from_days_agrees_with_known_dates() {
+        assert_eq!(civil_from_days(0), (1970, 1, 1));
+        assert_eq!(civil_from_days(-1), (1969, 12, 31));
+        assert_eq!(civil_from_days(59), (1970, 3, 1));
+        assert_eq!(civil_from_days(20_691), (2026, 8, 26));
+    }
+
+    #[test]
+    fn civil_from_days_handles_leap_days() {
+        let leap = 11_016;
+        assert_eq!(civil_from_days(leap), (2000, 2, 29));
+        assert_eq!(civil_from_days(leap + 1), (2000, 3, 1));
+    }
+
+    #[test]
+    fn day_stamp_reads_as_a_card_meta_date() {
+        assert_eq!(day_stamp(20_691 * DAY_MS, 0), "26 AUG");
+        assert_eq!(day_stamp(0, 0), "1 JAN");
+    }
+
+    #[test]
+    fn day_stamp_follows_the_local_day() {
+        let late = 20_691 * DAY_MS + 23 * 3_600_000;
+        assert_eq!(day_stamp(late, 0), "26 AUG");
+        assert_eq!(day_stamp(late, 2 * 3_600_000), "27 AUG");
     }
 }

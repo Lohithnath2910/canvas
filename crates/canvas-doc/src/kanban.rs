@@ -78,6 +78,16 @@ impl KanbanDoc {
         columns
     }
 
+    pub const DEFAULT_COLUMNS: [&str; 3] = ["TODO", "DOING", "DONE"];
+
+    pub fn seeded() -> Self {
+        let doc = Self::new();
+        for title in Self::DEFAULT_COLUMNS {
+            doc.add_column(title);
+        }
+        doc
+    }
+
     pub fn add_column(&self, title: &str) -> (String, Vec<u8>) {
         let id = uuid::Uuid::new_v4().to_string();
         let mut txn = self.doc.transact_mut();
@@ -586,5 +596,39 @@ mod tests {
         assert_eq!(doc.cards()[0].title, "héllo 🎉🎉");
         doc.set_title(&id, "");
         assert_eq!(doc.cards()[0].title, "");
+    }
+
+    #[test]
+    fn a_seeded_board_opens_with_three_named_columns() {
+        let doc = KanbanDoc::seeded();
+        let titles: Vec<String> = doc.columns().into_iter().map(|c| c.title).collect();
+        assert_eq!(titles, KanbanDoc::DEFAULT_COLUMNS);
+        assert!(doc.cards().is_empty());
+    }
+
+    #[test]
+    fn a_seeded_board_keeps_its_column_ids_across_a_reload() {
+        let doc = KanbanDoc::seeded();
+        let before: Vec<String> = doc.columns().into_iter().map(|c| c.id).collect();
+        let reloaded = KanbanDoc::load(&doc.snapshot());
+        let after: Vec<String> = reloaded.columns().into_iter().map(|c| c.id).collect();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn seeding_twice_never_produces_the_same_column_ids() {
+        let a: Vec<String> = KanbanDoc::seeded()
+            .columns()
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        let b: Vec<String> = KanbanDoc::seeded()
+            .columns()
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        for id in &a {
+            assert!(!b.contains(id));
+        }
     }
 }

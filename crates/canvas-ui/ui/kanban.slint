@@ -1,0 +1,510 @@
+import { Palette } from "theme/palette.slint";
+import { Typography } from "theme/typography.slint";
+import { Motion, Ease } from "theme/motion.slint";
+import { Layout } from "theme/layout.slint";
+import { Panel } from "theme/surface.slint";
+import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
+import { IconPin, IconTrash, IconX, IconPlus } from "theme/icons.slint";
+import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
+
+export struct KanbanColumnData {
+    id: string,
+    title: string,
+    count: int,
+}
+
+export struct KanbanCardData {
+    id: string,
+    col: int,
+    row: int,
+    title: string,
+    meta: string,
+}
+
+export component KanbanWindow inherits Window {
+    in-out property <string> note-title: "UNTITLED";
+    in property <[KanbanColumnData]> columns: [];
+    in property <[KanbanCardData]> cards: [];
+    in property <WidgetState> strip-state: WidgetState.idle;
+    in property <int> peer-count: 0;
+    in-out property <bool> pinned: false;
+    in property <bool> keyboard-focused: false;
+
+    callback window-moved(length, length);
+    callback drag-started();
+    callback drag-ended();
+    callback card-moved(string, int, int);
+    callback card-added(int);
+    callback card-removed(string);
+    callback card-title-edited(string, string);
+    callback edit-committed();
+    callback pin-toggled(bool);
+    callback delete-confirmed();
+    callback title-edited(string);
+    callback close-requested();
+    callback palette-requested();
+
+    in-out property <string> editing-id: "";
+
+    preferred-width: Layout.kanban-w + 2 * Layout.plate-margin;
+    preferred-height: Layout.kanban-h + 2 * Layout.plate-margin;
+    min-width: 420px + 2 * Layout.plate-margin;
+    min-height: 260px + 2 * Layout.plate-margin;
+    no-frame: true;
+    in-out property <length> resize-border: Layout.resize-border;
+    resize-border-width: root.resize-border;
+    background: transparent;
+    title: "Canvas";
+
+    in-out property <bool> opened: false;
+    in-out property <bool> closing: false;
+
+    property <bool> dragging: false;
+    property <bool> confirming-delete: false;
+    property <bool> editing-title: false;
+
+    property <string> held-card: "";
+    property <length> held-dx: 0px;
+    property <length> held-dy: 0px;
+    property <int> drop-col: -1;
+    property <int> drop-row: 0;
+
+    property <bool> controls-visible:
+        drag-area.has-hover
+        || pin-btn.hovered || pin-btn.focused
+        || trash-btn.hovered || trash-btn.focused
+        || close-btn.hovered || close-btn.focused
+        || root.editing-title;
+
+    property <length> confirm-h: 75px;
+    property <length> add-row-h: Layout.header-h;
+    property <length> board-w: plate.width - 2 * Layout.pad;
+    property <int> col-count: max(1, root.columns.length);
+    property <length> column-w:
+        (root.board-w - (root.col-count - 1) * Layout.kanban-col-gap) / root.col-count;
+    property <length> col-step: root.column-w + Layout.kanban-col-gap;
+    property <length> card-step: Layout.kanban-card-h + Layout.kanban-card-gap;
+
+    pure function column-x(col: int) -> length {
+        return col * root.col-step;
+    }
+
+    pure function card-y(row: int) -> length {
+        return Layout.kanban-col-head-h + Layout.kanban-card-gap + row * root.card-step;
+    }
+
+    pure function col-at(x: length) -> int {
+        return clamp(floor(x / root.col-step), 0, root.col-count - 1);
+    }
+
+    pure function row-at(y: length) -> int {
+        return max(0, floor((y - Layout.kanban-col-head-h) / root.card-step));
+    }
+
+    plate := Panel {
+        x: Layout.plate-margin;
+        y: Layout.plate-margin + (root.opened ? 0px : Motion.open-rise);
+        width: parent.width - 2 * Layout.plate-margin;
+        height: parent.height - 2 * Layout.plate-margin;
+        corner-radius: Layout.radius-plate;
+        dragging: root.dragging;
+
+        opacity: root.closing ? 0.0 : (root.opened ? 1.0 : 0.0);
+        animate y { duration: Motion.open; easing: Ease.standard; }
+        animate opacity {
+            duration: root.closing ? Motion.close : Motion.open;
+            easing: Ease.standard;
+        }
+
+        if root.keyboard-focused: Rectangle {
+            x: -(Layout.focus-offset + Layout.focus-width);
+            y: -(Layout.focus-offset + Layout.focus-width);
+            width: parent.width + 2 * (Layout.focus-offset + Layout.focus-width);
+            height: parent.height + 2 * (Layout.focus-offset + Layout.focus-width);
+            background: transparent;
+            border-width: Layout.focus-width;
+            border-color: Palette.text;
+            border-radius: Layout.radius-plate + Layout.focus-offset + Layout.focus-width;
+        }
+
+        board := Rectangle {
+            x: Layout.pad;
+            y: Layout.header-band + 1px + Layout.pad;
+            width: root.board-w;
+            height: parent.height - self.y - Layout.pad - root.add-row-h
+                - (root.confirming-delete ? root.confirm-h : 0px);
+            clip: true;
+
+            for column[idx] in root.columns: Rectangle {
+                x: root.column-x(idx);
+                y: 0;
+                width: root.column-w;
+                height: parent.height;
+                background: transparent;
+                border-width: (root.held-card != "" && root.drop-col == idx) ? 1px : 0px;
+                border-color: Palette.text;
+                border-radius: Layout.radius-control;
+
+                Text {
+                    x: 0;
+                    y: 0;
+                    width: parent.width - count-text.width - Layout.icon-gap;
+                    height: Layout.kanban-col-head-h - 1px;
+                    vertical-alignment: center;
+                    text: column.title;
+                    color: Palette.text;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.label-size;
+                    letter-spacing: Typography.label-tracking;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+
+                count-text := Text {
+                    x: parent.width - self.width;
+                    y: 0;
+                    height: Layout.kanban-col-head-h - 1px;
+                    vertical-alignment: center;
+                    horizontal-alignment: right;
+                    text: column.count;
+                    color: Palette.dim;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.label-size;
+                    letter-spacing: Typography.label-tracking;
+                    wrap: no-wrap;
+                }
+
+                Rectangle {
+                    x: 0;
+                    y: Layout.kanban-col-head-h - 1px;
+                    width: parent.width;
+                    height: 1px;
+                    background: Palette.edge;
+                }
+            }
+
+            for card in root.cards: card-box := Rectangle {
+                property <bool> held: root.held-card == card.id;
+                property <bool> editing: root.editing-id == card.id;
+
+                x: root.column-x(card.col) + (self.held ? root.held-dx : 0px);
+                y: root.card-y(card.row) + (self.held ? root.held-dy : 0px);
+                width: root.column-w;
+                height: Layout.kanban-card-h;
+                background: Palette.elev-raised;
+                border-width: 1px;
+                border-color: Palette.edge;
+                border-radius: Layout.radius-control;
+
+                drop-shadow-offset-y: self.held ? Palette.shadow-offset-y-drag : 0px;
+                drop-shadow-blur: self.held ? Palette.shadow-blur-drag : 0px;
+                drop-shadow-color: self.held ? Palette.shadow-color-drag : transparent;
+
+                card-touch := TouchArea {
+                    x: 0;
+                    y: 0;
+                    width: parent.width - Layout.icon-size - Layout.kanban-card-pad;
+                    height: parent.height;
+                    enabled: !card-box.editing;
+                    mouse-cursor: card-box.held ? grabbing : grab;
+                    double-clicked => { root.editing-id = card.id; }
+                    moved => {
+                        root.held-card = card.id;
+                        root.held-dx = self.mouse-x - self.pressed-x;
+                        root.held-dy = self.mouse-y - self.pressed-y;
+                        root.drop-col = root.col-at(
+                            root.column-x(card.col) + root.held-dx + root.column-w / 2);
+                        root.drop-row = root.row-at(root.card-y(card.row) + root.held-dy);
+                    }
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up && root.held-card == card.id) {
+                            root.card-moved(card.id, root.drop-col, root.drop-row);
+                            root.held-card = "";
+                            root.held-dx = 0px;
+                            root.held-dy = 0px;
+                            root.drop-col = -1;
+                        }
+                    }
+                }
+
+                if !card-box.editing: Text {
+                    x: Layout.kanban-card-pad;
+                    y: Layout.kanban-card-pad;
+                    width: parent.width - 2 * Layout.kanban-card-pad;
+                    height: 22px;
+                    vertical-alignment: center;
+                    text: card.title;
+                    color: Palette.text;
+                    font-family: Typography.body-face;
+                    font-size: Typography.body-size;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+
+                if card-box.editing: Rectangle {
+                    x: Layout.kanban-card-pad - 6px;
+                    y: Layout.kanban-card-pad;
+                    width: parent.width - 2 * Layout.kanban-card-pad + 12px;
+                    height: 22px;
+                    background: Palette.elev-recessed;
+                    border-radius: Layout.radius-control;
+                    border-width: 1px;
+                    border-color: Palette.edge;
+
+                    card-input := TextInput {
+                        x: 6px;
+                        y: 0;
+                        width: parent.width - 12px;
+                        height: parent.height;
+                        text: card.title;
+                        single-line: true;
+                        vertical-alignment: center;
+                        color: Palette.text;
+                        selection-background-color: Palette.edge;
+                        selection-foreground-color: Palette.text;
+                        text-cursor-width: 2px;
+                        font-family: Typography.body-face;
+                        font-size: Typography.body-size;
+                        init => { self.focus(); self.select-all(); }
+                        edited => { root.card-title-edited(card.id, self.text); }
+                        accepted => { root.edit-committed(); }
+                        key-pressed(event) => {
+                            if (event.text == Key.Escape) {
+                                root.edit-committed();
+                                return accept;
+                            }
+                            return reject;
+                        }
+                    }
+                }
+
+                Text {
+                    x: Layout.kanban-card-pad;
+                    y: Layout.kanban-card-pad + 22px + Layout.kanban-card-gap;
+                    width: parent.width - 2 * Layout.kanban-card-pad;
+                    height: 16px;
+                    vertical-alignment: center;
+                    text: card.meta;
+                    color: Palette.dim;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.label-size;
+                    letter-spacing: Typography.label-tracking;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+
+                card-del := IconButton {
+                    x: parent.width - Layout.icon-size - Layout.kanban-card-pad + 4px;
+                    y: Layout.kanban-card-pad - Layout.header-y;
+                    width: Layout.icon-size;
+                    revealed: card-touch.has-hover || card-del.hovered || card-del.focused;
+                    activated => { root.card-removed(card.id); }
+                    IconTrash { stroke-color: card-del.glyph-color; }
+                }
+            }
+        }
+
+        add-row := Rectangle {
+            x: Layout.pad;
+            y: board.y + board.height;
+            width: root.board-w;
+            height: root.add-row-h;
+
+            for column[idx] in root.columns: add-btn := IconButton {
+                x: root.column-x(idx);
+                y: 0;
+                width: Layout.icon-size;
+                activated => { root.card-added(idx); }
+                IconPlus { stroke-color: add-btn.glyph-color; }
+            }
+        }
+
+        pin-btn := IconButton {
+            x: parent.width - Layout.pad - 64px;
+            y: Layout.header-y;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            activated => {
+                root.pinned = !root.pinned;
+                root.pin-toggled(root.pinned);
+            }
+            IconPin { stroke-color: root.pinned ? Palette.text : pin-btn.glyph-color; }
+        }
+
+        trash-btn := IconButton {
+            x: parent.width - Layout.pad - 40px;
+            y: Layout.header-y;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            activated => { root.confirming-delete = true; }
+            IconTrash { stroke-color: trash-btn.glyph-color; }
+        }
+
+        close-btn := IconButton {
+            x: parent.width - Layout.pad - Layout.icon-size;
+            y: Layout.header-y;
+            width: Layout.icon-size;
+            revealed: root.controls-visible;
+            activated => { root.close-requested(); }
+            IconX { stroke-color: close-btn.glyph-color; }
+        }
+
+        drag-area := TouchArea {
+            x: 16px;
+            y: 6px;
+            width: parent.width - Layout.pad - Layout.cluster-w - 16px;
+            height: Layout.header-band - 6px;
+            moved => {
+                if (!root.dragging) {
+                    root.dragging = true;
+                    root.drag-started();
+                }
+                root.window-moved(
+                    self.mouse-x - self.pressed-x,
+                    self.mouse-y - self.pressed-y
+                );
+            }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up && root.dragging) {
+                    root.dragging = false;
+                    root.drag-ended();
+                }
+            }
+            double-clicked => { root.editing-title = true; }
+        }
+
+        Rectangle {
+            x: Layout.pad;
+            y: Layout.header-y;
+            width: Layout.strip-w;
+            height: Layout.header-h;
+            GlyphStrip {
+                x: 0;
+                y: (Layout.header-h - Layout.strip-h) / 2;
+                width: Layout.strip-w;
+                height: Layout.strip-h;
+                state: root.strip-state;
+                peer-count: root.peer-count;
+            }
+        }
+
+        if !root.editing-title: Text {
+            x: Layout.title-x;
+            y: Layout.header-y;
+            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            height: Layout.header-h;
+            text: root.note-title;
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+            letter-spacing: Typography.title-tracking;
+            vertical-alignment: center;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        if root.editing-title: Rectangle {
+            x: Layout.title-x - 6px;
+            y: Layout.header-y;
+            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            height: Layout.header-h;
+            background: Palette.elev-recessed;
+            border-radius: Layout.radius-control;
+            border-width: 1px;
+            border-color: Palette.edge;
+
+            title-input := TextInput {
+                x: 6px;
+                y: 0;
+                width: parent.width - 12px;
+                height: parent.height;
+                text: root.note-title;
+                single-line: true;
+                vertical-alignment: center;
+                color: Palette.text;
+                selection-background-color: Palette.edge;
+                selection-foreground-color: Palette.text;
+                text-cursor-width: 2px;
+                font-family: Typography.interface-face;
+                font-size: Typography.title-size;
+                letter-spacing: Typography.title-tracking;
+                init => { self.focus(); self.select-all(); }
+                edited => { root.title-edited(self.text); }
+                accepted => { root.editing-title = false; }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.editing-title = false;
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+        }
+
+        Rectangle {
+            x: 0;
+            y: Layout.header-band;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        if root.confirming-delete: Rectangle {
+            x: 0;
+            y: parent.height - Layout.pad - root.confirm-h;
+            width: parent.width;
+            height: root.confirm-h;
+            background: Palette.plate;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.edge;
+            }
+
+            Text {
+                x: Layout.pad;
+                y: 13px;
+                text: "DELETE — CANNOT BE UNDONE";
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                wrap: no-wrap;
+            }
+
+            HorizontalLayout {
+                x: Layout.pad;
+                y: 41px;
+                height: 34px;
+                spacing: 8px;
+                alignment: start;
+
+                Button {
+                    label: "DELETE BOARD";
+                    variant: ButtonVariant.destructive;
+                    clicked => { root.delete-confirmed(); }
+                }
+                Button {
+                    label: "CANCEL";
+                    variant: ButtonVariant.default;
+                    clicked => { root.confirming-delete = false; }
+                }
+            }
+
+            FocusScope {
+                width: 0px;
+                height: 0px;
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.confirming-delete = false;
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+        }
+    }
+}

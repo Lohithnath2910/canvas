@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-10` — the Kanban widget window and card drag, on `KanbanDoc`'s fractional index.
+**Current task:** the **VERIFICATION QUEUE walk-through** — every buildable Stage W task is done, and the user asked on 2026-08-26 for the queue to be cleared once they were. `SW-12`, `SW-13` and `SW-14` are blocked on open questions 4, 5, 6 and 7.
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 28 ticked, 43 open (5 dropped, 10 added — S1-46 to S1-51, SW-16, SW-17, and the two Spreadsheet tasks). 143 tests pass.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Done:** 28 ticked, 43 open (5 dropped, 10 added — S1-46 to S1-51, SW-16, SW-17, and the two Spreadsheet tasks). 150 tests pass.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -384,6 +384,43 @@ built type, with a single label to their right.
 - [ ] 🟡 The hover label is driven by Slint's `changed hovered` handler, which is the one
       piece of this that has never been run. If the label sticks on a type after the pointer
       leaves, or never changes at all, that is the handler not firing — open a task
+
+**The Kanban board** → **SW-10**
+
+Create one from the **board glyph** in home's footer strip, or `New board` in the palette.
+It should open already carrying three columns — you do not have to set anything up.
+
+- [ ] The window is `640×400` with the same 32px header, glyph strip, editable title and
+      three controls as a note, and the trash control says `DELETE BOARD`
+- [ ] Three equal columns, gap 12, titled `TODO` `DOING` `DONE`, each with its name in
+      `text`, a `0` count in `dim` at the right, and a 1px `edge` rule under both
+- [ ] A `+` sits under each column. Click one — a card called `New card` appears at the
+      bottom of that column and the column's count goes up
+- [ ] Cards are `elev-raised` with a 1px `edge`, radius 8, and read
+      `New card` over `UNASSIGNED` in interface-face-11 `dim`
+- [ ] **Drag a card into another column.** While you drag: the card follows the pointer 1:1,
+      its shadow deepens, and **nothing tilts, scales or rotates** (rule 5)
+- [ ] **The column you are over gets a 1px `text` outline around the whole column — no
+      fill, no tint.** If it fills or tints instead, that is a bug
+- [ ] Let go — the card lands in that column, both counts update, and the order is the
+      order you dropped it in. Drop it between two existing cards and check it stays there
+- [ ] Drag a card **within** its own column to reorder it
+- [ ] Double-click a card — its title becomes an editable field, pre-selected. Enter or Esc
+      commits. Only one card can be editing at a time
+- [ ] Hover a card — a trash icon appears at its top right; clicking it removes the card.
+      **The right edge of a card is not draggable** — that strip belongs to the icon, the
+      same arrangement the Todo rows use
+- [ ] **Add cards, move them, close the window with `x`, reopen from home — everything is
+      where you left it. Then quit from the tray, relaunch and check again.** This is the
+      one that proves the fractional index is being written, not just computed
+- [ ] Drag the board window by its header — same feel as a note, no drift → also **S1-51**
+- [ ] 🟡 Fill a column past the bottom of the window — the extra cards are **clipped and
+      there is no scroll.** §10.3 never specified one. Expected, not a bug; open a task if
+      you want it
+- [ ] 🟡 Nothing sets an assignee or a due date, so every card reads `UNASSIGNED`. The
+      fields exist in `KanbanDoc` and the meta line renders `MIRA · 25 AUG` correctly when
+      they are set — there is just no UI for setting them, same shape as the Todo widget's
+      unset due-date `Tag`
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
       push-back and no snap-in, and always leaves ~120px of plate plus the whole header
@@ -1360,7 +1397,42 @@ because the app is currently hardcoded to a single type.
   no scale (rule 5).
   **The drop target is a 1px `text` outline around the whole column. No fill, no tint.**
   Card drag needs disjoint `TouchArea`s per §13.3 — do not layer one over the column.
+  **Built 2026-08-26.** `ui/kanban.slint`, `wire_kanban`/`refresh_kanban` in `app.rs`, and a
+  `Kanban` arm everywhere `WidgetDoc`/`WidgetWindow` has one. Added to `BUILT` as `board`,
+  so it is creatable from home's glyph strip and the palette the same day SW-17 landed.
+  Decisions this task had to take, all recorded rather than assumed:
+  **A new board is seeded with three columns — `TODO · DOING · DONE`.** `KanbanDoc::new()`
+  makes an empty document with *no* columns, and §10.3 says "three equal columns" without
+  naming them; the artboard's `SPEC · BUILD · SHIPPED` is that mockup's project content, not
+  a product default. `KanbanDoc::seeded()` is the named constructor, and `WidgetDoc::seed()`
+  is the general hook `App::create_widget` calls, so **the columns are written to disk at
+  creation**, not lazily. That matters: if they were minted on each open, a board that was
+  never closed would come back with **different column ids** and orphan every card.
+  **The `+` row lives outside the board rectangle, not inside a column.** It is one
+  `IconButton` per column in its own strip below the board, and the board's height is
+  reduced to make room. Put inside the column it would eventually sit under a card once the
+  column filled up — two overlapping `TouchArea`s, §13.3's trap, exactly the one that got
+  the Calendar's chip handler deleted in SW-08.
+  **The drop column is worked out in the card's own `moved` handler**, from the dragged
+  card's centre against the column pitch, not from a second region. `col-at`/`row-at` are
+  `pure function`s on the window so the geometry is stated once. **There is only ever one
+  `TouchArea` per card**, and it stops short of the card's delete icon the way `ItemRow`'s
+  does in the Todo window (`todo-row-tail`).
+  **The window never touches a fractional key.** `move_card(id, column_id, index)` finds the
+  neighbours in the destination column and mints the key itself, so the drop handler passes
+  a column index and a row index and nothing else.
+  **Card meta is `ASSIGNEE · DATE`, uppercased, falling back to `UNASSIGNED`** — §10.3's own
+  wording. The date is `day_stamp`, new in `calendar_time`, built on Howard Hinnant's
+  `civil_from_days`; it reads `26 AUG`, matching the artboard's `MIRA · 25 AUG`.
+  🟡 **Cards overflow the bottom of a tall column and are clipped — there is no scroll.**
+  §10.3 does not mention one and the `ScrollBar` component would need a per-column
+  `Flickable`, which is its own task. Noted, not silently ignored.
   *DoD:* cards drag between columns, land in the right order, and survive a restart.
+  ✅ the CRDT half — 150 tests pass, including three new ones that pin the seeding:
+  a seeded board opens with exactly those three titles, its column ids survive a reload, and
+  two separately seeded boards never share a column id.
+  🟡 **the drag has not been driven by hand, and it is the whole point of the task.** The box
+  stays open. See the VERIFICATION QUEUE.
 
 ### Wf — Whiteboard
 

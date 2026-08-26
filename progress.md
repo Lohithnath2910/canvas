@@ -50,68 +50,68 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-10` — the Kanban widget window and card drag.** `640×400`, three equal columns, gap
-12. Column header is interface-face-11 `text` plus a `dim` count, gap 8, then a 1px `edge`
-rule. Cards are `elev-raised`, 1px `edge`, radius 8, padding 12, gap 8, title body-face-14,
-meta interface-face-11 `dim` reading `ASSIGNEE · DATE` or `UNASSIGNED`.
-**The drop target is a 1px `text` outline around the whole column — no fill, no tint.**
-A dragged card gets `shadow-drag` and nothing else: no tilt, no scale (rule 5).
+**The VERIFICATION QUEUE walk-through — with the user at the keyboard.** This is not a
+fallback because the backlog ran dry; the user asked for it directly on 2026-08-26:
 
-`KanbanDoc` is done and has 22 tests. `move_card(id, column, index)` is the API a drop
-gives you — it finds the neighbours in the destination column itself and mints the
-fractional key, so **the window never touches a key.** Cards live in a `yrs::Map` keyed by
-card id, so there is no array position to reorder.
+> *"i want to clear the verification queue also after all these SW tasks and its proper
+> functioning etc is wired in and is working"*
 
-**The one trap:** card drag needs disjoint `TouchArea`s (§13.3). Do not put a column-wide
-`TouchArea` behind the cards — that is the same overlap that got the Calendar's chip
-handler deleted in SW-08. One `TouchArea` per card, and work out the drop column from the
-pointer's x against the column bounds in the `moved` handler rather than from a second
-region.
+Every Stage W task that can be built without the user is now built. What is left in the
+backlog is `SW-12` (blocked on **open question 4** — the Whiteboard has no artboard) and
+`SW-13`/`SW-14` (blocked on **open questions 5, 6 and 7** — Spreadsheet formulas, mid-sheet
+insertion, default size). Those are genuine blocks, not soft ones: the mid-sheet-insertion
+answer decides the CRDT shape and cannot be retrofitted.
 
-After that: `SW-12` needs **open question 4** (the Whiteboard has no artboard) and
-`SW-13`/`SW-14` need **open questions 5, 6 and 7** (Spreadsheet formulas, mid-sheet
-insertion, default size). Those three are genuinely blocked. **When they are the only
-thing left, the next unit of work is the verification walk-through, not a fourth attempt
-to unblock them** — see below.
+So the next session should **not** hunt for a fourth thing to build. It should open
+`TASKS.md`'s VERIFICATION QUEUE and walk it, top to bottom, with the user driving, ticking
+what passes and opening a numbered task for what does not. Everything needed is already
+written down: each section says exactly what to click and what should happen.
+
+**Start the walk here, in this order** — it goes cheapest-to-set-up first:
+
+1. **The create control** (SW-17). It is the gateway to everything else — if the footer
+   glyph strip does not work, nothing below can be reached. The one line most likely to be
+   wrong is the hover label, driven by Slint's `changed hovered`, which has never been run.
+2. **The Calendar** (SW-08). A seeded `THIS WEEK` board is already in the database flagged
+   open, so it should appear on launch with eight chips in the artboard's own layout.
+3. **The Kanban board** (SW-10). Create one from the board glyph; it arrives with three
+   columns. The drag is the whole task and the whole risk.
+4. **The Todo widget** (SW-05/SW-02), then the older Stage 1 sections — three header
+   controls, undo/redo, reduced motion, the home scrollbar, the palette and its global
+   hotkey, the open/close animation, the screen clamp, the drag feel.
+
+`S1-45` — Stage 1 sign-off — cannot honestly close until this walk happens.
 
 ### What is real and what is not
 
 **Wired into the running app and reachable by a user:** the sticky note, the **Todo**
-widget, the **Shared Document**, and the **Calendar**. As of SW-17 all four are creatable
-from home's footer glyph strip *and* from the command palette, both driven by one
-`BUILT` table in `canvas-app/src/widget_types.rs`. A seeded `THIS WEEK` calendar is
-sitting in the database flagged open, so it should appear on next launch.
+widget, the **Shared Document**, the **Calendar**, and the **Kanban board**. All five are
+creatable from home's footer glyph strip *and* from the command palette, both driven by one
+`BUILT` table in `canvas-app/src/widget_types.rs`. A seeded `THIS WEEK` calendar is sitting
+in the database flagged open.
 
-**Built, tested, and NOT reachable from the app:** `KanbanDoc` and `WhiteboardDoc`. Do not
-read 143 passing tests as a working Kanban. They are deliberately absent from `BUILT` —
-the table hides a type until it has a window, and a test fails if a kind gains a document
-without gaining a table row.
+**Built, tested, and NOT reachable from the app:** `WhiteboardDoc` only. It is deliberately
+absent from `BUILT` — the table hides a type until it has a window, and a test fails if a
+kind gains a document without gaining a table row.
 
 **Only in `--gallery`:** the four §6 components (SW-03).
 
-### Still the largest block of value
-
-**The VERIFICATION QUEUE — and the user has now put a deadline on it.** On 2026-08-26 they
-asked for it to be **cleared** once the Stage W widgets are wired and working. So when the
-SW tasks run out, the next unit of work is the walk-through with the user at the keyboard,
-not another feature. Raise it in every end-of-run report until it happens.
-
-It has a section per task: the Todo widget (SW-05/SW-02), the **Calendar** (SW-08, seeded
-and ready to look at), the **create control** (SW-17), three header controls (SW-16),
-undo/redo (S1-43), reduced motion (S1-44), the home scrollbar (S1-47), the SW-01 regression
-check, and the four components via `--gallery` (SW-03) — on top of the palette, the global
-hotkey, the open/close animation, the screen clamp and the drag feel. `S1-45` cannot
-honestly close until it is walked.
+**None of it has been watched working.** 150 passing tests say the documents converge and
+the maths is right. They say nothing about what is on screen.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
-- **How a Calendar event is created, moved or deleted from inside the widget** —
-  **open question 10**. §10.4 specifies the readout and no editing UI at all. `CalendarDoc`
-  already has every method needed, so nothing is blocked on the CRDT, only the interaction.
-- **Before SW-13:** does the Spreadsheet support formulas, and can rows and columns be
-  inserted mid-sheet? The second decides the CRDT shape and cannot be retrofitted.
+- **Open question 4** — the Whiteboard has no artboard. `SW-12` needs one.
+- **Open questions 5, 6, 7** — Spreadsheet formulas, mid-sheet row/column insertion,
+  default size. The second decides the CRDT shape and cannot be retrofitted, so `SW-13` is
+  genuinely blocked.
+- **Open question 10** — how a Calendar event is created, moved or deleted from inside the
+  widget. §10.4 specifies the readout and no editing UI at all. `CalendarDoc` already has
+  every method needed, so nothing is blocked on the CRDT, only the interaction.
+- **Nothing sets an assignee or a due date on a Kanban card**, so every card reads
+  `UNASSIGNED`. Same shape as the Todo widget's unset due-date `Tag`: the field exists, the
+  meta line renders it correctly, there is no UI for it.
 - What pin should do beyond holding a note at the desktop layer.
-- The Whiteboard has no artboard (open question 4) — SW-12 needs one.
 - `CTRL+T` is shown against `New todo` in the palette but has never been registered — only
   Ctrl+K and Ctrl+N are. §9's own text, not a regression, but it is a small lie on screen.
 
@@ -130,7 +130,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 143 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 150 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -168,7 +168,7 @@ Canvas/
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
     canvas-doc/      CRDT documents (yrs). StickyNoteDoc, UndoHistory, TodoListDoc,
                      CalendarDoc, KanbanDoc, WhiteboardDoc + a hand-written fractional
-                     index. 103 tests. KanbanDoc and WhiteboardDoc have NO window yet.
+                     index. 106 tests. Only WhiteboardDoc has NO window yet.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -182,7 +182,7 @@ cargo run -p canvas-app -- --dump    # print every note's text/position/state fr
 cargo run -p canvas-app -- --gallery # the section 6 component gallery (dev only)
 cargo run -p canvas-app --example insert_todo   # a non-note row; --remove undoes it
 cargo run -p canvas-app --example insert_calendar # a seeded week; --remove undoes it
-cargo test --workspace               # 134 tests
+cargo test --workspace               # 150 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
 ```
@@ -1987,3 +1987,73 @@ belong in the row list"* — the user overruled it, and SW-02's entry now says s
 - 🟡 Nothing on screen has been watched. The box stays open and the VERIFICATION QUEUE has
   a new section for it, including the one thing most likely to be wrong: the `changed
   hovered` handler.
+
+---
+
+### 2026-08-26 — SW-10: the Kanban board, and the last buildable Stage W task
+
+- 🟡 **The Kanban board renders and its cards drag between columns.** `ui/kanban.slint`,
+  `wire_kanban`/`refresh_kanban` in `app.rs`, a `Kanban` arm everywhere the two enums have
+  one, and a `board` row in `BUILT` so it is creatable from home and the palette. Compiles,
+  clippy-clean, 150 tests pass — **and the drag, which is the entire task, has not been
+  driven by hand.** The box stays open.
+
+**A new board is seeded with three columns.** `KanbanDoc::new()` returns a document with no
+columns at all, and §10.3 says *"three equal columns"* without naming them — the artboard's
+`SPEC · BUILD · SHIPPED` is that mockup's project content, not a product default. So:
+`TODO · DOING · DONE`, via a named `KanbanDoc::seeded()` constructor.
+
+**Where the seeding happens matters more than what it says.** It runs in
+`App::create_widget`, through a general `WidgetDoc::seed(kind)` hook, and **writes to disk
+immediately**. The tempting alternative — mint the columns lazily in `WidgetDoc::load` when
+the snapshot is empty — is quietly broken: a board that was created but never closed would
+come back on the next open with **different column ids**, and every card that referenced the
+old ones would be orphaned. `a_seeded_board_keeps_its_column_ids_across_a_reload` and
+`seeding_twice_never_produces_the_same_column_ids` are the two tests that pin both halves of
+that. The lazy path is still there in `load` as a safety net for a board row whose document
+somehow went missing; it is a net, not the mechanism.
+
+**§13.3 shaped this task twice, in two different places.**
+
+The first is the one the task text warned about: no column-wide `TouchArea` behind the
+cards. There is exactly **one `TouchArea` per card**, and the drop column is worked out
+inside that card's own `moved` handler — the dragged card's centre against the column pitch
+— rather than by asking a second region what is underneath. `col-at` and `row-at` are `pure
+function`s on the window so the geometry is written once and both the drag and the drop read
+the same arithmetic.
+
+The second was not in the task text and is the one worth remembering. The `+` button that
+adds a card started out **inside** its column, pinned to the bottom. That is fine on an
+empty board and becomes the exact same overlap the moment the column fills up and a card
+slides underneath it. It now lives in **its own strip below the board**, with the board's
+height reduced to make room, so the two regions can never meet however many cards there are.
+This is the third time this project has walked into overlapping `TouchArea`s (the note
+header, the Calendar's chips, this) — the pattern that keeps causing it is *"put the small
+control where the big scrollable content also is"*, and the fix is always to give the
+control its own band rather than to reason about z-order.
+
+**The window never touches a fractional key.** `move_card(id, column_id, index)` finds the
+neighbours in the destination column and mints the key itself, so the drop handler hands
+over a column index and a row index and nothing else. That is what SW-09 built the API for
+and it paid off exactly as intended — the Slint side has no idea base-36 keys exist.
+
+**Card meta is `ASSIGNEE · DATE`, uppercased, falling back to `UNASSIGNED`** — §10.3's own
+wording. The date needed a calendar day out of epoch millis, so `calendar_time` gained
+`day_stamp` and `civil_from_days` (Howard Hinnant's algorithm, four tests including the
+2000-02-29 leap day and the local-day boundary). It renders `26 AUG`, matching the
+artboard's `MIRA · 25 AUG`.
+
+**Known and deliberate, not silently ignored:** cards past the bottom of a tall column are
+**clipped, with no scroll** — §10.3 never specified one and a per-column `Flickable` plus
+`ScrollBar` is its own task. And **nothing sets an assignee or a due date**, so every card
+reads `UNASSIGNED`; the fields exist in `KanbanDoc` and the meta line renders them correctly
+when set, exactly the shape the Todo widget's unset due-date `Tag` is in.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **150 tests pass**
+  (27 app · 106 doc · 17 storage).
+
+**This is the last Stage W task that can be built without the user.** `SW-12` needs open
+question 4 (the Whiteboard has no artboard) and `SW-13`/`SW-14` need open questions 5, 6 and
+7. So the next unit of work is the one the user asked for on 2026-08-26: **walk the
+VERIFICATION QUEUE and clear it.** The GO block at the top of this file says where to start
+and why that order.
