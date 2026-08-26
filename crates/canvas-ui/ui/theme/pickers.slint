@@ -1,0 +1,402 @@
+import { Palette } from "palette.slint";
+import { Typography } from "typography.slint";
+import { Motion, Ease } from "motion.slint";
+import { Layout } from "layout.slint";
+import { Button, ButtonVariant, IconButton } from "controls.slint";
+import { IconChevronLeft, IconChevronRight } from "icons.slint";
+
+export struct DayCell {
+    label: string,
+    epoch-day: int,
+    in-month: bool,
+    today: bool,
+}
+
+component Readout inherits Rectangle {
+    in property <string> value;
+    in property <bool> selected;
+    callback picked();
+
+    width: Layout.picker-readout-w;
+    height: Layout.header-band;
+    border-radius: Layout.radius-control;
+    border-width: 1px;
+    border-color: root.selected ? Palette.text : Palette.edge;
+    background: root.selected ? Palette.text : Palette.elev-recessed;
+    animate background, border-color { duration: Motion.hover; easing: Ease.standard; }
+
+    Text {
+        width: 100%;
+        height: 100%;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        text: root.value;
+        color: root.selected ? Palette.base : Palette.text;
+        font-family: Typography.interface-face;
+        font-size: Typography.title-size;
+        letter-spacing: Typography.title-tracking;
+    }
+
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.picked(); }
+    }
+}
+
+component FaceCell inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected;
+    callback picked();
+
+    width: Layout.picker-cell;
+    height: Layout.picker-cell;
+    border-radius: Layout.radius-pill;
+    background: root.selected ? Palette.text : Colors.transparent;
+
+    Text {
+        width: 100%;
+        height: 100%;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        text: root.label;
+        color: root.selected ? Palette.base : (touch.has-hover ? Palette.text : Palette.dim);
+        font-family: Typography.interface-face;
+        font-size: Typography.label-size;
+        letter-spacing: Typography.label-tracking;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.picked(); }
+    }
+}
+
+export component TimePicker inherits Rectangle {
+    in-out property <int> minute-of-day: 0;
+    in property <string> save-label: "OK";
+    callback accepted();
+    callback cancelled();
+
+    property <bool> on-minutes: false;
+    property <int> hour: root.minute-of-day / 60;
+    property <int> minute: mod(root.minute-of-day, 60);
+
+    property <length> cx: Layout.picker-face / 2;
+    property <length> cy: root.readout-h + Layout.pad + Layout.picker-face / 2;
+    property <length> outer-r: (Layout.picker-face - Layout.picker-cell) / 2;
+    property <length> inner-r: root.outer-r - Layout.picker-ring-gap;
+    property <length> readout-h: Layout.header-band;
+
+    property <angle> hand-angle:
+        (root.on-minutes ? root.minute * 6 : mod(root.hour, 12) * 30) * 1deg;
+    property <length> hand-r: (!root.on-minutes && root.hour >= 12) ? root.inner-r : root.outer-r;
+
+    width: Layout.picker-face;
+    height: root.readout-h + Layout.pad + Layout.picker-face + Layout.pad + Layout.button-h;
+    background: Colors.transparent;
+
+    public function show-hours() { root.on-minutes = false; }
+
+    HorizontalLayout {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: root.readout-h;
+        spacing: Layout.icon-gap;
+        alignment: center;
+
+        Readout {
+            value: root.hour < 10 ? "0" + root.hour : root.hour;
+            selected: !root.on-minutes;
+            picked => { root.on-minutes = false; }
+        }
+
+        Text {
+            width: Layout.gap-m;
+            height: root.readout-h;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            text: ":";
+            color: Palette.dim;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+        }
+
+        Readout {
+            value: root.minute < 10 ? "0" + root.minute : root.minute;
+            selected: root.on-minutes;
+            picked => { root.on-minutes = true; }
+        }
+    }
+
+    Path {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: parent.width / 1px;
+        viewbox-height: parent.height / 1px;
+        stroke: Palette.text;
+        stroke-width: 1px;
+        fill: transparent;
+
+        MoveTo {
+            x: root.cx / 1px;
+            y: root.cy / 1px;
+        }
+
+        LineTo {
+            x: (root.cx + root.hand-r * Math.sin(root.hand-angle)) / 1px;
+            y: (root.cy - root.hand-r * Math.cos(root.hand-angle)) / 1px;
+        }
+    }
+
+    Rectangle {
+        x: root.cx - Layout.picker-hand-dot / 2;
+        y: root.cy - Layout.picker-hand-dot / 2;
+        width: Layout.picker-hand-dot;
+        height: Layout.picker-hand-dot;
+        background: Palette.text;
+    }
+
+    if !root.on-minutes: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: Colors.transparent;
+
+        for h in 24: FaceCell {
+            property <int> spoke: mod(h, 12);
+            property <length> ring-r: h < 12 ? root.outer-r : root.inner-r;
+            property <angle> spoke-angle: self.spoke * 30deg;
+
+            x: root.cx + self.ring-r * Math.sin(self.spoke-angle) - Layout.picker-cell / 2;
+            y: root.cy - self.ring-r * Math.cos(self.spoke-angle) - Layout.picker-cell / 2;
+            label: h < 10 ? "0" + h : h;
+            selected: root.hour == h;
+            picked => {
+                root.minute-of-day = h * 60 + root.minute;
+                root.on-minutes = true;
+            }
+        }
+    }
+
+    if root.on-minutes: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: Colors.transparent;
+
+        for slot in 12: FaceCell {
+            property <int> value: slot * 5;
+            property <angle> spoke-angle: slot * 30deg;
+
+            x: root.cx + root.outer-r * Math.sin(self.spoke-angle) - Layout.picker-cell / 2;
+            y: root.cy - root.outer-r * Math.cos(self.spoke-angle) - Layout.picker-cell / 2;
+            label: self.value < 10 ? "0" + self.value : self.value;
+            selected: root.minute == self.value;
+            picked => { root.minute-of-day = root.hour * 60 + self.value; }
+        }
+    }
+
+    HorizontalLayout {
+        x: 0;
+        y: parent.height - Layout.button-h;
+        width: parent.width;
+        height: Layout.button-h;
+        spacing: Layout.icon-gap;
+        alignment: end;
+
+        Button {
+            label: "CANCEL";
+            variant: ButtonVariant.default;
+            clicked => { root.cancelled(); }
+        }
+
+        Button {
+            label: root.save-label;
+            variant: ButtonVariant.primary;
+            clicked => { root.accepted(); }
+        }
+    }
+}
+
+export component DatePicker inherits Rectangle {
+    in property <string> stamp: "";
+    in property <string> month-label: "";
+    in property <[string]> weekday-heads: [];
+    in property <[DayCell]> days: [];
+    in-out property <int> selected-day: 0;
+    in property <string> save-label: "OK";
+    callback month-stepped(int);
+    callback accepted();
+    callback cancelled();
+
+    property <length> head-h: Layout.header-band;
+    property <length> nav-h: Layout.picker-row-h;
+    property <length> col-w: Layout.picker-face / 7;
+    property <length> grid-h: 6 * Layout.picker-row-h;
+
+    width: Layout.picker-face;
+    height: root.head-h + 1px + root.nav-h + root.nav-h + root.grid-h
+        + Layout.pad + Layout.button-h;
+    background: Colors.transparent;
+
+    Text {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: root.head-h;
+        vertical-alignment: center;
+        text: root.stamp;
+        color: Palette.text;
+        font-family: Typography.interface-face;
+        font-size: Typography.title-size;
+        letter-spacing: Typography.title-tracking;
+        overflow: elide;
+        wrap: no-wrap;
+    }
+
+    Rectangle {
+        x: 0;
+        y: root.head-h;
+        width: parent.width;
+        height: 1px;
+        background: Palette.edge;
+    }
+
+    Rectangle {
+        x: 0;
+        y: root.head-h + 1px;
+        width: parent.width;
+        height: root.nav-h;
+
+        prev-btn := IconButton {
+            x: 0;
+            y: (parent.height - Layout.icon-size) / 2 - Layout.header-y;
+            width: Layout.icon-size;
+            activated => { root.month-stepped(-1); }
+            IconChevronLeft { stroke-color: prev-btn.glyph-color; }
+        }
+
+        Text {
+            x: Layout.icon-size + Layout.icon-gap;
+            y: 0;
+            width: parent.width - 2 * (Layout.icon-size + Layout.icon-gap);
+            height: parent.height;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            text: root.month-label;
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        next-btn := IconButton {
+            x: parent.width - Layout.icon-size;
+            y: (parent.height - Layout.icon-size) / 2 - Layout.header-y;
+            width: Layout.icon-size;
+            activated => { root.month-stepped(1); }
+            IconChevronRight { stroke-color: next-btn.glyph-color; }
+        }
+    }
+
+    Rectangle {
+        x: 0;
+        y: root.head-h + 1px + root.nav-h;
+        width: parent.width;
+        height: root.nav-h;
+
+        for head[idx] in root.weekday-heads: Text {
+            x: idx * root.col-w;
+            y: 0;
+            width: root.col-w;
+            height: parent.height;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            text: head;
+            color: Palette.dim;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+        }
+    }
+
+    Rectangle {
+        x: 0;
+        y: root.head-h + 1px + 2 * root.nav-h;
+        width: parent.width;
+        height: root.grid-h;
+
+        for cell[idx] in root.days: slot := Rectangle {
+            property <bool> selected: root.selected-day == cell.epoch-day;
+
+            x: mod(idx, 7) * root.col-w;
+            y: floor(idx / 7) * Layout.picker-row-h;
+            width: root.col-w;
+            height: Layout.picker-row-h;
+
+            if cell.today: Rectangle {
+                x: (parent.width - Layout.picker-cell) / 2;
+                y: 0;
+                width: Layout.picker-cell;
+                height: 1px;
+                background: Palette.text;
+            }
+
+            Rectangle {
+                x: (parent.width - Layout.picker-cell) / 2;
+                y: (parent.height - Layout.picker-cell) / 2;
+                width: Layout.picker-cell;
+                height: Layout.picker-cell;
+                border-radius: Layout.radius-pill;
+                background: slot.selected ? Palette.text : Colors.transparent;
+
+                Text {
+                    width: 100%;
+                    height: 100%;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    text: cell.label;
+                    color: slot.selected ? Palette.base : Palette.text;
+                    opacity: cell.in-month ? 1.0 : Layout.placeholder-opacity;
+                    font-family: Typography.body-face;
+                    font-size: Typography.body-size;
+                }
+            }
+
+            touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.selected-day = cell.epoch-day; }
+            }
+        }
+    }
+
+    HorizontalLayout {
+        x: 0;
+        y: parent.height - Layout.button-h;
+        width: parent.width;
+        height: Layout.button-h;
+        spacing: Layout.icon-gap;
+        alignment: end;
+
+        Button {
+            label: "CANCEL";
+            variant: ButtonVariant.default;
+            clicked => { root.cancelled(); }
+        }
+
+        Button {
+            label: root.save-label;
+            variant: ButtonVariant.primary;
+            clicked => { root.accepted(); }
+        }
+    }
+}

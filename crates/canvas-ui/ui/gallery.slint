@@ -5,6 +5,7 @@ import { Panel } from "theme/surface.slint";
 import { Checkbox, Tag, Divider, TextField, ScrollBar, Button, ButtonVariant } from "theme/controls.slint";
 import { Sheet } from "theme/sheet.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
+import { TimePicker, DatePicker, DayCell } from "theme/pickers.slint";
 
 component SectionLabel inherits Text {
     height: Typography.label-line;
@@ -16,8 +17,8 @@ component SectionLabel inherits Text {
 }
 
 export component GalleryWindow inherits Window {
-    preferred-width: 1240px;
-    preferred-height: 760px;
+    preferred-width: 1500px;
+    preferred-height: 800px;
     min-width: 400px;
     min-height: 400px;
     background: Palette.base;
@@ -31,6 +32,16 @@ export component GalleryWindow inherits Window {
     in-out property <string> field-plain: "";
     in-out property <string> field-labelled: "Typed value";
     in-out property <string> field-error: "not a number";
+
+    in-out property <int> pick-minute: 9 * 60 + 30;
+    in-out property <int> pick-day: 0;
+    in property <string> pick-stamp: "";
+    in property <string> pick-month: "";
+    in property <[string]> pick-heads: [];
+    in property <[DayCell]> pick-days: [];
+    callback pick-month-stepped(int);
+    callback pick-committed();
+    in property <string> pick-result: "";
 
     in-out property <bool> sheet-open: true;
     in-out property <string> sheet-name: "Ship the strip spec";
@@ -317,6 +328,58 @@ export component GalleryWindow inherits Window {
                 text <=> root.sheet-notes;
                 accepted(v) => { sheet.saved(); }
             }
+        }
+    }
+
+    pickers := Panel {
+        x: demo.x + demo.width + Layout.pad;
+        y: Layout.pad;
+        width: Layout.picker-face + 2 * Layout.pad;
+        height: 4 * Layout.pad + 1px + 2 * (Layout.header-band + Layout.pad
+            + Layout.picker-face + Layout.pad + Layout.button-h)
+            + Layout.icon-gap + Typography.label-line;
+        corner-radius: Layout.radius-plate;
+
+        time-pick := TimePicker {
+            x: Layout.pad;
+            y: Layout.pad;
+            minute-of-day <=> root.pick-minute;
+            accepted => { root.pick-committed(); }
+        }
+
+        Rectangle {
+            x: Layout.pad;
+            y: time-pick.y + time-pick.height + Layout.pad;
+            width: parent.width - 2 * Layout.pad;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        date-pick := DatePicker {
+            x: Layout.pad;
+            y: time-pick.y + time-pick.height + Layout.pad + 1px + Layout.pad;
+            stamp: root.pick-stamp;
+            month-label: root.pick-month;
+            weekday-heads: root.pick-heads;
+            days: root.pick-days;
+            selected-day <=> root.pick-day;
+            month-stepped(delta) => { root.pick-month-stepped(delta); }
+            accepted => { root.pick-committed(); }
+        }
+
+        Text {
+            x: Layout.pad;
+            y: date-pick.y + date-pick.height + Layout.icon-gap;
+            width: parent.width - 2 * Layout.pad;
+            height: Typography.label-line;
+            vertical-alignment: center;
+            text: root.pick-result;
+            color: Palette.dim;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+            overflow: elide;
+            wrap: no-wrap;
         }
     }
 }

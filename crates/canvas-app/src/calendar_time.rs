@@ -77,11 +77,110 @@ pub fn local_offset_ms() -> i64 {
     0
 }
 
+pub fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = (month as i64 + 9).rem_euclid(12);
+    let doy = (153 * mp + 2) / 5 + day as i64 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+pub fn weekday(days_since_epoch: i64) -> u32 {
+    (days_since_epoch + 4).rem_euclid(DAYS_PER_WEEK) as u32
+}
+
+pub fn local_civil(ts_ms: i64, offset_ms: i64) -> (i64, u32, u32) {
+    civil_from_days((ts_ms + offset_ms).div_euclid(DAY_MS))
+}
+
+pub fn compose_local_ms(
+    year: i64,
+    month: u32,
+    day: u32,
+    minute_of_day: i64,
+    offset_ms: i64,
+) -> i64 {
+    days_from_civil(year, month, day) * DAY_MS + minute_of_day * MINUTE_MS - offset_ms
+}
+
+pub fn month_step(year: i64, month: u32, delta: i32) -> (i64, u32) {
+    let zero = year * 12 + month as i64 - 1 + delta as i64;
+    (zero.div_euclid(12), zero.rem_euclid(12) as u32 + 1)
+}
+
+pub fn month_grid(year: i64, month: u32, first_weekday: u32) -> Vec<i64> {
+    let first = days_from_civil(year, month, 1);
+    let lead = (weekday(first) + DAYS_PER_WEEK as u32 - first_weekday) % DAYS_PER_WEEK as u32;
+    let start = first - lead as i64;
+    (0..42).map(|i| start + i).collect()
+}
+
+pub fn month_name(month: u32) -> &'static str {
+    const NAMES: [&str; 12] = [
+        "JANUARY",
+        "FEBRUARY",
+        "MARCH",
+        "APRIL",
+        "MAY",
+        "JUNE",
+        "JULY",
+        "AUGUST",
+        "SEPTEMBER",
+        "OCTOBER",
+        "NOVEMBER",
+        "DECEMBER",
+    ];
+    NAMES
+        .get(month.wrapping_sub(1) as usize)
+        .copied()
+        .unwrap_or("")
+}
+
+pub fn weekday_initial(weekday: u32) -> &'static str {
+    const HEADS: [&str; 7] = ["S", "M", "T", "W", "T", "F", "S"];
+    HEADS.get(weekday as usize).copied().unwrap_or("")
+}
+
+pub fn date_stamp(ts_ms: i64, offset_ms: i64) -> String {
+    const DAYS: [&str; 7] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+    let days = (ts_ms + offset_ms).div_euclid(DAY_MS);
+    let (_, month, day) = civil_from_days(days);
+    format!(
+        "{}, {day} {}",
+        DAYS[weekday(days) as usize],
+        &month_name(month)[..3]
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const IST: i64 = 5 * 3_600_000 + 30 * MINUTE_MS;
+
+    fn is_leap(year: i64) -> bool {
+        year.rem_euclid(4) == 0 && (year.rem_euclid(100) != 0 || year.rem_euclid(400) == 0)
+    }
+
+    fn days_in_month(year: i64, month: u32) -> u32 {
+        match month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 if is_leap(year) => 29,
+            2 => 28,
+            _ => 0,
+        }
+    }
+
+    #[test]
+    fn the_test_month_lengths_add_up_to_a_year() {
+        for year in 1970..2100 {
+            let total: u32 = (1..=12).map(|m| days_in_month(year, m)).sum();
+            assert_eq!(total, if is_leap(year) { 366 } else { 365 });
+        }
+    }
 
     fn utc(days_since_epoch: i64, hour: i64, minute: i64) -> i64 {
         days_since_epoch * DAY_MS + hour * 3_600_000 + minute * MINUTE_MS
@@ -214,5 +313,139 @@ mod tests {
         let late = 20_691 * DAY_MS + 23 * 3_600_000;
         assert_eq!(day_stamp(late, 0), "26 AUG");
         assert_eq!(day_stamp(late, 2 * 3_600_000), "27 AUG");
+    }
+
+    #[test]
+    fn days_from_civil_inverts_civil_from_days() {
+        for days in -40_000..40_000 {
+            let (y, m, d) = civil_from_days(days);
+            assert_eq!(days_from_civil(y, m, d), days, "{y}-{m}-{d}");
+        }
+    }
+
+    #[test]
+    fn days_from_civil_agrees_with_known_dates() {
+        assert_eq!(days_from_civil(1970, 1, 1), 0);
+        assert_eq!(days_from_civil(1969, 12, 31), -1);
+        assert_eq!(days_from_civil(2026, 8, 26), 20_691);
+        assert_eq!(days_from_civil(2000, 2, 29), 11_016);
+    }
+
+    #[test]
+    fn weekday_reads_zero_as_sunday() {
+        assert_eq!(weekday(0), 4);
+        assert_eq!(weekday(days_from_civil(2026, 8, 26)), 3);
+        assert_eq!(weekday(days_from_civil(2026, 8, 30)), 0);
+        for days in -1000..1000 {
+            assert_eq!(weekday(days + 7), weekday(days));
+        }
+    }
+
+    #[test]
+    fn month_step_wraps_both_year_boundaries() {
+        assert_eq!(month_step(2026, 12, 1), (2027, 1));
+        assert_eq!(month_step(2026, 1, -1), (2025, 12));
+        assert_eq!(month_step(2026, 8, 0), (2026, 8));
+        assert_eq!(month_step(2026, 8, 12), (2027, 8));
+        assert_eq!(month_step(2026, 8, -12), (2025, 8));
+        let (mut y, mut m) = (2026, 1);
+        for _ in 0..24 {
+            let stepped = month_step(y, m, 1);
+            y = stepped.0;
+            m = stepped.1;
+        }
+        assert_eq!((y, m), (2028, 1));
+    }
+
+    #[test]
+    fn a_month_grid_is_six_weeks_starting_on_the_asked_for_weekday() {
+        for month in 1..=12 {
+            let grid = month_grid(2026, month, 1);
+            assert_eq!(grid.len(), 42);
+            assert_eq!(weekday(grid[0]), 1);
+            for (i, day) in grid.iter().enumerate() {
+                assert_eq!(*day, grid[0] + i as i64);
+            }
+        }
+        assert_eq!(weekday(month_grid(2026, 8, 0)[0]), 0);
+    }
+
+    #[test]
+    fn a_month_grid_contains_every_day_of_its_month() {
+        for year in [1999, 2024, 2026] {
+            for month in 1..=12 {
+                let grid = month_grid(year, month, 1);
+                for day in 1..=days_in_month(year, month) {
+                    assert!(
+                        grid.contains(&days_from_civil(year, month, day)),
+                        "{year}-{month}-{day} missing"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_month_grid_never_starts_inside_its_own_month() {
+        for year in [1970, 2026, 2100] {
+            for month in 1..=12 {
+                let grid = month_grid(year, month, 1);
+                let first = days_from_civil(year, month, 1);
+                assert!(grid[0] <= first);
+                assert!(first - grid[0] < 7);
+            }
+        }
+    }
+
+    #[test]
+    fn compose_local_ms_round_trips_a_picked_date_and_time() {
+        for offset in [0, IST, -8 * 3_600_000, 45 * MINUTE_MS] {
+            for (y, m, d, minute) in [
+                (2026, 8, 26, 0),
+                (2026, 8, 26, 9 * 60 + 30),
+                (2026, 1, 1, 23 * 60 + 59),
+                (2024, 2, 29, 12 * 60),
+                (1999, 12, 31, 18 * 60 + 5),
+            ] {
+                let ts = compose_local_ms(y, m, d, minute, offset);
+                assert_eq!(local_civil(ts, offset), (y, m, d), "offset {offset}");
+                assert_eq!(minute_of_day(ts, offset), minute, "offset {offset}");
+            }
+        }
+    }
+
+    #[test]
+    fn compose_local_ms_disagrees_across_timezones_by_the_offset() {
+        let utc = compose_local_ms(2026, 8, 26, 9 * 60, 0);
+        let ist = compose_local_ms(2026, 8, 26, 9 * 60, IST);
+        assert_eq!(utc - ist, IST);
+    }
+
+    #[test]
+    fn compose_local_ms_and_hhmm_agree_on_the_clock() {
+        for minute in 0..1440 {
+            let ts = compose_local_ms(2026, 8, 26, minute, IST);
+            assert_eq!(
+                hhmm(ts, IST),
+                format!("{:02}:{:02}", minute / 60, minute % 60)
+            );
+        }
+    }
+
+    #[test]
+    fn date_stamp_reads_as_a_picker_header() {
+        assert_eq!(date_stamp(20_691 * DAY_MS, 0), "WED, 26 AUG");
+        assert_eq!(date_stamp(0, 0), "THU, 1 JAN");
+    }
+
+    #[test]
+    fn month_and_weekday_names_never_panic_on_a_bad_index() {
+        assert_eq!(month_name(1), "JANUARY");
+        assert_eq!(month_name(12), "DECEMBER");
+        assert_eq!(month_name(0), "");
+        assert_eq!(month_name(13), "");
+        assert_eq!(weekday_initial(0), "S");
+        assert_eq!(weekday_initial(6), "S");
+        assert_eq!(weekday_initial(7), "");
     }
 }

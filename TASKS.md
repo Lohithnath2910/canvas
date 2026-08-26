@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-19` — the date and time pickers, which `SW-20` and the rest of `SW-21` both need. `SW-21a` (the drag) is built and 🟡 at the top of the VERIFICATION QUEUE. Then `SW-20` (Calendar editor), then `SW-21`'s card editor, then `SW-13`/`SW-14` (Spreadsheet, not started).
+**Current task:** `SW-20` — the Calendar editor, live event and info bar, on `SW-18`'s `Sheet` and `SW-19`'s pickers. Then `SW-21`'s card editor. Then `SW-13`/`SW-14` (Spreadsheet, not started). `SW-21a` (the Kanban drag) and `SW-19`'s two picker faces are 🟡 at the top of the VERIFICATION QUEUE.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 31 ticked. 161 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 31 ticked. 174 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -135,6 +135,19 @@ board has zero cards and this session cannot synthesise a drag.
       no longer writes a CRDT update
 - [ ] Drag with the pointer well outside the board, then release — the card must not vanish
       or land in a column that was never outlined
+
+**The pickers, `SW-19`** — `cargo run -p canvas-app -- --gallery`, third column. Photographed,
+never clicked.
+- [ ] Click a number on the hour ring — the ring must swap to minutes and the `MM` readout light
+      up. Click the `HH` readout to go back to hours
+- [ ] Click a minute — the ring is in 5s, and the readout must show exactly what you clicked
+- [ ] The hand must point at the selected number: the long radius for 00-11, the short one for
+      12-23
+- [ ] Step months with the two chevrons — the grid, the month label and the dim out-of-month days
+      all follow, and today's 1px rule only appears in the month that actually contains today
+- [ ] Click a day, then **OK** — the line under the grid prints the composed epoch millis and the
+      value converted back out of it. They must agree with what you picked. That line is the
+      round-trip made visible; 13 tests already assert it, this is the eye check
 
 **A session can now take its own screenshots** — the recipe is in `progress.md`'s START HERE,
 and it is a script now: `scriptsshot.ps1 -Out x.png -AppArgs "--open-kind","kanban" -Arrange`.
@@ -1672,6 +1685,25 @@ would otherwise be re-introduced three more times.
   *DoD:* pick a time and a date, both round-trip to epoch millis correctly across a
   timezone (reuse `calendar_time`, do not write a second date conversion), and neither
   picker introduces a colour, radius, duration or font size not already in §5.
+
+  **Built 2026-08-26. The arithmetic half is ✅; the two faces are 🟡, photographed but not
+  clicked.** Both live in `theme/pickers.slint` and both are in the gallery — a third column,
+  `cargo run -p canvas-app -- --gallery`.
+  **`Math.sin`/`Math.cos` do exist in Slint 1.17.1**, take an `angle` and return a float, and
+  `Path` accepts `MoveTo`/`LineTo` sub-elements with `float` x/y. So the clock face is real
+  geometry and the fallback of a precomputed Rust table was not needed. Verified by reading
+  the vendored `i-slint-compiler-1.17.1` `lookup.rs` and `builtins.slint`, not from memory.
+  **The one deliberate deviation from this entry: the grid is Monday-first, not `S M T W T F S`.**
+  That came off the Android reference; the app's own Calendar widget renders `MON…SUN`, and two
+  surfaces in the same app disagreeing on where the week starts is worse than disagreeing with a
+  screenshot. `month_grid` takes `first_weekday` as a parameter and the heads come from Rust, so
+  switching back is one constant, `FIRST_WEEKDAY`.
+  **`IconChevronLeft`/`IconChevronRight` are new §5.6 glyphs**, which this entry authorises as
+  the one justified place: 16-unit grid, 1.5px, square caps, same `IconGlyph` base as the other
+  sixteen.
+  `is_leap` and `days_in_month` were written and then **moved into the test module** — nothing
+  in the pickers needs them, since `month_grid` derives in-month from `civil_from_days`, so in
+  production they were dead flexibility. They come back if `SW-20` needs them.
 
 ### W2c — Calendar, made usable
 

@@ -50,31 +50,31 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-24` and `SW-25` are both done and watched. The user then named a defect directly, so it
-jumps the queue.**
+**`SW-24`, `SW-25`, `SW-21a` (the drag) and `SW-19` are done. Next is `SW-20`.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **`SW-21`, drag half only** | The user, 2026-08-26: *"kanban bvoard was resisting moving things around"*. **Do not build the card editor in the same pass.** The root cause is already found and is `S1-51`'s bug: the card's `TouchArea` moves *with* the card, so `mouse-x − pressed-x` measures against a target that is running away. The touch region must not move — leave the card where the model puts it and draw a separate floating card at board level |
-| 2 | **SW-19** — date and time pickers | SW-20 and the rest of SW-21 both need them |
-| 3 | **SW-20** — Calendar editor, live event, info bar | The user asked for this in the same breath: *"the calendar and kanban board need entry stuff like thats why component gallery exists i think"* — and they are right, the gallery's `Sheet` demo is the prototype for exactly this |
-| 4 | **SW-21**, the card editor half | On the `Sheet`, once the pickers exist |
-| 5 | **SW-13 / SW-14** — Spreadsheet | **Not built at all** — the user asked on 2026-08-26 whether it was, and the answer was no |
+| 1 | **SW-20** — Calendar editor, live event, info bar | The user asked for it directly: *"the calendar and kanban board need entry stuff like thats why component gallery exists i think"* — and they are right, the gallery's `Sheet` demo is the prototype. Both prerequisites now exist: `SW-18`'s `Sheet` and `SW-19`'s pickers. **Read the ⚠ hit-testing note in its entry before writing the click handler** — one `TouchArea` per day column, resolve chip-vs-empty in Rust |
+| 2 | **SW-21**, the card editor half | Same `Sheet`, same pickers. The drag half is already done as `SW-21a` |
+| 3 | **SW-13 / SW-14** — Spreadsheet | **Not built at all.** The user asked on 2026-08-26 whether it was, and the answer was no |
 
 **Then the VERIFICATION QUEUE walk-through**, which the user asked for directly and which is
-gated on the above.
+gated on the above. It is now three items longer, and the first two are the newest: the Kanban
+card drag (`SW-21a`) and the two pickers (`SW-19`).
 
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
-That is now a condition on every remaining Stage W2 task, not a separate audit at the end.
-It is also a **release-build** question — see the debug-build warning in the screenshot recipe
-below, and open question 12.
+That is a condition on every remaining Stage W2 task, not a separate audit at the end.
+**The RAM half is measured and it passes** — 22.0 MB idle, 31.9 MB with all four types open,
+against §2's 20–40 idle and < 50 total. See the entry below. **The smoothness half is still
+open** and needs a release build in front of the user; open question 12.
 
-Closed in Stage W2 so far: `SW-22` (typing no longer dies after one character — the lock is
+Closed in Stage W2 so far: `SW-22` (typing survives past one character — the lock is
 `rows_locked_by_editor`; read its entry before writing any other repeater), `SW-23`
 (`--open-kind`, watched), `SW-18` (the `Sheet` — read its **two caller contracts** before
 building any editor on it), `SW-24` (the `document` type is gone), `SW-25` (the alignment pass,
-every surface photographed).
+every surface photographed), `SW-21a` (the card drag no longer fights the pointer),
+`SW-19` (the pickers — arithmetic ✅ by 13 tests, the two faces 🟡).
 
 **`SW-12` (Whiteboard) is parked at the user's request** — *"for now ignore whiteboard"*.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
@@ -83,6 +83,12 @@ every surface photographed).
 compiling SW-25 pass across nine `.slint` files uncommitted while its own log said the tree was
 clean. It was nearly lost. A run that stops on a usage limit can stop between the code and the
 commit, and nothing in this protocol catches that except looking.
+
+**⚠ Never use `perl -0pi -e` with `\x{...}` escapes on these files.** Without `-CSD` Perl reads
+the file as latin-1 and writes it back as UTF-8, which double-encodes **every** existing
+accented character, em dash and emoji in the whole file. It happened once on `TASKS.md` on
+2026-08-26 and cost a `git checkout` and a redo. Write the replacement text into a temp file and
+splice it with `awk` on line numbers instead.
 
 ### Three things that will bite, all already paid for once
 
@@ -2690,3 +2696,61 @@ guessed at. Release build, `winit-software` (the default — GPU is opt-in and s
   question 12 is still open on it: the software renderer may be taking an opaque
   partial-redraw path and repainting whole windows per scroll frame. The user's word on that
   was *"i dont know, will test later"*.
+
+### 2026-08-26 — SW-19: the date and time pickers
+
+The user's brief was *"i want time to be selected like android widget, like in the images, use
+how you want but style should be matching our app"* — that interaction, none of that skin.
+
+- ✅ **The arithmetic, and it is verified by tests rather than by eye.** `calendar_time` gained
+  the inverse of what it already had: `days_from_civil` (the exact inverse of the existing
+  `civil_from_days`, proven over 80 000 consecutive days), `weekday`, `local_civil`,
+  `compose_local_ms`, `month_step`, `month_grid`, `month_name`, `weekday_initial` and
+  `date_stamp`. **13 new tests, 51 in `canvas-app` now, 174 across the workspace.**
+  The DoD's actual requirement — *round-trips to epoch millis correctly across a timezone* —
+  is `compose_local_ms_round_trips_a_picked_date_and_time`, which walks five dates through
+  **four offsets including a 45-minute one** and asserts both the civil date and the
+  minute-of-day come back unchanged. `compose_local_ms_and_hhmm_agree_on_the_clock` walks all
+  1440 minutes of a day. No second date conversion was written; everything composes onto
+  `civil_from_days`.
+- 🟡 **`theme/pickers.slint` — `TimePicker` and `DatePicker`. Photographed, not clicked.**
+  **`Math.sin` / `Math.cos` do exist in Slint 1.17.1** — this was the task's ⚠ and it is now
+  settled by reading the vendored crate, not from memory: `i-slint-compiler-1.17.1`'s
+  `lookup.rs` registers `sin`/`cos`/`tan`/`atan`/`sqrt`/`mod` and `expression_tree.rs` types
+  them `(Type::Angle) -> Type::Float32`. So an `angle` literal goes in and a float comes out.
+  `Path` also takes `MoveTo`/`LineTo` sub-elements with plain `float` x/y, so **the clock hand
+  is a real line at a real angle** — no rotation API, no string-built path commands, and the
+  fallback of precomputing the label positions in Rust was not needed.
+  The 24-hour double ring is `for h in 24` with `h < 12` on the outer radius and `h >= 12` on
+  the inner, both at `spoke * 30deg`. Cell spacing was checked against §13.3 before writing it:
+  at `picker-cell` 24px the outer ring's centres are 54px apart, the inner ring's 40px, and the
+  radial gap is `picker-ring-gap` 32px — every `TouchArea` is disjoint, so there is nothing for
+  §13.3 to bite.
+- ✅ **Two defects the photograph caught, both fixed and re-shot.**
+  The readout row was `x: (parent.width - self.preferred-width) / 2` on a `HorizontalLayout`
+  that also had `alignment: center`. `self.preferred-width` under a centred alignment is not
+  the content width, so `09 : 30` sat 48px right of the clock face's centre. It is
+  `x: 0; width: 100%; alignment: center` now — no self-reference. **This is §13.4's family
+  again: do not compute a layout's own position from its own resolved size.**
+  Second: the pickers panel ran off the bottom of the screen. At 150% display scaling an
+  880px-tall window is 1320 device pixels and **Windows silently clamps it to the work area**,
+  so the OK buttons were unreachable and the frame looked like a rendering bug. The gallery is
+  three columns now — components, the `Sheet` demo, and the two pickers stacked — at 1500×800.
+  Worth remembering for any future full-height surface.
+- **One deliberate deviation from the task text, recorded rather than quietly taken.** The grid
+  is **Monday-first**, not the `S M T W T F S` the entry asks for. That came off the Android
+  reference; the app's own Calendar widget renders `MON…SUN`, and two surfaces in the same app
+  disagreeing about where the week starts is worse than disagreeing with a screenshot.
+  `month_grid` takes `first_weekday` as a parameter and the column heads come from Rust via
+  `weekday_initial`, so reversing this is one constant, `FIRST_WEEKDAY`.
+- **New tokens:** `picker-face` 240, `picker-cell` 24, `picker-ring-gap` 32, `picker-readout-w`
+  64, `picker-row-h` 32 — all multiples of 8 — and `picker-hand-dot` 3px, which is off the 8px
+  scale but is §6.2's own dot-cell size, so it is the spec's number rather than an invented one.
+  **New glyphs:** `IconChevronLeft` / `IconChevronRight`, which `SW-19`'s entry explicitly
+  authorises as the one justified addition to §5.6's sixteen. 16-unit grid, 1.5px, square caps,
+  same `IconGlyph` base as the rest.
+- **What still needs the user's hands:** clicking an hour and watching the ring swap to minutes,
+  clicking a minute, stepping months with the chevrons, and pressing OK to see the composed
+  timestamp print in the readout line under the date grid. That line is the round-trip made
+  visible — it prints the epoch millis *and* the value converted back — and it is the fastest
+  way to confirm by eye what the tests already assert.

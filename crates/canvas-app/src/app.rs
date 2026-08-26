@@ -11,9 +11,9 @@ use crate::widget::{LiveWidget, WidgetDoc, WidgetWindow};
 use crate::widget_types;
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
-    platform_system_sans, CalendarChip, CalendarWindow, CanvasTray, HomeWindow, KanbanCardData,
-    KanbanColumnData, KanbanWindow, Motion, NoteRow, PaletteRow, PaletteWindow, StickyNoteWindow,
-    TodoItemData, TodoWindow, Typography, WidgetTypeData,
+    platform_system_sans, CalendarChip, CalendarWindow, CanvasTray, DayCell, HomeWindow,
+    KanbanCardData, KanbanColumnData, KanbanWindow, Motion, NoteRow, PaletteRow, PaletteWindow,
+    StickyNoteWindow, TodoItemData, TodoWindow, Typography, WidgetTypeData,
 };
 
 pub const ACTION_SETTINGS: &str = "settings";
@@ -1633,6 +1633,8 @@ impl App {
 }
 
 pub fn gallery() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::calendar_time as ct;
+
     let window = canvas_ui::GalleryWindow::new()?;
     window
         .global::<canvas_ui::Typography>()
@@ -1640,9 +1642,93 @@ pub fn gallery() -> Result<(), Box<dyn std::error::Error>> {
     window
         .global::<canvas_ui::Motion>()
         .set_reduced(crate::reduced_motion::wanted());
+
+    let offset = ct::local_offset_ms();
+    let today = (canvas_storage::now_millis() + offset).div_euclid(ct::DAY_MS);
+    let shown = Rc::new(std::cell::Cell::new({
+        let (y, m, _) = ct::civil_from_days(today);
+        (y, m)
+    }));
+
+    window.set_pick_day(today as i32);
+    window.set_pick_heads(slint::ModelRc::new(slint::VecModel::from(weekday_heads(
+        FIRST_WEEKDAY,
+    ))));
+    paint_month(&window, shown.get(), today);
+
+    {
+        let handle = window.as_weak();
+        let shown = shown.clone();
+        window.on_pick_month_stepped(move |delta| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let (y, m) = shown.get();
+            shown.set(ct::month_step(y, m, delta));
+            paint_month(&window, shown.get(), today);
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        window.on_pick_committed(move || {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let (y, m, d) = ct::civil_from_days(window.get_pick_day() as i64);
+            let minute = window.get_pick_minute() as i64;
+            let ts = ct::compose_local_ms(y, m, d, minute, offset);
+            let (ry, rm, rd) = ct::local_civil(ts, offset);
+            window.set_pick_result(
+                format!(
+                    "PICKED {} {} · EPOCH {ts} · BACK {ry}-{rm:02}-{rd:02} {}",
+                    ct::date_stamp(ts, offset),
+                    ct::hhmm(ts, offset),
+                    ct::hhmm(ts, offset)
+                )
+                .into(),
+            );
+        });
+    }
+
     window.show()?;
     slint::run_event_loop()?;
     Ok(())
+}
+
+const FIRST_WEEKDAY: u32 = 1;
+
+fn weekday_heads(first_weekday: u32) -> Vec<slint::SharedString> {
+    use crate::calendar_time as ct;
+    (0..7)
+        .map(|i| {
+            ct::weekday_initial((first_weekday + i) % ct::DAYS_PER_WEEK as u32)
+                .to_string()
+                .into()
+        })
+        .collect()
+}
+
+fn paint_month(window: &canvas_ui::GalleryWindow, shown: (i64, u32), today: i64) {
+    use crate::calendar_time as ct;
+
+    let (year, month) = shown;
+    window.set_pick_month(format!("{} {year}", ct::month_name(month)).into());
+    window.set_pick_stamp(ct::date_stamp(window.get_pick_day() as i64 * ct::DAY_MS, 0).into());
+
+    let cells: Vec<DayCell> = ct::month_grid(year, month, FIRST_WEEKDAY)
+        .into_iter()
+        .map(|day| {
+            let (y, m, d) = ct::civil_from_days(day);
+            DayCell {
+                label: d.to_string().into(),
+                epoch_day: day as i32,
+                in_month: (y, m) == (year, month),
+                today: day == today,
+            }
+        })
+        .collect();
+    window.set_pick_days(slint::ModelRc::new(slint::VecModel::from(cells)));
 }
 
 fn refresh_calendar(app: &SharedApp, id: &str) {

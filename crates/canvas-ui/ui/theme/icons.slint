@@ -209,3 +209,29 @@ export component IconX inherits IconGlyph {
         stroke-width: root.stroke-w;
     }
 }
+
+export component IconChevronLeft inherits IconGlyph {
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        commands: "M10.25 3.25 L5.25 8 L10.25 12.75";
+        fill: transparent;
+        stroke: root.stroke-color;
+        stroke-width: root.stroke-w;
+    }
+}
+
+export component IconChevronRight inherits IconGlyph {
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        commands: "M5.75 3.25 L10.75 8 L5.75 12.75";
+        fill: transparent;
+        stroke: root.stroke-color;
+        stroke-width: root.stroke-w;
+    }
+}
