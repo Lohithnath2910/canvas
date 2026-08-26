@@ -28,6 +28,64 @@ const KEEP_VISIBLE_W: f32 = 120.0;
 const KEEP_VISIBLE_H: f32 = 48.0;
 const NEW_CARD_TITLE: &str = "New card";
 
+pub const OPEN_FLAG: &str = "--open";
+pub const OPEN_KIND_FLAG: &str = "--open-kind";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenRequest {
+    Nothing,
+    Id(String),
+    Kind(&'static str),
+}
+
+impl OpenRequest {
+    pub fn from_args<I, S>(args: I) -> Result<Self, String>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let args: Vec<String> = args.into_iter().map(|a| a.as_ref().to_string()).collect();
+        let mut found = OpenRequest::Nothing;
+        let mut i = 0;
+        while i < args.len() {
+            let flag = args[i].as_str();
+            if flag != OPEN_FLAG && flag != OPEN_KIND_FLAG {
+                i += 1;
+                continue;
+            }
+            let value = args
+                .get(i + 1)
+                .filter(|v| !v.starts_with("--"))
+                .ok_or_else(|| match flag {
+                    OPEN_KIND_FLAG => format!(
+                        "{OPEN_KIND_FLAG} needs a widget type. One of: {}",
+                        widget_types::kind_words()
+                    ),
+                    _ => format!("{OPEN_FLAG} needs a widget id. Run --dump to list them"),
+                })?;
+            let next = if flag == OPEN_KIND_FLAG {
+                let kind = widget_types::resolve_kind(value).ok_or_else(|| {
+                    format!(
+                        "{value:?} is not a built widget type. One of: {}",
+                        widget_types::kind_words()
+                    )
+                })?;
+                OpenRequest::Kind(kind)
+            } else {
+                OpenRequest::Id(value.clone())
+            };
+            if found != OpenRequest::Nothing {
+                return Err(format!(
+                    "{OPEN_FLAG} and {OPEN_KIND_FLAG} name one widget between them, not two"
+                ));
+            }
+            found = next;
+            i += 2;
+        }
+        Ok(found)
+    }
+}
+
 fn clamp_to_screen(
     pos: slint::PhysicalPosition,
     size: slint::PhysicalSize,
@@ -154,7 +212,7 @@ pub struct App {
 pub type SharedApp = Rc<RefCell<App>>;
 
 impl App {
-    pub fn boot() -> Result<SharedApp, Box<dyn std::error::Error>> {
+    pub fn boot(request: OpenRequest) -> Result<SharedApp, Box<dyn std::error::Error>> {
         let dir = Store::default_path();
         std::fs::create_dir_all(&dir)?;
         let store = Store::open(&dir.join("canvas_local.db"))?;
@@ -170,6 +228,10 @@ impl App {
             reduced_motion,
             tray: None,
         }));
+
+        if let Err(e) = App::honour_open_request(&app, &request) {
+            eprintln!("canvas: --open ignored: {e}");
+        }
 
         let to_open: Vec<String> = {
             let a = app.borrow();
@@ -197,6 +259,40 @@ impl App {
         App::install_hotkeys(&app);
         App::start_flush_timer(&app);
         Ok(app)
+    }
+
+    fn honour_open_request(
+        app: &SharedApp,
+        request: &OpenRequest,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let id = match request {
+            OpenRequest::Nothing => return Ok(()),
+            OpenRequest::Id(id) => {
+                let a = app.borrow();
+                a.store
+                    .get_widget(id)?
+                    .ok_or_else(|| format!("no widget {id} in this database"))?;
+                id.clone()
+            }
+            OpenRequest::Kind(kind) => {
+                let existing = {
+                    let a = app.borrow();
+                    a.store
+                        .list_widgets()?
+                        .into_iter()
+                        .rev()
+                        .find(|w| w.widget_type == *kind)
+                        .map(|w| w.id)
+                };
+                match existing {
+                    Some(id) => id,
+                    None => App::insert_widget(app, kind)?,
+                }
+            }
+        };
+        app.borrow().store.set_open(&id, true)?;
+        eprintln!("canvas: --open will show widget {}", &id[..8.min(id.len())]);
+        Ok(())
     }
 
     pub fn open_home(app: &SharedApp) -> Result<(), Box<dyn std::error::Error>> {
@@ -363,19 +459,21 @@ impl App {
         App::create_widget(app, KIND_STICKY_NOTE)
     }
 
+    fn insert_widget(app: &SharedApp, kind: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let a = app.borrow();
+        let (row, _) = a.store.create_widget(kind)?;
+        if let Some(doc) = WidgetDoc::seed(kind) {
+            a.store
+                .save_document(&row.id, &doc.snapshot(), &doc.state_vector())?;
+        }
+        Ok(row.id)
+    }
+
     pub fn create_widget(
         app: &SharedApp,
         kind: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let id = {
-            let a = app.borrow();
-            let (row, _) = a.store.create_widget(kind)?;
-            if let Some(doc) = WidgetDoc::seed(kind) {
-                a.store
-                    .save_document(&row.id, &doc.snapshot(), &doc.state_vector())?;
-            }
-            row.id
-        };
+        let id = App::insert_widget(app, kind)?;
         App::open_widget(app, &id)?;
         Ok(id)
     }
@@ -2134,15 +2232,72 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
 #[cfg(test)]
 mod tests {
     use super::{
-        built_types_model, count_label, default_actions, rows_locked_by_editor, ACTION_SETTINGS,
+        built_types_model, count_label, default_actions, rows_locked_by_editor, OpenRequest,
+        ACTION_SETTINGS,
     };
     use crate::widget_types;
+    use canvas_storage::{KIND_KANBAN, KIND_TODO};
     use slint::Model;
 
     #[test]
     fn a_live_row_editor_suppresses_the_model_rebuild() {
         assert!(!rows_locked_by_editor(""));
         assert!(rows_locked_by_editor("card-7"));
+    }
+
+    #[test]
+    fn a_plain_launch_asks_for_nothing() {
+        assert_eq!(
+            OpenRequest::from_args(Vec::<String>::new()),
+            Ok(OpenRequest::Nothing)
+        );
+        assert_eq!(
+            OpenRequest::from_args(["--gpu", "--dump"]),
+            Ok(OpenRequest::Nothing)
+        );
+    }
+
+    #[test]
+    fn open_kind_takes_either_word_for_a_type() {
+        assert_eq!(
+            OpenRequest::from_args(["--open-kind", "kanban"]),
+            Ok(OpenRequest::Kind(KIND_KANBAN))
+        );
+        assert_eq!(
+            OpenRequest::from_args(["--gpu", "--open-kind", "todo"]),
+            Ok(OpenRequest::Kind(KIND_TODO))
+        );
+    }
+
+    #[test]
+    fn open_takes_a_widget_id() {
+        assert_eq!(
+            OpenRequest::from_args(["--open", "b6ff3785-0d18-434e-97c5-c9e5f4e21b3f"]),
+            Ok(OpenRequest::Id(
+                "b6ff3785-0d18-434e-97c5-c9e5f4e21b3f".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn a_flag_with_no_value_names_what_it_wanted() {
+        let e = OpenRequest::from_args(["--open-kind"]).unwrap_err();
+        assert!(e.contains("kanban"), "{e}");
+        let e = OpenRequest::from_args(["--open", "--gpu"]).unwrap_err();
+        assert!(e.contains("--dump"), "{e}");
+    }
+
+    #[test]
+    fn an_unbuilt_type_is_refused_rather_than_created() {
+        let e = OpenRequest::from_args(["--open-kind", "whiteboard"]).unwrap_err();
+        assert!(e.contains("whiteboard"), "{e}");
+        assert!(e.contains("calendar"), "{e}");
+    }
+
+    #[test]
+    fn two_open_flags_are_refused() {
+        assert!(OpenRequest::from_args(["--open", "a", "--open-kind", "todo"]).is_err());
+        assert!(OpenRequest::from_args(["--open-kind", "todo", "--open-kind", "note"]).is_err());
     }
 
     #[test]

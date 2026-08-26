@@ -55,6 +55,26 @@ pub fn palette_label(t: &WidgetType) -> String {
     format!("New {}", t.name)
 }
 
+pub fn resolve_kind(word: &str) -> Option<&'static str> {
+    let word = word.trim().to_ascii_lowercase();
+    BUILT
+        .iter()
+        .find(|t| t.kind == word || t.name == word)
+        .map(|t| t.kind)
+}
+
+pub fn kind_words() -> String {
+    let mut words: Vec<String> = Vec::new();
+    for t in BUILT {
+        if t.kind == t.name {
+            words.push(t.kind.to_string());
+        } else {
+            words.push(format!("{} ({})", t.kind, t.name));
+        }
+    }
+    words.join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,6 +108,33 @@ mod tests {
                 has_doc, offered,
                 "{kind} has a document but is not offered, or the other way round"
             );
+        }
+    }
+
+    #[test]
+    fn a_kind_resolves_from_its_storage_key_or_its_spoken_name() {
+        assert_eq!(resolve_kind("kanban"), Some(KIND_KANBAN));
+        assert_eq!(resolve_kind("board"), Some(KIND_KANBAN));
+        assert_eq!(resolve_kind("  BOARD "), Some(KIND_KANBAN));
+        assert_eq!(resolve_kind("sticky_note"), Some(KIND_STICKY_NOTE));
+        assert_eq!(resolve_kind("note"), Some(KIND_STICKY_NOTE));
+        assert_eq!(resolve_kind("whiteboard"), None);
+        assert_eq!(resolve_kind(""), None);
+    }
+
+    #[test]
+    fn every_built_type_is_reachable_by_both_of_its_words() {
+        for t in BUILT {
+            assert_eq!(resolve_kind(t.kind), Some(t.kind));
+            assert_eq!(resolve_kind(t.name), Some(t.kind));
+        }
+    }
+
+    #[test]
+    fn the_help_line_names_every_built_type() {
+        let words = kind_words();
+        for t in BUILT {
+            assert!(words.contains(t.kind), "{} missing from {words}", t.kind);
         }
     }
 

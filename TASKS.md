@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-23` — the `--open-kind <kind>` dev flag, so a session can put a widget on screen and photograph it. Then **Stage W2** in order: SW-18, SW-19, SW-20, SW-21, SW-13, SW-14.
+**Current task:** `SW-18` — the `Sheet` overlay every editor sits in. Then **Stage W2** in order: SW-19, SW-20, SW-21, SW-13, SW-14.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 28 ticked. 151 tests pass. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it.
+**Done:** 29 ticked. 160 tests pass. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -393,8 +393,18 @@ built type, with a single label to their right.
 
 **The Kanban board** → **SW-10**
 
-Create one from the **board glyph** in home's footer strip, or `New board` in the palette.
+Create one from the **board glyph** in home's footer strip, or `New board` in the palette,
+or launch `cargo run -p canvas-app -- --open-kind kanban` (**SW-23**).
 It should open already carrying three columns — you do not have to set anything up.
+
+- [ ] ⚠ **Do this one first — a card may not be surviving a restart.** On 2026-08-26 a
+      screenshot caught this board carrying one `New card` in `TODO`; every later launch,
+      and `--dump`, showed the board empty with `revs=15` in `revision_history`. The frame
+      was taken with a DPI-unaware capture whose geometry did not match the window list, so
+      it may simply be an unreliable frame — nothing in the code writes an empty document
+      over a full one, and a probe run added no revisions. **Add a card, wait two seconds,
+      quit from the tray, relaunch.** If the card is gone, that is a real persistence bug
+      and it outranks everything else in Stage W2
 
 - [ ] The window is `640×400` with the same 32px header, glyph strip, editable title and
       three controls as a note, and the trash control says `DELETE BOARD`
@@ -1748,7 +1758,7 @@ folded into the two tasks below; the questions are closed.
 
 ### W2g — making a session able to check its own work
 
-- [ ] **SW-23 · `--open` dev flag, so a session can put a widget on screen to photograph** — `S`
+- [x] **SW-23 · `--open` dev flag, so a session can put a widget on screen to photograph** — `S`
   Needs: nothing. **Screenshots now work** (see the recipe in `progress.md`'s START HERE),
   but a session can only photograph what is already on screen, and the only ways to open a
   widget are a mouse click on home or the palette — neither of which a session has.
@@ -1759,6 +1769,15 @@ folded into the two tasks below; the questions are closed.
   those are visual tasks whose whole risk is on-screen.
   *DoD:* `--open-kind kanban` launches with a board on screen; the screenshot recipe
   captures it; the flag never changes what a normal launch does.
+  ✅ **Done and watched 2026-08-26.** `OpenRequest::from_args` parses both flags before the
+  backend is chosen, `App::boot` takes the request and `honour_open_request` resolves it to
+  one widget id — creating and seeding one if that kind has none — then sets its open flag,
+  so the existing boot loop does the opening and no second code path exists. `--open-kind`
+  takes either word for a type (`kanban` or `board`). All four paths were run:
+  `--open-kind kanban` put the board on screen and it was photographed;
+  `--open-kind whiteboard` was refused with the list of built types; `--open-kind` with no
+  value said what it wanted; `--open <unknown-id>` printed `--open ignored` and launched
+  normally. No flag, no behaviour change.
 ### Wh — sign-off
 
 - [ ] **SW-15 · Stage W sign-off audit** — `M`

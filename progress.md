@@ -50,7 +50,7 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W2, in order. `SW-22` is done — start with `SW-23`.** The user walked the running app on 2026-08-26,
+**Stage W2, in order. `SW-22` and `SW-23` are done — start with `SW-18`.** The user walked the running app on 2026-08-26,
 answered ten questions, and the answers are all folded into `TASKS.md`'s **Stage W2**
 section — every one of them, with the quote that produced it. **Nothing below is blocked and
 nothing needs asking again.** Build straight through:
@@ -58,7 +58,7 @@ nothing needs asking again.** Build straight through:
 | # | Task | Why it is in this position |
 |---|---|---|
 | ~~1~~ | ~~**SW-22** — typing dies after one character~~ | **Done 2026-08-26**, 🟡 not watched. The lock is `rows_locked_by_editor`; read the entry below before writing any other repeater |
-| 2 | **SW-23** — `--open-kind <kind>` dev flag | Cheap, and it is what lets you photograph your own work on tasks 4 and 5 |
+| ~~2~~ | ~~**SW-23** — `--open-kind <kind>` dev flag~~ | **Done and watched 2026-08-26.** `--open-kind kanban` puts a board on screen; use it on every visual task below |
 | 3 | **SW-18** — the `Sheet` overlay | Everything after it needs it |
 | 4 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
 | 5 | **SW-20** — Calendar editor, live event, info bar | The big one |
@@ -89,13 +89,19 @@ gated on the above.
    Rust**) and the Spreadsheet's cell hit-testing (**one area over the grid, never one per
    cell**). Both are called out in their task entries.
 
-### You can take your own screenshots now
+### You can take your own screenshots now — and open the widget yourself
 
 The recipe is in **START HERE** below and it works — minimise all, restore only the Canvas
-windows, capture, undo. It settles alignment, spacing and "did it render at all". It does
-**not** settle beauty, hover, focus, drag feel or animation; those still need the user.
-Read the three "not optional" notes before using it — one of them stops you reporting a
-phantom bug, which nearly happened the day it was written.
+windows, capture, undo. **`SW-23` closed the last gap:** `cargo run -p canvas-app --
+--open-kind kanban` puts any built type on screen with no click, so every visual task in
+Stage W2 can be photographed before it is handed over. Together they settle alignment,
+spacing and "did it render at all". They do **not** settle beauty, hover, focus, drag feel
+or animation; those still need the user.
+
+**Read all five "not optional" notes before using it.** Two of the five were written after a
+frame was nearly reported as a bug, and rule 5 covers the one that will catch you: restoring
+every window handle of the pid un-hides an internal `Slint Window` that then paints a white
+rectangle on the desktop. That is the script, not the app.
 
 ### What is real and what is not
 
@@ -188,6 +194,10 @@ cargo run -p canvas-app -- --dump    # print every note's text/position/state fr
 cargo run -p canvas-app -- --gallery # the section 6 component gallery (dev only)
 cargo run -p canvas-app --example insert_todo   # a non-note row; --remove undoes it
 cargo run -p canvas-app --example insert_calendar # a seeded week; --remove undoes it
+cargo run -p canvas-app -- --open-kind kanban    # put one widget of that kind on screen,
+                                                 # creating one if there is none (SW-23).
+                                                 # Takes either word: kanban or board
+cargo run -p canvas-app -- --open <widget-id>    # the same for one specific widget
 cargo test --workspace               # 150 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
@@ -235,9 +245,22 @@ control is where the spec's `x` says it is, whether the right glyph is on the ri
 **What it is not good for:** *"is it beautiful"*, hover, focus, drag feel, animation — all
 of which still need the user. Photograph what you can, then hand over the rest.
 
-**The blocker it does not solve:** a session can only photograph what is already on screen,
-and the only ways to open a widget are a mouse click on home or the palette. That is what
-**SW-23** (`--open-kind <kind>`) is for, and it should be built before the visual tasks.
+**`--open-kind` solves the last blocker** (SW-23, 2026-08-26). A session can now put any
+built widget type on screen from the command line and photograph it, with no click.
+
+**Two more things the recipe needs, learned 2026-08-26 while photographing the Kanban:**
+4. **Make the capturing PowerShell DPI-aware** — `SetProcessDpiAwareness(2)` before
+   `VirtualScreen`. Without it `VirtualScreen` reports logical pixels, Windows scales the
+   capture, and the frame's geometry does **not** agree with `GetWindowRect`. One such frame
+   showed a window in a place the window list said it was not, and was nearly written up as
+   a bug. A DPI-aware capture of this machine is 2560×1440; a DPI-unaware one is 1707×960.
+5. **Only restore the windows that were visible *before* `MinimizeAll()`, and match them by
+   title `== "Canvas"`.** The app keeps a **hidden** window titled `Slint Window`;
+   `ShowWindow(h, SW_RESTORE)` over every handle of the pid makes it visible, and it paints
+   an unstyled white rectangle over the desktop. That is the script's bug, not the app's —
+   it is trap 3 all over again, and it survives until the process is restarted. Enumerate
+   first, then minimise. The console window of a debug build wants `ShowWindow(h, 6)`
+   (minimise) or it sits on top of everything you are trying to photograph.
 
 ### Ground rules that are NOT in the spec — carried over from this session
 
@@ -2228,3 +2251,57 @@ through. Nothing is lost by ending the edit: every keystroke was already in the 
   applied. Nothing on **DO NOT REGRESS** was touched: no I/O moved onto the keystroke path,
   the 500ms flush timer and `pending_updates` buffering are unchanged, and the note widget
   has no repeater and was not edited.
+
+---
+
+### 2026-08-26 — SW-23: `--open-kind`, and the first widget this session photographed itself
+
+A four-line flag that changes what a session can check. Screenshots have worked since
+2026-08-26, but a session could only photograph what was *already* on screen, and the only
+ways to open a widget were a mouse click on home or a keystroke in the palette — neither of
+which a session has. Every visual task in Stage W2 was therefore unphotographable.
+
+**`OpenRequest` is parsed before anything else happens.** `OpenRequest::from_args` reads
+`--open <widget-id>` and `--open-kind <kind>` off the command line in `main`, before the
+backend is selected, and a bad flag prints one line and exits rather than opening a window
+onto a request it could not honour. `--open-kind` takes **either word for a type** — `kanban`
+or `board`, `sticky_note` or `note` — because `widget_types::BUILT` already carries both and
+making a session remember which one the storage layer uses is a trap for no gain.
+
+**Resolution is a set of the open flag, not a second open path.** `honour_open_request` turns
+the request into exactly one widget id — an existing widget of that kind, newest first, or a
+freshly created and seeded one if there is none — and then calls `store.set_open(id, true)`.
+It runs *before* `boot` reads the list of widgets to open, so the widget arrives through the
+existing loop. There is no second way to open a window, which is the whole point: the flag
+cannot drift away from what a real launch does.
+
+`create_widget` was split so this could reuse it. `insert_widget` is the row-plus-seed half;
+`create_widget` is that half followed by `open_widget`, exactly as before.
+
+- ✅ **Watched working.** `--open-kind kanban` launched with the board on screen and it was
+  photographed — three columns `TODO · DOING · DONE`, counts right-aligned at `0`, a 1px rule
+  under each header, a `+` under each column, and the glyph strip and `UNTITLED` title in the
+  header. Home was beside it reading `6 WIDGETS · 1 OPEN`.
+- ✅ All three failure paths run: `--open-kind whiteboard` → *"not a built widget type. One
+  of: sticky_note (note), todo, document, calendar, kanban (board)"* and exits;
+  `--open-kind` with no value → *"needs a widget type"* and exits; `--open 00000000-dead` →
+  *"--open ignored: no widget 00000000-dead in this database"* and then launches normally.
+- ✅ 160 tests pass (was 151), clippy clean, `cargo fmt` applied. A plain launch parses to
+  `OpenRequest::Nothing` and does nothing at all, which is a test.
+
+**The screenshot recipe gained two rules, both paid for in this pass** — the capturing
+PowerShell must be DPI-aware, and it must restore only the windows that were visible before
+`MinimizeAll()`, matched by title. Both are written up in START HERE. The second one is
+trap 3 again: `ShowWindow` over every handle of the pid un-hides the app's hidden
+`Slint Window` and paints a white rectangle on the desktop, which looks exactly like a
+rendering bug and is not one.
+
+- 🟡 **One thing I could not explain, and it is in the queue.** An early frame — taken with
+  the DPI-unaware capture, before rule 4 existed — showed this board carrying one `New card`
+  in `TODO`. Every later launch, and `--dump`, shows it empty with `revs=15`. That frame's
+  geometry did not agree with the window list, so it may simply be untrustworthy; against
+  that, no code path writes an empty document over a full one, and a probe run of the
+  screenshot cycle added no revisions and no cards. **It needs a pair of eyes and one
+  minute:** add a card, wait two seconds, quit from the tray, relaunch. That line is now the
+  first one in the Kanban block of the VERIFICATION QUEUE, marked ⚠, because if a card does
+  not survive a restart it outranks the rest of Stage W2.

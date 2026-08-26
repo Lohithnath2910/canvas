@@ -11,7 +11,7 @@ mod screen;
 mod widget;
 mod widget_types;
 
-use app::{App, SharedApp};
+use app::{App, OpenRequest, SharedApp};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -26,9 +26,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return app::gallery();
     }
 
+    let request = match OpenRequest::from_args(std::env::args().skip(1)) {
+        Ok(request) => request,
+        Err(message) => {
+            eprintln!("canvas: {message}");
+            return Ok(());
+        }
+    };
+
     select_backend();
 
-    let app = App::boot()?;
+    let app = App::boot(request)?;
     slint::run_event_loop_until_quit()?;
     App::flush_all(&app);
     Ok(())
