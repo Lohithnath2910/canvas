@@ -2620,3 +2620,43 @@ were and the token exists so the change is one edit when they ask for it.
   palette was not photographed at all. The user asked on 2026-08-26 for the whole app to be
   *"awesomely smooth all over while taking very less ram usage"* — that is a release-build
   question and it is now the standing bar for Stage W2's remaining tasks, not a one-off check.
+
+### 2026-08-26 — SW-21a: the Kanban drag stops fighting the pointer
+
+The user named it twice, the second time in the middle of this run: *"kanban bvoard was
+resisting moving things around"*. So the drag was pulled out of `SW-21` and shipped on its
+own, ahead of the card editor, which still needs `SW-19`'s pickers.
+
+- 🟡 **The drag is rebuilt. NOT WATCHED — this is the first thing in the VERIFICATION QUEUE.**
+  **The bug, and it is `S1-51`'s bug a second time.** `card-box.x` was
+  `column-x(card.col) + (held ? held-dx : 0px)`, and `card-touch` is a **child of
+  `card-box`**. So `self.mouse-x` is measured from a `TouchArea` that the delta had just
+  moved. Every frame: pointer moves 10px, `held-dx` becomes 10, the card and its touch region
+  move 10, so next frame `mouse-x - pressed-x` reads ~0 again. The delta feeds back into the
+  origin it is measured from. That is precisely "resisting" — the card pulls back toward the
+  cursor's start and stutters.
+  **The fix, which `TASKS.md` had already written down before the code was touched:** the
+  touch region must not move. `card-box` now sits at its model position full stop; the card
+  in the slot drops to `Layout.placeholder-opacity` so you can see where it came from; and a
+  single floating `Rectangle` at **board level** — not inside the repeater — carries
+  `shadow-drag` and the held card's title and meta at `held-x + held-dx`.
+  `held-x`/`held-y`/`held-title`/`held-meta` are set in the `moved` handler, where `card` is
+  still in scope. `card-touch` is stationary for the whole gesture, so `mouse-x - pressed-x`
+  is honest 1:1 pointer follow, which is what §5.5 asks for.
+  **Not** fixed by `absolute-position` or by accumulating smaller deltas — trap 4 and `S1-51`
+  are both about exactly that, and the note in `TASKS.md` says so twice.
+- ✅ **A no-op drop no longer writes to the CRDT.** Press-and-release on a card with no
+  movement used to call `card-moved` anyway, which meant a `move_card` update, a
+  `revision_history` row and a full repeater rebuild for a gesture that changed nothing. It
+  is now guarded on `drop-col != card.col || drop-row != card.row`. This is the user's
+  *"very less ram usage"* ask paying off in the smallest possible place: fewer updates, less
+  history to compact later.
+- ✅ **The column-header half of `SW-21` was already closed by `SW-25`** and the two tasks
+  agree, as that entry required: the count column is a fixed `Layout.kanban-count-w` 24px, so
+  a two-digit count cannot shove the title sideways. Photographed.
+
+**Why this is 🟡 and not ✅.** A board created fresh has three columns and **zero cards**, so
+there is nothing to photograph, and a drag cannot be synthesised from here — the screenshot
+recipe's note 2 is the reason: Windows refuses `SetForegroundWindow` to a background process,
+so this session cannot give the window focus and send input to it. The six-line click-through
+is at the top of the VERIFICATION QUEUE.

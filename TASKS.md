@@ -5,7 +5,7 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-21`, but **the drag fix first and on its own** — the user named it directly on 2026-08-26: *"kanban bvoard was resisting moving things around"*. The root cause is already known and is `S1-51`'s bug: the card's `TouchArea` moves with the card. Then `SW-19` (pickers), then `SW-20` and the rest of `SW-21` (the editors), then `SW-13`/`SW-14` (Spreadsheet).
+**Current task:** `SW-19` — the date and time pickers, which `SW-20` and the rest of `SW-21` both need. `SW-21a` (the drag) is built and 🟡 at the top of the VERIFICATION QUEUE. Then `SW-20` (Calendar editor), then `SW-21`'s card editor, then `SW-13`/`SW-14` (Spreadsheet, not started).
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
 **Done:** 31 ticked. 161 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
@@ -118,7 +118,26 @@ clearing is now gated on **Stage W2** rather than Stage W. It is still not an in
 parking lot: when Stage W2 is done, the walk-through is the next unit of work, not another
 feature. Say so in the end-of-run report every time until it happens.
 
-**A session can now take its own screenshots** — the recipe is in `progress.md`'s START HERE.
+**⚠ THE ONE TO CHECK FIRST — the Kanban card drag** → **`SW-21a`, built 2026-08-26, never
+watched.** The user reported it twice: *"its too glitchy to move the cards around"* and
+*"kanban bvoard was resisting moving things around"*. It could not be photographed — a fresh
+board has zero cards and this session cannot synthesise a drag.
+- [ ] `cargo run -p canvas-app -- --open-kind kanban`, then click `+` under **TODO** three
+      times to get three cards
+- [ ] Press and hold a card and move the pointer slowly. **The card under the pointer must
+      stay glued to the grab point** — no drift, no rubber-banding, no fighting back. The card
+      left behind in the slot goes faint; the one that follows you carries the drop shadow
+- [ ] Drag it left and right across all three columns — the **destination column** gets a 1px
+      white outline, and it must switch the moment the dragged card's centre crosses the gap
+- [ ] Let go over **DOING** — the card lands in DOING, the faint one disappears, and the
+      TODO/DOING counts both change
+- [ ] Press a card and release **without moving it** — nothing should change at all. That path
+      no longer writes a CRDT update
+- [ ] Drag with the pointer well outside the board, then release — the card must not vanish
+      or land in a column that was never outlined
+
+**A session can now take its own screenshots** — the recipe is in `progress.md`'s START HERE,
+and it is a script now: `scriptsshot.ps1 -Out x.png -AppArgs "--open-kind","kanban" -Arrange`.
 It is not a substitute for the user's eyes on *"is this beautiful"*, but it does settle
 alignment, spacing and "did it render at all", so **check the queue lines you can check
 yourself before handing the list over.**
@@ -1731,6 +1750,22 @@ would otherwise be re-introduced three more times.
   *DoD:* drag a card across three columns without a stutter and drop it exactly where the
   outline says; the column header holds still as counts change; a card's four fields are
   editable from the sheet and survive a restart.
+
+  **Part (1), the drag, is built 2026-08-26 as `SW-21a` — 🟡 NOT WATCHED.** The user named it
+  again that day: *"kanban bvoard was resisting moving things around"*, so it was pulled ahead
+  of the editor and shipped on its own. `card-box.x`/`y` no longer add `held-dx`/`held-dy`, so
+  `card-touch` is stationary for the whole gesture and `mouse-x - pressed-x` cannot feed back
+  into its own origin. The card in the slot drops to `Layout.placeholder-opacity` and a single
+  floating `Rectangle` at **board level** carries `shadow-drag` and the held title/meta,
+  positioned from `held-x + held-dx`. A no-op drop — same column, same row — now skips
+  `card-moved` entirely, so click-without-moving stops writing a CRDT update and a
+  `revision_history` row.
+  **It could not be photographed:** a fresh board has three columns and zero cards, and this
+  session cannot synthesise a drag (the recipe's note 2 — Windows refuses `SetForegroundWindow`
+  to a background process). See the VERIFICATION QUEUE.
+  **Part (2), the column header, was done in `SW-25`** — the count column is a fixed
+  `Layout.kanban-count-w` 24px, so a two-digit count cannot shift the title. Photographed.
+  **Part (3), the card editor, is still open** and still needs `SW-19`'s pickers.
 
 ### W2e — Spreadsheet, unblocked
 

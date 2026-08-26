@@ -66,6 +66,10 @@ export component KanbanWindow inherits Window {
     property <string> held-card: "";
     property <length> held-dx: 0px;
     property <length> held-dy: 0px;
+    property <length> held-x: 0px;
+    property <length> held-y: 0px;
+    property <string> held-title: "";
+    property <string> held-meta: "";
     property <int> drop-col: -1;
     property <int> drop-row: 0;
 
@@ -188,18 +192,15 @@ export component KanbanWindow inherits Window {
                 property <bool> held: root.held-card == card.id;
                 property <bool> editing: root.editing-id == card.id;
 
-                x: root.column-x(card.col) + (self.held ? root.held-dx : 0px);
-                y: root.card-y(card.row) + (self.held ? root.held-dy : 0px);
+                x: root.column-x(card.col);
+                y: root.card-y(card.row);
                 width: root.column-w;
                 height: Layout.kanban-card-h;
                 background: Palette.elev-raised;
                 border-width: 1px;
                 border-color: Palette.edge;
                 border-radius: Layout.radius-control;
-
-                drop-shadow-offset-y: self.held ? Palette.shadow-offset-y-drag : 0px;
-                drop-shadow-blur: self.held ? Palette.shadow-blur-drag : 0px;
-                drop-shadow-color: self.held ? Palette.shadow-color-drag : transparent;
+                opacity: self.held ? Layout.placeholder-opacity : 1.0;
 
                 card-touch := TouchArea {
                     x: 0;
@@ -211,6 +212,10 @@ export component KanbanWindow inherits Window {
                     double-clicked => { root.editing-id = card.id; }
                     moved => {
                         root.held-card = card.id;
+                        root.held-x = root.column-x(card.col);
+                        root.held-y = root.card-y(card.row);
+                        root.held-title = card.title;
+                        root.held-meta = card.meta;
                         root.held-dx = self.mouse-x - self.pressed-x;
                         root.held-dy = self.mouse-y - self.pressed-y;
                         root.drop-col = root.col-at(
@@ -219,7 +224,9 @@ export component KanbanWindow inherits Window {
                     }
                     pointer-event(event) => {
                         if (event.kind == PointerEventKind.up && root.held-card == card.id) {
-                            root.card-moved(card.id, root.drop-col, root.drop-row);
+                            if (root.drop-col != card.col || root.drop-row != card.row) {
+                                root.card-moved(card.id, root.drop-col, root.drop-row);
+                            }
                             root.held-card = "";
                             root.held-dx = 0px;
                             root.held-dy = 0px;
@@ -301,6 +308,50 @@ export component KanbanWindow inherits Window {
                     revealed: card-touch.has-hover || card-del.hovered || card-del.focused;
                     activated => { root.card-removed(card.id); }
                     IconTrash { stroke-color: card-del.glyph-color; }
+                }
+            }
+
+            if root.held-card != "": Rectangle {
+                x: root.held-x + root.held-dx;
+                y: root.held-y + root.held-dy;
+                width: root.column-w;
+                height: Layout.kanban-card-h;
+                background: Palette.elev-raised;
+                border-width: 1px;
+                border-color: Palette.edge;
+                border-radius: Layout.radius-control;
+
+                drop-shadow-offset-y: Palette.shadow-offset-y-drag;
+                drop-shadow-blur: Palette.shadow-blur-drag;
+                drop-shadow-color: Palette.shadow-color-drag;
+
+                Text {
+                    x: Layout.kanban-card-pad;
+                    y: Layout.kanban-card-pad;
+                    width: parent.width - 2 * Layout.kanban-card-pad;
+                    height: Layout.checkbox-row-h;
+                    vertical-alignment: center;
+                    text: root.held-title;
+                    color: Palette.text;
+                    font-family: Typography.body-face;
+                    font-size: Typography.body-size;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+
+                Text {
+                    x: Layout.kanban-card-pad;
+                    y: Layout.kanban-card-pad + Layout.checkbox-row-h + Layout.kanban-card-gap;
+                    width: parent.width - 2 * Layout.kanban-card-pad;
+                    height: Typography.label-line;
+                    vertical-alignment: center;
+                    text: root.held-meta;
+                    color: Palette.dim;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.label-size;
+                    letter-spacing: Typography.label-tracking;
+                    overflow: elide;
+                    wrap: no-wrap;
                 }
             }
         }
