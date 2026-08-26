@@ -16,7 +16,6 @@ export component Sheet inherits Rectangle {
 
     property <bool> hold: false;
     property <length> footer-h: Layout.sheet-footer-h;
-    property <length> ring: Layout.focus-offset + Layout.focus-width;
 
     public function focus-body() { keys.focus(); }
 
@@ -73,20 +72,20 @@ export component Sheet inherits Rectangle {
         }
 
         scroll := Flickable {
-            x: Layout.pad - root.ring;
+            x: Layout.pad - Layout.ring;
             y: 0;
-            width: parent.width - 2 * Layout.pad - Layout.scroll-gutter + root.ring;
-            height: parent.height;
+            width: parent.width - 2 * Layout.pad - Layout.scroll-gutter + Layout.ring;
+            height: parent.height - Layout.field-gap;
             viewport-height: max(fields.preferred-height, self.height);
 
             fields := VerticalLayout {
                 width: 100%;
                 alignment: start;
                 spacing: Layout.field-gap;
-                padding-left: root.ring;
-                padding-right: root.ring;
+                padding-left: Layout.ring;
+                padding-right: Layout.ring;
                 padding-top: Layout.pad;
-                padding-bottom: Layout.pad;
+                padding-bottom: Layout.pad - Layout.field-gap;
 
                 @children
             }

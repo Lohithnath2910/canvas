@@ -5,6 +5,7 @@ export global Layout {
     out property <length> header-h: 32px;
     out property <length> header-y: 8px;
     out property <length> header-band: 48px;
+    out property <length> footer-band: 48px;
 
     out property <length> dot-size: 8px;
     out property <length> dot-gap: 4px;
@@ -16,6 +17,7 @@ export global Layout {
     out property <length> icon-size-palette: 24px;
     out property <length> icon-stroke: 1.5px;
     out property <length> icon-gap: 8px;
+    out property <length> gap-m: 12px;
     out property <length> cluster-w: 64px;
 
     out property <length> plate-margin: 24px;
@@ -30,7 +32,6 @@ export global Layout {
     out property <length> todo-h: 360px;
     out property <length> todo-row-h: 22px;
     out property <length> todo-row-gap: 12px;
-    out property <length> todo-row-tail: 40px;
 
     out property <length> calendar-w: 480px;
     out property <length> calendar-h: 360px;
@@ -41,6 +42,7 @@ export global Layout {
     out property <length> kanban-h: 400px;
     out property <length> kanban-col-gap: 12px;
     out property <length> kanban-col-head-h: 32px;
+    out property <length> kanban-count-w: 24px;
     out property <length> kanban-card-h: 70px;
     out property <length> kanban-card-gap: 8px;
     out property <length> kanban-card-pad: 12px;
@@ -67,7 +69,10 @@ export global Layout {
     out property <length> tag-h: 20px;
     out property <length> tag-pad-x: 10px;
 
-    out property <length> sheet-footer-h: 66px;
+    out property <length> sheet-footer-h: 67px;
+
+    out property <length> button-h: 34px;
+    out property <length> confirm-band: 78px;
 
     out property <length> field-h: 40px;
     out property <length> field-pad-x: 12px;
@@ -79,6 +84,7 @@ export global Layout {
 
     out property <length> focus-width: 2px;
     out property <length> focus-offset: 2px;
+    out property <length> ring: root.focus-offset + root.focus-width;
 
     out property <float> placeholder-opacity: 0.25;
 }

@@ -85,7 +85,7 @@ export component StickyNoteWindow inherits Window {
         || root.editing-title
         || body-input.has-focus;
 
-    property <length> confirm-h: 75px;
+    property <length> confirm-h: Layout.confirm-band;
 
     plate := Panel {
         x: Layout.plate-margin;
@@ -196,7 +196,7 @@ export component StickyNoteWindow inherits Window {
         }
 
         pin-btn := IconButton {
-            x: parent.width - root.pad - 64px;
+            x: parent.width - root.pad - Layout.cluster-w;
             y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
@@ -210,7 +210,7 @@ export component StickyNoteWindow inherits Window {
         }
 
         trash-btn := IconButton {
-            x: parent.width - root.pad - 40px;
+            x: close-btn.x - Layout.icon-size - Layout.icon-gap;
             y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
@@ -228,10 +228,10 @@ export component StickyNoteWindow inherits Window {
         }
 
         drag-area := TouchArea {
-            x: 16px;
-            y: 6px;
-            width: parent.width - root.pad - Layout.cluster-w - 16px;
-            height: Layout.header-band - 6px;
+            x: 0;
+            y: 0;
+            width: pin-btn.x - Layout.icon-gap;
+            height: Layout.header-band;
             moved => {
                 if (!root.dragging) {
                     root.dragging = true;
@@ -269,7 +269,7 @@ export component StickyNoteWindow inherits Window {
         if !root.editing-title: Text {
             x: (root.pad + Layout.strip-w + 12px);
             y: Layout.header-y;
-            width: parent.width - root.pad - Layout.cluster-w - self.x - 12px;
+            width: pin-btn.x - Layout.gap-m - self.x;
             height: Layout.header-h;
             text: root.dev-label;
             color: Palette.text;
@@ -285,7 +285,7 @@ export component StickyNoteWindow inherits Window {
         if root.editing-title: Rectangle {
             x: (root.pad + Layout.strip-w + 12px) - 6px;
             y: Layout.header-y;
-            width: parent.width - root.pad - Layout.cluster-w - self.x - 12px;
+            width: pin-btn.x - Layout.gap-m - self.x;
             height: Layout.header-h;
             background: Palette.elev-recessed;
             border-radius: Layout.radius-control;
@@ -348,7 +348,7 @@ export component StickyNoteWindow inherits Window {
 
             Text {
                 x: root.pad;
-                y: 13px;
+                y: Layout.pad;
                 text: "DELETE — CANNOT BE UNDONE";
                 color: Palette.dim;
                 font-family: Typography.interface-face;
@@ -359,9 +359,9 @@ export component StickyNoteWindow inherits Window {
 
             HorizontalLayout {
                 x: root.pad;
-                y: 41px;
-                height: 34px;
-                spacing: 8px;
+                y: Layout.pad + Typography.label-line + Layout.gap-m;
+                height: Layout.button-h;
+                spacing: Layout.icon-gap;
                 alignment: start;
 
                 Button {

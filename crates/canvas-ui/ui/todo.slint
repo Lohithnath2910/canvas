@@ -27,10 +27,14 @@ component ItemRow inherits Rectangle {
 
     out property <bool> hovered: touch.has-hover || del.hovered || del.focused;
 
+    property <bool> show-tag: root.item.due != "" && !root.editing;
+    property <length> tail: Layout.icon-size + Layout.icon-gap
+        + (root.show-tag ? due-tag.width + Layout.icon-gap : 0px);
+
     touch := TouchArea {
         x: 0;
         y: 0;
-        width: parent.width - Layout.todo-row-tail;
+        width: parent.width - Layout.icon-size - Layout.icon-gap;
         height: parent.height;
         enabled: !root.editing;
         double-clicked => { root.begin-edit(); }
@@ -39,7 +43,7 @@ component ItemRow inherits Rectangle {
     if !root.editing: Checkbox {
         x: 0;
         y: (parent.height - self.height) / 2;
-        width: parent.width - Layout.todo-row-tail;
+        width: parent.width - root.tail;
         label: root.item.text;
         checked: root.item.done;
         completed: root.item.done;
@@ -49,7 +53,7 @@ component ItemRow inherits Rectangle {
     if root.editing: Rectangle {
         x: Layout.checkbox-size + Layout.checkbox-gap;
         y: 0;
-        width: parent.width - self.x - Layout.todo-row-tail;
+        width: parent.width - self.x - root.tail;
         height: parent.height;
         background: Palette.elev-recessed;
         border-radius: Layout.radius-control;
@@ -83,10 +87,11 @@ component ItemRow inherits Rectangle {
         }
     }
 
-    if root.item.due != "" && !root.editing: Tag {
-        x: parent.width - Layout.todo-row-tail - self.width - Layout.icon-gap;
+    due-tag := Tag {
+        x: parent.width - Layout.icon-size - Layout.icon-gap - self.width;
         y: (parent.height - self.height) / 2;
         label: root.item.due;
+        visible: root.show-tag;
     }
 
     del := IconButton {
@@ -154,9 +159,12 @@ export component TodoWindow inherits Window {
         || close-btn.hovered || close-btn.focused
         || root.editing-title;
 
-    property <length> confirm-h: 75px;
-    property <length> footer-h: 40px;
-    property <length> compose-h: 48px;
+    property <length> confirm-h: Layout.confirm-band;
+    property <length> footer-h: Layout.footer-band;
+    property <length> compose-band: 2 * Layout.pad + Layout.checkbox-row-h;
+    property <length> list-top: Layout.header-band + 1px + Layout.pad;
+    property <length> list-bottom: plate.height - root.footer-h - root.compose-band
+        - (root.confirming-delete ? root.confirm-h : 0px);
 
     plate := Panel {
         x: Layout.plate-margin;
@@ -185,16 +193,15 @@ export component TodoWindow inherits Window {
         }
 
         list-area := Rectangle {
-            x: Layout.pad;
-            y: Layout.header-band + 1px + Layout.pad;
-            width: parent.width - 2 * Layout.pad;
-            height: parent.height - self.y - Layout.pad - root.compose-h - root.footer-h
-                - (root.confirming-delete ? root.confirm-h : 0px);
+            x: Layout.pad - Layout.ring;
+            y: root.list-top - Layout.ring;
+            width: parent.width - 2 * Layout.pad + Layout.ring;
+            height: root.list-bottom - root.list-top + 2 * Layout.ring;
             clip: true;
 
             if root.items.length == 0: Text {
-                x: 0;
-                y: 0;
+                x: Layout.ring;
+                y: Layout.ring;
                 width: parent.width;
                 text: "NOTHING HERE YET";
                 color: Palette.text;
@@ -216,6 +223,10 @@ export component TodoWindow inherits Window {
                     width: 100%;
                     alignment: start;
                     spacing: Layout.todo-row-gap;
+                    padding-left: Layout.ring;
+                    padding-right: Layout.ring;
+                    padding-top: Layout.ring;
+                    padding-bottom: Layout.ring;
 
                     for entry in root.items: ItemRow {
                         item: entry;
@@ -231,8 +242,8 @@ export component TodoWindow inherits Window {
 
             ScrollBar {
                 x: parent.width - Layout.scroll-gutter;
-                y: 0;
-                height: 100%;
+                y: Layout.ring;
+                height: parent.height - 2 * Layout.ring;
                 view-height: rows-scroll.height;
                 viewport-height: rows-scroll.viewport-height;
                 viewport-y <=> rows-scroll.viewport-y;
@@ -241,7 +252,7 @@ export component TodoWindow inherits Window {
 
         compose := Rectangle {
             x: Layout.pad;
-            y: list-area.y + list-area.height + Layout.icon-gap;
+            y: root.list-bottom + Layout.pad;
             width: parent.width - 2 * Layout.pad;
             height: Layout.checkbox-row-h;
             visible: !root.confirming-delete;
@@ -325,7 +336,7 @@ export component TodoWindow inherits Window {
         }
 
         pin-btn := IconButton {
-            x: parent.width - Layout.pad - 64px;
+            x: parent.width - Layout.pad - Layout.cluster-w;
             y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
@@ -339,7 +350,7 @@ export component TodoWindow inherits Window {
         }
 
         trash-btn := IconButton {
-            x: parent.width - Layout.pad - 40px;
+            x: close-btn.x - Layout.icon-size - Layout.icon-gap;
             y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
@@ -357,10 +368,10 @@ export component TodoWindow inherits Window {
         }
 
         drag-area := TouchArea {
-            x: 16px;
-            y: 6px;
-            width: parent.width - Layout.pad - Layout.cluster-w - 16px;
-            height: Layout.header-band - 6px;
+            x: 0;
+            y: 0;
+            width: pin-btn.x - Layout.icon-gap;
+            height: Layout.header-band;
             moved => {
                 if (!root.dragging) {
                     root.dragging = true;
@@ -398,7 +409,7 @@ export component TodoWindow inherits Window {
         if !root.editing-title: Text {
             x: Layout.title-x;
             y: Layout.header-y;
-            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            width: pin-btn.x - Layout.gap-m - self.x;
             height: Layout.header-h;
             text: root.note-title;
             color: Palette.text;
@@ -414,7 +425,7 @@ export component TodoWindow inherits Window {
         if root.editing-title: Rectangle {
             x: Layout.title-x - 6px;
             y: Layout.header-y;
-            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            width: pin-btn.x - Layout.gap-m - self.x;
             height: Layout.header-h;
             background: Palette.elev-recessed;
             border-radius: Layout.radius-control;
@@ -466,6 +477,7 @@ export component TodoWindow inherits Window {
             y: parent.height - Layout.pad - root.confirm-h;
             width: parent.width;
             height: root.confirm-h;
+            background: Palette.plate;
 
             Rectangle {
                 x: 0;
@@ -477,7 +489,7 @@ export component TodoWindow inherits Window {
 
             Text {
                 x: Layout.pad;
-                y: 13px;
+                y: Layout.pad;
                 text: "DELETE — CANNOT BE UNDONE";
                 color: Palette.dim;
                 font-family: Typography.interface-face;
@@ -488,9 +500,9 @@ export component TodoWindow inherits Window {
 
             HorizontalLayout {
                 x: Layout.pad;
-                y: 41px;
-                height: 34px;
-                spacing: 8px;
+                y: Layout.pad + Typography.label-line + Layout.gap-m;
+                height: Layout.button-h;
+                spacing: Layout.icon-gap;
                 alignment: start;
 
                 Button {

@@ -76,7 +76,7 @@ export component KanbanWindow inherits Window {
         || close-btn.hovered || close-btn.focused
         || root.editing-title;
 
-    property <length> confirm-h: 75px;
+    property <length> confirm-h: Layout.confirm-band;
     property <length> add-row-h: Layout.header-h;
     property <length> board-w: plate.width - 2 * Layout.pad;
     property <int> col-count: max(1, root.columns.length);
@@ -131,7 +131,7 @@ export component KanbanWindow inherits Window {
             x: Layout.pad;
             y: Layout.header-band + 1px + Layout.pad;
             width: root.board-w;
-            height: parent.height - self.y - Layout.pad - root.add-row-h
+            height: parent.height - self.y - Layout.pad - root.add-row-h - Layout.icon-gap
                 - (root.confirming-delete ? root.confirm-h : 0px);
             clip: true;
 
@@ -148,7 +148,7 @@ export component KanbanWindow inherits Window {
                 Text {
                     x: 0;
                     y: 0;
-                    width: parent.width - count-text.width - Layout.icon-gap;
+                    width: parent.width - Layout.kanban-count-w - Layout.icon-gap;
                     height: Layout.kanban-col-head-h - 1px;
                     vertical-alignment: center;
                     text: column.title;
@@ -161,8 +161,9 @@ export component KanbanWindow inherits Window {
                 }
 
                 count-text := Text {
-                    x: parent.width - self.width;
+                    x: parent.width - Layout.kanban-count-w;
                     y: 0;
+                    width: Layout.kanban-count-w;
                     height: Layout.kanban-col-head-h - 1px;
                     vertical-alignment: center;
                     horizontal-alignment: right;
@@ -203,7 +204,7 @@ export component KanbanWindow inherits Window {
                 card-touch := TouchArea {
                     x: 0;
                     y: 0;
-                    width: parent.width - Layout.icon-size - Layout.kanban-card-pad;
+                    width: parent.width - Layout.icon-size - Layout.kanban-card-pad - Layout.icon-gap;
                     height: parent.height;
                     enabled: !card-box.editing;
                     mouse-cursor: card-box.held ? grabbing : grab;
@@ -231,7 +232,7 @@ export component KanbanWindow inherits Window {
                     x: Layout.kanban-card-pad;
                     y: Layout.kanban-card-pad;
                     width: parent.width - 2 * Layout.kanban-card-pad;
-                    height: 22px;
+                    height: Layout.checkbox-row-h;
                     vertical-alignment: center;
                     text: card.title;
                     color: Palette.text;
@@ -245,7 +246,7 @@ export component KanbanWindow inherits Window {
                     x: Layout.kanban-card-pad - 6px;
                     y: Layout.kanban-card-pad;
                     width: parent.width - 2 * Layout.kanban-card-pad + 12px;
-                    height: 22px;
+                    height: Layout.checkbox-row-h;
                     background: Palette.elev-recessed;
                     border-radius: Layout.radius-control;
                     border-width: 1px;
@@ -280,9 +281,9 @@ export component KanbanWindow inherits Window {
 
                 Text {
                     x: Layout.kanban-card-pad;
-                    y: Layout.kanban-card-pad + 22px + Layout.kanban-card-gap;
+                    y: Layout.kanban-card-pad + Layout.checkbox-row-h + Layout.kanban-card-gap;
                     width: parent.width - 2 * Layout.kanban-card-pad;
-                    height: 16px;
+                    height: Typography.label-line;
                     vertical-alignment: center;
                     text: card.meta;
                     color: Palette.dim;
@@ -294,7 +295,7 @@ export component KanbanWindow inherits Window {
                 }
 
                 card-del := IconButton {
-                    x: parent.width - Layout.icon-size - Layout.kanban-card-pad + 4px;
+                    x: parent.width - Layout.icon-size - Layout.kanban-card-pad;
                     y: Layout.kanban-card-pad - Layout.header-y;
                     width: Layout.icon-size;
                     revealed: card-touch.has-hover || card-del.hovered || card-del.focused;
@@ -306,7 +307,7 @@ export component KanbanWindow inherits Window {
 
         add-row := Rectangle {
             x: Layout.pad;
-            y: board.y + board.height;
+            y: board.y + board.height + Layout.icon-gap;
             width: root.board-w;
             height: root.add-row-h;
 
@@ -320,7 +321,7 @@ export component KanbanWindow inherits Window {
         }
 
         pin-btn := IconButton {
-            x: parent.width - Layout.pad - 64px;
+            x: parent.width - Layout.pad - Layout.cluster-w;
             y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
@@ -332,7 +333,7 @@ export component KanbanWindow inherits Window {
         }
 
         trash-btn := IconButton {
-            x: parent.width - Layout.pad - 40px;
+            x: close-btn.x - Layout.icon-size - Layout.icon-gap;
             y: Layout.header-y;
             width: Layout.icon-size + Layout.icon-gap;
             revealed: root.controls-visible;
@@ -350,10 +351,10 @@ export component KanbanWindow inherits Window {
         }
 
         drag-area := TouchArea {
-            x: 16px;
-            y: 6px;
-            width: parent.width - Layout.pad - Layout.cluster-w - 16px;
-            height: Layout.header-band - 6px;
+            x: 0;
+            y: 0;
+            width: pin-btn.x - Layout.icon-gap;
+            height: Layout.header-band;
             moved => {
                 if (!root.dragging) {
                     root.dragging = true;
@@ -391,7 +392,7 @@ export component KanbanWindow inherits Window {
         if !root.editing-title: Text {
             x: Layout.title-x;
             y: Layout.header-y;
-            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            width: pin-btn.x - Layout.gap-m - self.x;
             height: Layout.header-h;
             text: root.note-title;
             color: Palette.text;
@@ -406,7 +407,7 @@ export component KanbanWindow inherits Window {
         if root.editing-title: Rectangle {
             x: Layout.title-x - 6px;
             y: Layout.header-y;
-            width: parent.width - Layout.pad - Layout.cluster-w - self.x - 12px;
+            width: pin-btn.x - Layout.gap-m - self.x;
             height: Layout.header-h;
             background: Palette.elev-recessed;
             border-radius: Layout.radius-control;
@@ -466,7 +467,7 @@ export component KanbanWindow inherits Window {
 
             Text {
                 x: Layout.pad;
-                y: 13px;
+                y: Layout.pad;
                 text: "DELETE — CANNOT BE UNDONE";
                 color: Palette.dim;
                 font-family: Typography.interface-face;
@@ -477,9 +478,9 @@ export component KanbanWindow inherits Window {
 
             HorizontalLayout {
                 x: Layout.pad;
-                y: 41px;
-                height: 34px;
-                spacing: 8px;
+                y: Layout.pad + Typography.label-line + Layout.gap-m;
+                height: Layout.button-h;
+                spacing: Layout.icon-gap;
                 alignment: start;
 
                 Button {

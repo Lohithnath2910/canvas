@@ -78,7 +78,7 @@ export component Button inherits Rectangle {
     property <bool> pressed: touch.pressed && root.enabled;
     property <bool> hovered: touch.has-hover && root.enabled;
 
-    height: 34px;
+    height: Layout.button-h;
     width: text-label.width + 32px;
     border-radius: Layout.radius-control;
     border-width: 1px;
