@@ -608,6 +608,22 @@ impl App {
     }
 }
 
+fn rows_locked_by_editor(editing_id: &str) -> bool {
+    !editing_id.is_empty()
+}
+
+fn end_todo_row_edit(handle: &slint::Weak<TodoWindow>) {
+    if let Some(window) = handle.upgrade() {
+        window.set_editing_id(slint::SharedString::new());
+    }
+}
+
+fn end_kanban_card_edit(handle: &slint::Weak<KanbanWindow>) {
+    if let Some(window) = handle.upgrade() {
+        window.set_editing_id(slint::SharedString::new());
+    }
+}
+
 fn refresh_todo(app: &SharedApp, id: &str) {
     let Ok(a) = app.try_borrow() else {
         return;
@@ -632,10 +648,13 @@ fn refresh_todo(app: &SharedApp, id: &str) {
     let window = window.clone_strong();
     drop(a);
 
-    let model: slint::VecModel<TodoItemData> = slint::VecModel::from(rows);
-    window.set_items(slint::ModelRc::new(model));
     window.set_open_count(open as i32);
     window.set_done_count(done as i32);
+    if rows_locked_by_editor(window.get_editing_id().as_ref()) {
+        return;
+    }
+    let model: slint::VecModel<TodoItemData> = slint::VecModel::from(rows);
+    window.set_items(slint::ModelRc::new(model));
 }
 
 fn todo_edit(app: &SharedApp, id: &str, change: impl FnOnce(&TodoListDoc) -> Option<Vec<u8>>) {
@@ -666,6 +685,7 @@ fn wire_todo(app: &SharedApp, id: &str, window: &TodoWindow) -> slint::Timer {
     {
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
+        let handle = window.as_weak();
         window.on_item_added(move |text| {
             let Some(app) = weak.upgrade() else {
                 return;
@@ -674,6 +694,7 @@ fn wire_todo(app: &SharedApp, id: &str, window: &TodoWindow) -> slint::Timer {
             if text.is_empty() {
                 return;
             }
+            end_todo_row_edit(&handle);
             todo_edit(&app, &id, |doc| Some(doc.add_item(&text).1));
         });
     }
@@ -681,10 +702,12 @@ fn wire_todo(app: &SharedApp, id: &str, window: &TodoWindow) -> slint::Timer {
     {
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
+        let handle = window.as_weak();
         window.on_item_toggled(move |item_id| {
             let Some(app) = weak.upgrade() else {
                 return;
             };
+            end_todo_row_edit(&handle);
             todo_edit(&app, &id, |doc| doc.toggle_item(item_id.as_ref()));
         });
     }
@@ -705,19 +728,26 @@ fn wire_todo(app: &SharedApp, id: &str, window: &TodoWindow) -> slint::Timer {
     {
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
+        let handle = window.as_weak();
         window.on_item_removed(move |item_id| {
             let Some(app) = weak.upgrade() else {
                 return;
             };
+            end_todo_row_edit(&handle);
             todo_edit(&app, &id, |doc| doc.delete_item(item_id.as_ref()));
         });
     }
 
     {
         let handle = window.as_weak();
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
         window.on_edit_committed(move || {
             if let Some(window) = handle.upgrade() {
                 window.set_editing_id(slint::SharedString::new());
+            }
+            if let Some(app) = weak.upgrade() {
+                refresh_todo(&app, &id);
             }
         });
     }
@@ -1796,6 +1826,9 @@ fn refresh_kanban(app: &SharedApp, id: &str) {
     let window = window.clone_strong();
     drop(a);
 
+    if rows_locked_by_editor(window.get_editing_id().as_ref()) {
+        return;
+    }
     let column_model: slint::VecModel<KanbanColumnData> = slint::VecModel::from(column_rows);
     window.set_columns(slint::ModelRc::new(column_model));
     let card_model: slint::VecModel<KanbanCardData> = slint::VecModel::from(cards);
@@ -1847,10 +1880,12 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
     {
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
+        let handle = window.as_weak();
         window.on_card_added(move |col| {
             let Some(app) = weak.upgrade() else {
                 return;
             };
+            end_kanban_card_edit(&handle);
             kanban_edit(&app, &id, |doc| {
                 let column = doc.columns().into_iter().nth(col.max(0) as usize)?;
                 Some(doc.add_card(&column.id, NEW_CARD_TITLE).1)
@@ -1861,10 +1896,12 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
     {
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
+        let handle = window.as_weak();
         window.on_card_moved(move |card_id, col, row| {
             let Some(app) = weak.upgrade() else {
                 return;
             };
+            end_kanban_card_edit(&handle);
             kanban_edit(&app, &id, |doc| {
                 let column = doc.columns().into_iter().nth(col.max(0) as usize)?;
                 doc.move_card(card_id.as_ref(), &column.id, row.max(0) as usize)
@@ -1875,10 +1912,12 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
     {
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
+        let handle = window.as_weak();
         window.on_card_removed(move |card_id| {
             let Some(app) = weak.upgrade() else {
                 return;
             };
+            end_kanban_card_edit(&handle);
             kanban_edit(&app, &id, |doc| doc.delete_card(card_id.as_ref()));
         });
     }
@@ -1898,9 +1937,14 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
 
     {
         let handle = window.as_weak();
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
         window.on_edit_committed(move || {
             if let Some(window) = handle.upgrade() {
                 window.set_editing_id(slint::SharedString::new());
+            }
+            if let Some(app) = weak.upgrade() {
+                refresh_kanban(&app, &id);
             }
         });
     }
@@ -2089,9 +2133,17 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
 }
 #[cfg(test)]
 mod tests {
-    use super::{built_types_model, count_label, default_actions, ACTION_SETTINGS};
+    use super::{
+        built_types_model, count_label, default_actions, rows_locked_by_editor, ACTION_SETTINGS,
+    };
     use crate::widget_types;
     use slint::Model;
+
+    #[test]
+    fn a_live_row_editor_suppresses_the_model_rebuild() {
+        assert!(!rows_locked_by_editor(""));
+        assert!(rows_locked_by_editor("card-7"));
+    }
 
     #[test]
     fn count_label_is_singular_plural_and_empty() {

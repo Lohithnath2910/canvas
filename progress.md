@@ -50,14 +50,14 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W2, in order. Start with `SW-22`.** The user walked the running app on 2026-08-26,
+**Stage W2, in order. `SW-22` is done — start with `SW-23`.** The user walked the running app on 2026-08-26,
 answered ten questions, and the answers are all folded into `TASKS.md`'s **Stage W2**
 section — every one of them, with the quote that produced it. **Nothing below is blocked and
 nothing needs asking again.** Build straight through:
 
 | # | Task | Why it is in this position |
 |---|---|---|
-| 1 | **SW-22** — typing dies after one character | Small, and it is a live bug in shipped code. Same root cause would be re-introduced three more times below |
+| ~~1~~ | ~~**SW-22** — typing dies after one character~~ | **Done 2026-08-26**, 🟡 not watched. The lock is `rows_locked_by_editor`; read the entry below before writing any other repeater |
 | 2 | **SW-23** — `--open-kind <kind>` dev flag | Cheap, and it is what lets you photograph your own work on tasks 4 and 5 |
 | 3 | **SW-18** — the `Sheet` overlay | Everything after it needs it |
 | 4 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
@@ -73,10 +73,12 @@ gated on the above.
 
 ### Three things that will bite, all already paid for once
 
-1. **`SW-22`'s root cause is a repeater rebuild under a live caret.** Every keystroke calls
-   `refresh_*`, which calls `set_cards`/`set_items`, which tears down and rebuilds the
-   `TextInput` the cursor is in. Fix by **not rebuilding the model while `editing-id` is
-   set** — not by debouncing.
+1. **A repeater rebuild under a live caret kills typing.** Fixed for the Kanban and the
+   Todo in `SW-22`: `rows_locked_by_editor` makes `refresh_todo`/`refresh_kanban` return
+   before `set_items`/`set_cards` while `editing-id` is set, `edit-committed` clears the id
+   and refreshes, and every structural change calls `end_*_edit` first so it is not
+   swallowed. **Any new repeater with an inline editor — the Spreadsheet grid in `SW-14`
+   above all — must do the same thing.** Never debounce it instead.
 2. **`SW-21`'s drag is the same bug `S1-51` already fixed for window drag.** The card's
    `TouchArea` moves *with* the card, so `mouse-x - pressed-x` measures against a target
    that is running away. **The touch region must not move**: leave the card where the model
@@ -108,8 +110,9 @@ kind, and the footer count is correct.
 **Built but never watched:** everything else. 150 passing tests say the documents converge
 and the maths is right; they say nothing about what is on screen.
 
-**Known broken, reported by the user:** the Kanban — card drag is glitchy and not smooth,
-the column header alignment is wrong, and typing into a card stops after one character.
+**Known broken, reported by the user:** the Kanban — card drag is glitchy and not smooth
+(`SW-21`) and the column header alignment is wrong (`SW-21`). Typing stopping after one
+character was `SW-22` and is fixed in code, unwatched.
 
 ### Open questions — none of them block Stage W2
 
@@ -2179,3 +2182,49 @@ instance and re-check before writing a screenshot finding down.**
 - ❌ No code changed. `TASKS.md` gained Stage W2 (SW-18 … SW-23) and closed four open
   questions; `progress.md` gained the screenshot recipe, four overrides and a rewritten GO
   block. 150 tests still pass, clippy still clean — neither was touched.
+
+---
+
+### 2026-08-26 — SW-22: typing into a repeater row survives past one character
+
+The first Stage W2 task, and the only one that was fixing already-shipped code rather than
+adding to it. The user's report was *"each card is only letting me type a single letter and
+nothing more than that"*.
+
+**The cause was exactly what `TASKS.md` predicted.** `edited =>` on the card's `TextInput`
+fires `card-title-edited` → `kanban_edit` → `refresh_kanban` → `set_cards`. Handing a
+repeater a brand-new `VecModel` makes it tear its items down and build them again, so the
+`TextInput` holding the caret is destroyed on the first keystroke and the second one has
+nowhere to go. The Todo widget had the identical chain — `item-text-edited` → `todo_edit`
+→ `refresh_todo` → `set_items` — and was never watched, so it was fixed in the same pass
+rather than waiting to be reported.
+
+**The fix is a lock, not a debounce.** `rows_locked_by_editor(editing_id)` is true whenever
+the window's `editing-id` is non-empty. `refresh_todo` and `refresh_kanban` still run —
+they still read the document, and the Todo still updates `open-count`/`done-count`, which
+are scalars and rebuild nothing — but they return before `set_items` / `set_columns` +
+`set_cards`. The CRDT write on the keystroke path is untouched: Hard Constraint 2 says the
+local document applies first, and it still does. Only the repaint waits.
+
+**`edit-committed` is what unlocks it.** It already cleared `editing-id`; it now clears it
+and calls the refresh, so committing is the single rebuild a row gets, and the row picks up
+whatever else changed while the caret was live.
+
+**One hole that the task description did not mention, closed here.** With the rebuild
+suppressed, anything structural done *during* an edit — clicking `+` on another column,
+ticking a different Todo row, deleting a card — writes to the document and paints nothing,
+so it reads as a dead click. Add, toggle, move and remove now call `end_todo_row_edit` /
+`end_kanban_card_edit` before their `*_edit`, which drops `editing-id` and lets the refresh
+through. Nothing is lost by ending the edit: every keystroke was already in the document.
+
+- 🟡 Typing a full sentence into a Kanban card and into a Todo row without losing the
+  caret — **not watched.** It needs an event loop and a pointer, so it is in the
+  VERIFICATION QUEUE under **Typing into a repeater row**, six lines, including the
+  restart check and the edit-during-structural-change case.
+- ✅ `rows_locked_by_editor` is covered by `a_live_row_editor_suppresses_the_model_rebuild`
+  in `canvas-app`. It is a thin test of a thin function, which is what `SW-22`'s own note
+  asked for — the behaviour around it cannot be tested headless.
+- ✅ 151 tests pass (was 150), `cargo clippy --workspace --all-targets` clean, `cargo fmt`
+  applied. Nothing on **DO NOT REGRESS** was touched: no I/O moved onto the keystroke path,
+  the 500ms flush timer and `pending_updates` buffering are unchanged, and the note widget
+  has no repeater and was not edited.

@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-22` — typing into a Kanban card or Todo row dies after one character. Then **Stage W2** in order: SW-23, SW-18, SW-19, SW-20, SW-21, SW-13, SW-14.
+**Current task:** `SW-23` — the `--open-kind <kind>` dev flag, so a session can put a widget on screen and photograph it. Then **Stage W2** in order: SW-18, SW-19, SW-20, SW-21, SW-13, SW-14.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 28 ticked. 150 tests pass. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Done:** 28 ticked. 151 tests pass. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -427,6 +427,20 @@ It should open already carrying three columns — you do not have to set anythin
       fields exist in `KanbanDoc` and the meta line renders `MIRA · 25 AUG` correctly when
       they are set — there is just no UI for setting them, same shape as the Todo widget's
       unset due-date `Tag`
+**Typing into a repeater row** → **SW-22**
+- [ ] **The one this task exists for:** double-click a Kanban card and type a whole
+      sentence. Every character must land — the caret must not vanish after the first one
+- [ ] Press Enter — the card shows the full sentence, and the count and layout are right
+- [ ] Do the same on a **Todo** row: double-click it, type a sentence, press Enter
+- [ ] Escape mid-sentence instead of Enter — the row still shows what you typed (the
+      keystrokes went into the document as they were made; Esc only ends the edit)
+- [ ] Close the window with `x`, reopen from home — the text is still there. Then quit from
+      the tray, relaunch, and check again
+- [ ] While a card is being edited, click the `+` on another column — the edit ends and
+      **both** the typed card and the new one are painted. Same for a Todo row: type into
+      one, then tick another row's checkbox. Structural changes end the edit on purpose,
+      because the rebuild they need is the one thing the fix suppresses
+
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
       push-back and no snap-in, and always leaves ~120px of plate plus the whole header
@@ -1506,6 +1520,12 @@ would otherwise be re-introduced three more times.
   caret; the text is in the document afterwards; a restart still shows it.
   ⚠ A regression test is hard here (it needs an event loop). At minimum add a test that
   `editing-id` suppresses the refresh path, and put the click-through in the queue.
+  🟡 **Built 2026-08-26, not watched.** `rows_locked_by_editor` guards `refresh_todo` and
+  `refresh_kanban`: the CRDT write still happens on every keystroke, but the `set_items` /
+  `set_columns` + `set_cards` calls are skipped while `editing-id` is non-empty, and
+  `edit-committed` now clears the id **and then refreshes**, which is the one rebuild the
+  row gets. Add/toggle/move/remove call `end_*_edit` first, so a structural change is never
+  swallowed by a live caret. Box stays open until the click-through below passes.
 
 ### W2b — the editing layer
 
