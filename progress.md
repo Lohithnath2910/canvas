@@ -497,7 +497,12 @@ barely moves while the snapshot is more than twenty times either.
 
 ---
 
-## The run stopped here, and why
+## ⚠ HISTORICAL — a run that stopped on 2026-08-25. Superseded.
+
+**This section describes a state that no longer exists.** Open question 8 was answered
+(three header controls, colour dropped — SW-16), and SW-05, SW-06, SW-08, SW-10 and SW-17
+have all shipped since. Kept because the reasoning is still readable, but **do not treat
+anything below as current** — the 🟢 GO block at the top of this file is what is current.
 
 **Every remaining task in Stage W is a widget *window*, and all of them are blocked on
 open question 8** — *do the other widget types get the note's four header controls?* Its
