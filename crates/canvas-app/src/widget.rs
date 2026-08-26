@@ -2,9 +2,11 @@ use std::time::Duration;
 
 use slint::ComponentHandle;
 
-use canvas_doc::{StickyNoteDoc, TodoListDoc, UndoHistory};
-use canvas_storage::{WindowPlacement, KIND_DOCUMENT, KIND_STICKY_NOTE, KIND_TODO};
-use canvas_ui::{platform_system_sans, Motion, StickyNoteWindow, TodoWindow, Typography};
+use canvas_doc::{CalendarDoc, StickyNoteDoc, TodoListDoc, UndoHistory};
+use canvas_storage::{WindowPlacement, KIND_CALENDAR, KIND_DOCUMENT, KIND_STICKY_NOTE, KIND_TODO};
+use canvas_ui::{
+    platform_system_sans, CalendarWindow, Motion, StickyNoteWindow, TodoWindow, Typography,
+};
 
 const OPEN_DELAY: Duration = Duration::from_millis(16);
 const CLOSE_FADE: Duration = Duration::from_millis(100);
@@ -13,6 +15,7 @@ const DOC_PAD: f32 = 24.0;
 pub enum WidgetDoc {
     StickyNote(StickyNoteDoc),
     Todo(TodoListDoc),
+    Calendar(CalendarDoc),
 }
 
 impl WidgetDoc {
@@ -25,6 +28,10 @@ impl WidgetDoc {
             KIND_TODO => Some(WidgetDoc::Todo(match snapshot {
                 Some(bytes) if !bytes.is_empty() => TodoListDoc::load(bytes),
                 _ => TodoListDoc::new(),
+            })),
+            KIND_CALENDAR => Some(WidgetDoc::Calendar(match snapshot {
+                Some(bytes) if !bytes.is_empty() => CalendarDoc::load(bytes),
+                _ => CalendarDoc::new(),
             })),
             _ => None,
         }
@@ -39,13 +46,19 @@ impl WidgetDoc {
                 .map(|i| i.text)
                 .collect::<Vec<String>>()
                 .join(", "),
+            WidgetDoc::Calendar(doc) => doc
+                .events()
+                .into_iter()
+                .map(|e| e.title)
+                .collect::<Vec<String>>()
+                .join(", "),
         }
     }
 
     pub fn set_text(&self, text: &str) -> Option<Vec<u8>> {
         match self {
             WidgetDoc::StickyNote(doc) => doc.set_text(text),
-            WidgetDoc::Todo(_) => None,
+            WidgetDoc::Todo(_) | WidgetDoc::Calendar(_) => None,
         }
     }
 
@@ -53,6 +66,7 @@ impl WidgetDoc {
         match self {
             WidgetDoc::StickyNote(doc) => doc.snapshot(),
             WidgetDoc::Todo(doc) => doc.snapshot(),
+            WidgetDoc::Calendar(doc) => doc.snapshot(),
         }
     }
 
@@ -60,6 +74,7 @@ impl WidgetDoc {
         match self {
             WidgetDoc::StickyNote(doc) => doc.state_vector(),
             WidgetDoc::Todo(doc) => doc.state_vector(),
+            WidgetDoc::Calendar(doc) => doc.state_vector(),
         }
     }
 }
@@ -67,6 +82,7 @@ impl WidgetDoc {
 pub enum WidgetWindow {
     StickyNote(StickyNoteWindow),
     Todo(TodoWindow),
+    Calendar(CalendarWindow),
 }
 
 impl Clone for WidgetWindow {
@@ -74,6 +90,7 @@ impl Clone for WidgetWindow {
         match self {
             WidgetWindow::StickyNote(window) => WidgetWindow::StickyNote(window.clone_strong()),
             WidgetWindow::Todo(window) => WidgetWindow::Todo(window.clone_strong()),
+            WidgetWindow::Calendar(window) => WidgetWindow::Calendar(window.clone_strong()),
         }
     }
 }
@@ -99,6 +116,13 @@ impl WidgetWindow {
                 window.global::<Motion>().set_reduced(reduced_motion);
                 WidgetWindow::Todo(window)
             })),
+            KIND_CALENDAR => Some(CalendarWindow::new().map(|window| {
+                window
+                    .global::<Typography>()
+                    .set_system_sans(platform_system_sans().into());
+                window.global::<Motion>().set_reduced(reduced_motion);
+                WidgetWindow::Calendar(window)
+            })),
             _ => None,
         }
     }
@@ -107,6 +131,7 @@ impl WidgetWindow {
         match self {
             WidgetWindow::StickyNote(window) => window.window(),
             WidgetWindow::Todo(window) => window.window(),
+            WidgetWindow::Calendar(window) => window.window(),
         }
     }
 
@@ -114,6 +139,7 @@ impl WidgetWindow {
         match self {
             WidgetWindow::StickyNote(window) => window.show(),
             WidgetWindow::Todo(window) => window.show(),
+            WidgetWindow::Calendar(window) => window.show(),
         }
     }
 
@@ -125,6 +151,9 @@ impl WidgetWindow {
             WidgetWindow::Todo(window) => {
                 let _ = window.hide();
             }
+            WidgetWindow::Calendar(window) => {
+                let _ = window.hide();
+            }
         }
     }
 
@@ -132,6 +161,7 @@ impl WidgetWindow {
         match self {
             WidgetWindow::StickyNote(window) => window.global::<Motion>().set_reduced(reduced),
             WidgetWindow::Todo(window) => window.global::<Motion>().set_reduced(reduced),
+            WidgetWindow::Calendar(window) => window.global::<Motion>().set_reduced(reduced),
         }
     }
 
@@ -139,13 +169,14 @@ impl WidgetWindow {
         match self {
             WidgetWindow::StickyNote(window) => window.set_note_title(title.into()),
             WidgetWindow::Todo(window) => window.set_note_title(title.into()),
+            WidgetWindow::Calendar(window) => window.set_note_title(title.into()),
         }
     }
 
     pub fn set_text(&self, text: &str) {
         match self {
             WidgetWindow::StickyNote(window) => window.set_note_text(text.into()),
-            WidgetWindow::Todo(_) => {}
+            WidgetWindow::Todo(_) | WidgetWindow::Calendar(_) => {}
         }
     }
 
@@ -156,6 +187,7 @@ impl WidgetWindow {
                 window.set_tone(placement.tone as i32);
             }
             WidgetWindow::Todo(window) => window.set_pinned(placement.pinned),
+            WidgetWindow::Calendar(window) => window.set_pinned(placement.pinned),
         }
     }
 
@@ -169,6 +201,10 @@ impl WidgetWindow {
                 let scale = window.window().scale_factor();
                 window.set_resize_border(window.get_resize_border() * scale);
             }
+            WidgetWindow::Calendar(window) => {
+                let scale = window.window().scale_factor();
+                window.set_resize_border(window.get_resize_border() * scale);
+            }
         }
     }
 
@@ -176,6 +212,7 @@ impl WidgetWindow {
         match self {
             WidgetWindow::StickyNote(window) => window.set_opened(value),
             WidgetWindow::Todo(window) => window.set_opened(value),
+            WidgetWindow::Calendar(window) => window.set_opened(value),
         }
     }
 
@@ -183,6 +220,7 @@ impl WidgetWindow {
         match self {
             WidgetWindow::StickyNote(window) => window.set_closing(value),
             WidgetWindow::Todo(window) => window.set_closing(value),
+            WidgetWindow::Calendar(window) => window.set_closing(value),
         }
     }
 
@@ -197,6 +235,14 @@ impl WidgetWindow {
                 })
             }
             WidgetWindow::Todo(window) => {
+                let weak = window.as_weak();
+                Box::new(move || {
+                    if let Some(window) = weak.upgrade() {
+                        window.set_opened(true);
+                    }
+                })
+            }
+            WidgetWindow::Calendar(window) => {
                 let weak = window.as_weak();
                 Box::new(move || {
                     if let Some(window) = weak.upgrade() {

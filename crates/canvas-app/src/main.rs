@@ -3,6 +3,7 @@
 use mimalloc::MiMalloc;
 
 mod app;
+mod calendar_time;
 mod desktop_layer;
 mod hotkey;
 mod reduced_motion;

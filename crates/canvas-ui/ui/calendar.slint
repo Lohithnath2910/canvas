@@ -11,7 +11,7 @@ export struct CalendarChip {
     id: string,
     label: string,
     day: int,
-    top: length,
+    top: float,
     height: length,
     tone: int,
 }
@@ -29,8 +29,6 @@ export component CalendarWindow inherits Window {
     callback window-moved(length, length);
     callback drag-started();
     callback drag-ended();
-    callback chip-activated(string);
-    callback slot-activated(int, length);
     callback pin-toggled(bool);
     callback delete-confirmed();
     callback title-edited(string);
@@ -133,20 +131,14 @@ export component CalendarWindow inherits Window {
 
             for chip in root.chips: Rectangle {
                 x: chip.day * (root.column-w + Layout.calendar-col-gap);
-                y: Layout.calendar-label-h + 1px + chip.top;
+                y: Layout.calendar-label-h + 1px + chip.top * max(0px,
+                    parent.height - Layout.calendar-label-h - 1px - chip.height);
                 width: root.column-w;
                 height: chip.height;
                 border-radius: Layout.radius-control;
                 background: Palette.plate-tone(chip.tone);
                 border-width: 1px;
                 border-color: Palette.edge;
-
-                chip-touch := TouchArea {
-                    width: 100%;
-                    height: 100%;
-                    mouse-cursor: pointer;
-                    clicked => { root.chip-activated(chip.id); }
-                }
 
                 Text {
                     x: Layout.icon-gap;

@@ -10,8 +10,8 @@ use canvas_doc::{StickyNoteDoc, TodoListDoc, UndoHistory};
 use crate::widget::{LiveWidget, WidgetDoc, WidgetWindow};
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
-    platform_system_sans, CanvasTray, HomeWindow, Motion, NoteRow, PaletteRow, PaletteWindow,
-    StickyNoteWindow, TodoItemData, TodoWindow, Typography,
+    platform_system_sans, CalendarChip, CalendarWindow, CanvasTray, HomeWindow, Motion, NoteRow,
+    PaletteRow, PaletteWindow, StickyNoteWindow, TodoItemData, TodoWindow, Typography,
 };
 
 pub const ACTION_NEW_NOTE: &str = "new-note";
@@ -457,12 +457,16 @@ impl App {
         let poll_timer = match &window {
             WidgetWindow::StickyNote(note) => wire_note(app, id, note),
             WidgetWindow::Todo(todo) => wire_todo(app, id, todo),
+            WidgetWindow::Calendar(calendar) => wire_calendar(app, id, calendar),
         };
         if let Some(widget) = app.borrow_mut().widgets.get_mut(id) {
             widget.poll_timer = Some(poll_timer);
         }
         if matches!(window, WidgetWindow::Todo(_)) {
             refresh_todo(app, id);
+        }
+        if matches!(window, WidgetWindow::Calendar(_)) {
+            refresh_calendar(app, id);
         }
         window.play_open();
         window.show()?;
@@ -1514,6 +1518,246 @@ pub fn gallery() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn refresh_calendar(app: &SharedApp, id: &str) {
+    use crate::calendar_time as ct;
+
+    let Ok(a) = app.try_borrow() else {
+        return;
+    };
+    let Some(widget) = a.widgets.get(id) else {
+        return;
+    };
+    let (WidgetDoc::Calendar(doc), WidgetWindow::Calendar(window)) = (&widget.doc, &widget.window)
+    else {
+        return;
+    };
+
+    let offset = ct::local_offset_ms();
+    let now = canvas_storage::now_millis();
+    let week_start = ct::week_start_utc(now, offset);
+    let week_end = week_start + ct::DAYS_PER_WEEK * ct::DAY_MS;
+    let today = ct::day_index(now, week_start, offset);
+
+    let chips: Vec<CalendarChip> = doc
+        .events_between(week_start, week_end)
+        .into_iter()
+        .map(|event| {
+            let (height, tone) = ct::chip_bucket(event.duration());
+            let shown_from = event.start.max(week_start);
+            CalendarChip {
+                id: event.id.into(),
+                label: ct::hhmm(event.start, offset).into(),
+                day: ct::day_index(shown_from, week_start, offset),
+                top: ct::day_fraction(shown_from, offset),
+                height,
+                tone,
+            }
+        })
+        .collect();
+
+    let window = window.clone_strong();
+    drop(a);
+
+    let model: slint::VecModel<CalendarChip> = slint::VecModel::from(chips);
+    window.set_chips(slint::ModelRc::new(model));
+    window.set_today(today);
+}
+
+fn wire_calendar(app: &SharedApp, id: &str, window: &CalendarWindow) -> slint::Timer {
+    let owned_id = id.to_string();
+    let poll_timer = slint::Timer::default();
+
+    let anchor: DragAnchor = Rc::new(std::cell::Cell::new(None));
+
+    {
+        let anchor = anchor.clone();
+        let handle = window.as_weak();
+        window.on_drag_started(move || {
+            if let Some(window) = handle.upgrade() {
+                begin_drag(window.window(), &anchor);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let anchor = anchor.clone();
+        window.on_drag_ended(move || {
+            anchor.set(None);
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement_dirty = true;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let anchor = anchor.clone();
+        let handle = window.as_weak();
+        window.on_window_moved(move |dx, dy| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let win = window.window();
+            let scale = win.scale_factor();
+            let next = drag_move(win, &anchor, dx, dy);
+
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                let logical = next.to_logical(scale);
+                widget.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
+                widget.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        window.on_pin_toggled(move |pinned| {
+            if let Some(window) = handle.upgrade() {
+                crate::desktop_layer::apply_pin(window.window(), pinned);
+            }
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let mut a = app.borrow_mut();
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement.pinned = pinned;
+                widget.placement_dirty = true;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_title_edited(move |title| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let trimmed = title.trim();
+            let title = if trimmed.is_empty() {
+                canvas_storage::DEFAULT_TITLE
+            } else {
+                trimmed
+            };
+            let Ok(a) = app.try_borrow() else {
+                return;
+            };
+            let _ = a.store.set_title(&id, title);
+            drop(a);
+            App::refresh_home(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_close_requested(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            App::close_widget(&app, &id);
+            App::refresh_home(&app);
+            crate::maybe_quit(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        window.on_palette_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::show_palette(&app);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_delete_confirmed(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            App::delete_widget(&app, &id);
+            App::refresh_home(&app);
+            crate::maybe_quit(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.window().on_close_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::close_widget(&app, &id);
+                App::refresh_home(&app);
+                crate::maybe_quit(&app);
+            }
+            slint::CloseRequestResponse::KeepWindowShown
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        poll_timer.start(slint::TimerMode::Repeated, PIN_POLL_INTERVAL, move || {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            if window.get_pinned() {
+                crate::desktop_layer::hold_at_desktop_layer(window.window());
+            }
+
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            {
+                let Ok(mut a) = app.try_borrow_mut() else {
+                    return;
+                };
+                if let Some(widget) = a.widgets.get_mut(&id) {
+                    let size = window
+                        .window()
+                        .size()
+                        .to_logical(window.window().scale_factor());
+                    let w = (size.width - 2.0 * PLATE_MARGIN).round() as i32;
+                    let h = (size.height - 2.0 * PLATE_MARGIN).round() as i32;
+                    if w != widget.placement.width || h != widget.placement.height {
+                        widget.placement.width = w;
+                        widget.placement.height = h;
+                        widget.placement_dirty = true;
+                    }
+                }
+            }
+
+            let offset = crate::calendar_time::local_offset_ms();
+            let now = canvas_storage::now_millis();
+            let week_start = crate::calendar_time::week_start_utc(now, offset);
+            if window.get_today() != crate::calendar_time::day_index(now, week_start, offset) {
+                refresh_calendar(&app, &id);
+            }
+        });
+    }
+
+    poll_timer
+}
 #[cfg(test)]
 mod tests {
     use super::{count_label, default_actions, ACTION_NEW_NOTE, ACTION_NEW_TODO, ACTION_SETTINGS};

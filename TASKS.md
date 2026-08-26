@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-08` — Calendar window, **HALF BUILT** — the shell compiles, the wiring does not exist. See its entry.
+**Current task:** `SW-17` — one table of built widget types behind both home and the palette. Carries a design decision — show the user before building it out. See its entry.
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 28 ticked, 43 open (5 dropped, 10 added — S1-46 to S1-51, SW-16, SW-17, and the two Spreadsheet tasks). 122 tests pass.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Done:** 28 ticked, 43 open (5 dropped, 10 added — S1-46 to S1-51, SW-16, SW-17, and the two Spreadsheet tasks). 134 tests pass.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -110,6 +110,12 @@ task where it does not.
 This queue is how the loop keeps moving without the user in it: anything a session cannot
 see gets committed, logged 🟡, and listed here with exactly what to click. Ticked lines
 are confirmed — leave them ticked. Do not re-open a ticked line to "make sure".
+
+**⚠ The user asked on 2026-08-26 for this queue to be CLEARED — walked end to end and
+ticked or turned into numbered bugs — once the Stage W widgets are all wired and working.**
+So it is not an indefinite parking lot. When the SW tasks run out, the next unit of work is
+the walk-through, with the user at the keyboard, not another feature. Say so in the
+end-of-run report every time until it happens.
 
 **Note window**
 - [ ] **Drag the header — the plate must stay glued to the grab point for the whole
@@ -319,6 +325,34 @@ the same three controls.
 - [ ] 🟡 A due-date `Tag` is built into the row but nothing sets a due date yet —
       `TodoListDoc` stores `{id, text, done}` only, deliberately (SW-04). An empty tag
       column is expected
+
+**The Calendar widget** → **SW-08**
+
+A calendar row has already been seeded into the database — it is called **THIS WEEK**, it
+holds 8 events, and it is flagged open, so it should appear the moment you launch. If it
+is not there, run `cargo run -p canvas-app --example insert_calendar`.
+`--example insert_calendar -- --remove` deletes every calendar row when you are done.
+
+- [ ] The window is `480×360` with the same 32px header, glyph strip, editable title and
+      three controls as a note, and the trash control says `DELETE CALENDAR`
+- [ ] Seven equal day columns, `MON`–`SUN`, gap 8, each with a 1px rule above its label
+- [ ] **Today's column only**: the rule and the label step to `text`; the other six stay
+      `edge` and `dim`. It is a rule, not a wash — nothing behind the column changes
+- [ ] Eight chips, at these positions — this is the artboard's own layout, so it should
+      look like `handoff/screenshots/widget-types.png`:
+      MON 09:30 · TUE 11:00 · WED 09:30 and 14:00 · THU 09:30 and 16:00 · FRI 13:00 ·
+      SUN 18:00, and **SAT empty**
+- [ ] Chips carry the **24-hour time only** — no event names anywhere
+- [ ] Chip height and grey level both track duration: the 30-minute stand-ups are the
+      shortest and darkest, WED 14:00 (3 hours) is the tallest and lightest
+- [ ] Chips sit lower down the column the later they start — 09:30 near the top, 18:00
+      near the bottom
+- [ ] **Resize the window taller** — the chips spread out to keep the same relative times.
+      Their heights must not change; only their spacing does
+- [ ] Close it with `x`, reopen from home, quit from the tray and relaunch — all 8 chips
+      come back in the same places
+- [ ] 🟡 Nothing in the window can add, move or delete an event yet — §10.4 specifies the
+      readout and no editing UI at all, so that is **open question 10**, not an oversight
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -1194,21 +1228,45 @@ because the app is currently hardcoded to a single type.
   **Chips carry the 24-hour start time only, never the event name** — at a ~52px column an
   11px Silkscreen label holds five characters and a truncated name reads worse than none.
   Grey level carries duration. A day view is what is needed if names are ever required.
-  ⚠ **HALF BUILT — stopped mid-task 2026-08-26 on the 90% usage limit, not on a blocker.**
-  What exists: `ui/calendar.slint` with the seven-column grid, the per-day rule that steps
-  to `text` for `today`, a `CalendarChip` struct carrying `{id, label, day, top, height,
-  tone}`, and the standard header, strip, drag region and three controls. It **compiles,
-  is exported from `main.slint`, and is clippy-clean**, so the tree is not broken.
-  What is missing, and is the whole of the next session's first task:
-  **(1)** no `Calendar` arm in `WidgetDoc`/`WidgetWindow` in `widget.rs` — the compiler
-  will name every site once you add it; **(2)** no `wire_calendar` in `app.rs`;
-  **(3)** nothing maps `CalendarDoc`'s events to chips — that is where the real work is:
-  `day` from the event's weekday, `top` from its start offset inside the day, `height`
-  from `duration()` bucketed to §10.4's **24/32/40/56px**, `tone` from the same duration,
-  and `label` as the **24-hour start time only**. `CalendarDoc::events_between` already
-  exists to select the week, and returns overlapping events, not merely contained ones.
+  **Finished 2026-08-26** — the half-built shell from the session before is now wired.
+  `Calendar` arms in `WidgetDoc`/`WidgetWindow`, `wire_calendar` and `refresh_calendar` in
+  `app.rs`, and a new `canvas-app/src/calendar_time.rs` holding the whole week/day/clock
+  calculation with 12 tests.
+  Decisions the spec leaves open, all recorded rather than assumed:
+  **The week runs Monday→Sunday in LOCAL time.** `start`/`end` are epoch millis (UTC) per
+  SW-07, so every day boundary has to cross a timezone. `local_offset_ms()` reads
+  `GetTimeZoneInformation` — and note that **`TIME_ZONE_ID_UNKNOWN` (0) still carries a
+  valid `Bias`**: it means "this zone has no DST transitions this year", which is exactly
+  what India returns. Treating 0 as "no offset" silently put the whole grid 5½ hours out,
+  and it was only caught because the seeded Monday landed on an exact UTC midnight.
+  **`top` is a fraction of the day (0–1), not a pixel offset**, multiplied in Slint by the
+  track height less the chip's own height. That is what makes a resize spread the chips
+  instead of stranding them, and it keeps the last chip of the day fully on screen.
+  Heights stay absolute because §10.4 fixes them at 24/32/40/56px.
+  **Duration drives height and tone together**: ≤30min → 24px/tone 1 (darkest), ≤60 →
+  32/2, ≤120 → 40/3, longer → 56/4 (lightest). `plate-tone(1)` is `peer-4`, so tone rises
+  with duration and the longest event is the lightest plate — which is what the artboard
+  shows for its 3-hour WED block.
+  **An event straddling the week boundary is drawn from the week's own edge** — day 0,
+  fraction 0 — but keeps its real start time as the label. `events_between` returns
+  overlapping events, so this case arrives whether or not it is wanted.
+  **The chip `TouchArea` and the `chip-activated`/`slot-activated` callbacks were removed.**
+  Two chips at nearby times overlap, and overlapping `TouchArea`s are §13.3's documented
+  trap. Nothing was reading either callback, so they were dead weight pointing at a design
+  that does not exist yet — see **open question 10**.
+  The day rollover is picked up by the existing 700ms pin poll, which compares the window's
+  `today` against a freshly computed one and only refreshes when they differ.
+  `cargo run -p canvas-app --example insert_calendar` seeds a week matching the artboard;
+  `-- --remove` clears it.
   *DoD:* a week renders with correctly positioned and sized chips; today is marked; events
   survive a restart.
+  🟡 **Not watched working — the box stays open.** What *is* confirmed: 134 tests pass and
+  clippy is clean; the 12 `calendar_time` tests pin the week/day/clock maths; and the chip
+  mapping was run end-to-end against the seeded document, printing
+  `today=2` (Wednesday, 2026-08-26) and the artboard's exact eight chips —
+  MON 09:30, TUE 11:00, WED 09:30 + 14:00, THU 09:30 + 16:00, FRI 13:00, SUN 18:00, SAT
+  empty, with the 3-hour block at 56px/tone 4 and the stand-ups at 24px/tone 1.
+  What is **not** confirmed is anything on screen. See the VERIFICATION QUEUE.
 
 ### We — Kanban
 
@@ -1429,6 +1487,26 @@ protocol, the storage schema, or a design token not already specified.
    extension the bundled SQLite may or may not have compiled in. **(a) is the
    recommendation** — 200 notes is the stated target, not 200,000.
    *Blocks:* S1-48. **Ask before starting.**
+
+10. **How does a Calendar event get created, moved or deleted from inside the widget?**
+   SW-08 renders the week correctly, but §10.4 specifies **only the readout** — seven
+   columns, a time-labelled chip, grey by duration. It gives no form, no fields, no
+   affordance for a title or a start time, and the chip deliberately carries no name to
+   click on. Three things need a decision, and all of them are interaction, not tokens:
+   **(a)** what a click on empty column space does — nothing, or create a default-length
+   event at that time; **(b)** what a click on a chip does — a chip is at most 56×52px and
+   shows only `14:00`, so there is very little to aim at, and a single click that deletes
+   is destructive with no confirm; **(c)** where a title is typed, given the chip is
+   forbidden from showing one. §10.4's own escape hatch — *"a day view is needed if names
+   are required"* — is a fourth option and a much larger task.
+   The **column-wide `TouchArea` route is a trap either way**: chips at nearby times
+   overlap each other, and §13.3's rule is that two `TouchArea`s must never share a region.
+   Any answer here has to be built from disjoint regions, or from Rust-side hit-testing
+   against one region per column.
+   `CalendarDoc` already has `add_event`, `set_title`, `set_span` and `delete_event`, so
+   **nothing is blocked on the CRDT** — only on the interaction.
+   *Blocks:* nothing in the current backlog. SW-08 is finished without it, and the seeding
+   example covers verification. **Ask before building event editing.**
 ---
 
 ## Session-end checklist

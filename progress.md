@@ -50,66 +50,62 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**⚠ The last session stopped MID-TASK, on the 90% usage limit, not on a blocker.** Read
-this before starting anything.
+**`SW-17` — one table of built widget types, behind both home and the palette.** The user
+raised it directly while looking at the app: home has two labelled buttons and the palette
+offers three actions, and **neither scales to seven widget types**. Both lists should come
+from one table in Rust — kind, label, icon, shortcut — so adding a type touches one place.
+It is also the only thing standing between the user and the **Shared Document** and
+**Calendar**, which are both built and dispatch correctly but which nothing can create.
 
-**`SW-08` — the Calendar window — is HALF BUILT.** `ui/calendar.slint` exists, compiles, is
-exported from `main.slint` and is clippy-clean, so **the tree is not broken** and all 122
-tests pass. What it does not have is any connection to the runtime. Finish it first:
+**It carries a real design decision, so show the user before building it out:** does home
+grow a glyph strip of type buttons, or drop to a single `NEW` that opens the palette? Ask
+first, then build — that is what makes this one worth interrupting for.
 
-1. Add a `Calendar` arm to `WidgetDoc` and `WidgetWindow` in `widget.rs`. The compiler will
-   list every `match` that needs one — that is why they are enums.
-2. Write `wire_calendar` in `app.rs`, modelled on `wire_todo`.
-3. **The real work: map `CalendarDoc` events to `CalendarChip`s.** `day` from the weekday,
-   `top` from the start offset inside that day, `height` from `duration()` bucketed to
-   §10.4's **24/32/40/56px**, `tone` from the same duration, and `label` as the **24-hour
-   start time only — never the event name** (§10.4 is emphatic; a truncated name in a 52px
-   column reads worse than none). `CalendarDoc::events_between` already selects a week and
-   returns *overlapping* events, not merely contained ones.
-
-Then **`SW-17`**, which the user raised directly while looking at the app: home has two
-labelled buttons and the palette offers three actions, and **neither scales to seven widget
-types**. Both lists should come from one table of built types in Rust. It carries a real
-design decision — glyph strip vs. a single `NEW` that opens the palette — so show the user
-before building it out.
-
-Then `SW-10` (Kanban window + card drag, on `KanbanDoc`'s fractional index),
-and after that the two that are genuinely blocked: `SW-12` needs **open question 4** (the
-Whiteboard has no artboard at all) and `SW-13`/`SW-14` need **open questions 5, 6 and 7**
-(Spreadsheet formulas, mid-sheet insertion, default size).
+Then `SW-10` (Kanban window + card drag, on `KanbanDoc`'s fractional index), and after that
+the two that are genuinely blocked: `SW-12` needs **open question 4** (the Whiteboard has no
+artboard) and `SW-13`/`SW-14` need **open questions 5, 6 and 7** (Spreadsheet formulas,
+mid-sheet insertion, default size).
 
 ### What is real and what is not
 
-**Wired into the running app and reachable by a user:** the sticky note, and **the Todo
-widget** (SW-05). Home creates both; the palette creates both. The **Shared Document**
-(SW-06) is built and dispatches, but **nothing can create one yet** — that is SW-17.
+**Wired into the running app and reachable by a user:** the sticky note, the **Todo**
+widget (SW-05), and — as of 2026-08-26 — the **Calendar** (SW-08), which has a seeded
+`THIS WEEK` row sitting in the database flagged open, so it should appear on next launch.
+Home and the palette create notes and todos only. The **Shared Document** (SW-06) and the
+Calendar both dispatch, but **nothing in the UI can create either** — that is SW-17.
 
-**Built, tested, and NOT reachable from the app:** `CalendarDoc`, `KanbanDoc` and
-`WhiteboardDoc`, plus the Calendar window shell above. Do not read 122 passing tests as a
-working calendar.
+**Built, tested, and NOT reachable from the app:** `KanbanDoc` and `WhiteboardDoc`. Do not
+read 134 passing tests as a working Kanban.
 
-**Only in `--gallery`:** the four §6 components (SW-03). The Todo window is the first real
-user of `Checkbox` and `Tag`.
+**Only in `--gallery`:** the four §6 components (SW-03).
 
 ### Still the largest block of value
 
-**The VERIFICATION QUEUE.** Nothing built in the last two sessions has been watched
-working, and it now has a section per task: the Todo widget (SW-05/SW-02), three header
-controls (SW-16), undo/redo (S1-43), reduced motion (S1-44), the home scrollbar (S1-47),
-the SW-01 regression check, and the four components via `--gallery` (SW-03) — on top of the
-palette, the global hotkey, the open/close animation, the screen clamp and the drag feel.
-`S1-45` cannot honestly close until it is walked.
+**The VERIFICATION QUEUE — and the user has now put a deadline on it.** On 2026-08-26 they
+asked for it to be **cleared** once the Stage W widgets are wired and working. So when the
+SW tasks run out, the next unit of work is the walk-through with the user at the keyboard,
+not another feature. Raise it in every end-of-run report until it happens.
+
+It has a section per task: the Todo widget (SW-05/SW-02), the **Calendar** (SW-08, seeded
+and ready to look at), three header controls (SW-16), undo/redo (S1-43), reduced motion
+(S1-44), the home scrollbar (S1-47), the SW-01 regression check, and the four components
+via `--gallery` (SW-03) — on top of the palette, the global hotkey, the open/close
+animation, the screen clamp and the drag feel. `S1-45` cannot honestly close until it is
+walked.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
-- **Before Stage W starts:** does the Spreadsheet support formulas, and can rows and
-  columns be inserted mid-sheet? The second decides the CRDT shape and cannot be
-  retrofitted, so SW-13 is genuinely blocked on it. Everything before SW-13 is not.
+- **SW-17's own design decision** — glyph strip of type buttons on home, or a single `NEW`
+  that opens the palette. This one blocks the next task, so it is the first thing to ask.
+- **How a Calendar event is created, moved or deleted from inside the widget** — new
+  **open question 10**. §10.4 specifies the readout and no editing UI at all. `CalendarDoc`
+  already has every method needed, so nothing is blocked on the CRDT, only the interaction.
+- **Before SW-13:** does the Spreadsheet support formulas, and can rows and columns be
+  inserted mid-sheet? The second decides the CRDT shape and cannot be retrofitted.
 - What pin should do beyond holding a note at the desktop layer.
 - The Whiteboard has no artboard (open question 4) — SW-12 needs one.
 
 All of them are in **Open questions** at the bottom of [TASKS.md](TASKS.md).
-
 ---
 
 ## 🔒 DO NOT REGRESS
@@ -124,7 +120,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 122 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 134 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -162,7 +158,7 @@ Canvas/
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
     canvas-doc/      CRDT documents (yrs). StickyNoteDoc, UndoHistory, TodoListDoc,
                      CalendarDoc, KanbanDoc, WhiteboardDoc + a hand-written fractional
-                     index. 103 tests. The last four have NO window yet.
+                     index. 103 tests. KanbanDoc and WhiteboardDoc have NO window yet.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -175,7 +171,8 @@ cargo run -p canvas-app              # run it
 cargo run -p canvas-app -- --dump    # print every note's text/position/state from disk
 cargo run -p canvas-app -- --gallery # the section 6 component gallery (dev only)
 cargo run -p canvas-app --example insert_todo   # a non-note row; --remove undoes it
-cargo test --workspace               # 30 tests
+cargo run -p canvas-app --example insert_calendar # a seeded week; --remove undoes it
+cargo test --workspace               # 134 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
 ```
@@ -194,7 +191,7 @@ Database lives at `%APPDATA%/Canvas/canvas_local.db`. Delete that folder for a c
 3. **Ask before adding a dependency** (Hard Constraint 6). Current additions beyond the
    spec's closed stack, all signed off: `windows-sys`, `raw-window-handle`. `windows-sys`
    features enabled so far: `Win32_Foundation`, `Win32_UI_WindowsAndMessaging`,
-   `Win32_UI_Input_KeyboardAndMouse`, `Win32_Graphics_Gdi` — features are not new
+   `Win32_UI_Input_KeyboardAndMouse`, `Win32_Graphics_Gdi`, `Win32_System_Time` — features are not new
    dependencies (TASKS.md rule 5), but they are listed here so the surface stays visible.
 4. Verify against the pinned versions rather than memory. `slint 1.17.1` and `yrs 0.19.2`
    are exactly what §11/§13 were written against, so those code samples apply verbatim.
@@ -1840,3 +1837,76 @@ list. It is not a copy-paste — home's rows are full-bleed and carry a delete i
 right edge, so the 8px gutter moves every icon inward, and that is a look decision.
 
 - ✅ `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, 28 tests pass.
+
+---
+
+### 2026-08-26 — SW-08: the Calendar window, wired
+
+The session before this one stopped mid-task on the usage limit: `ui/calendar.slint` existed
+and compiled, but nothing connected it to the runtime. That is now finished.
+
+- 🟡 **The Calendar widget renders a real week.** `Calendar` arms in `WidgetDoc` and
+  `WidgetWindow`, `wire_calendar` and `refresh_calendar` in `app.rs`, and a new
+  `crates/canvas-app/src/calendar_time.rs` carrying the whole week/day/clock calculation.
+  Compiles, clippy-clean, 134 tests pass — **but nothing has been watched on screen**, so
+  the box stays open and it is in the VERIFICATION QUEUE.
+
+**The one real bug this task produced, and how it was caught.** `local_offset_ms()` reads
+`GetTimeZoneInformation`, and the first version treated its return value as
+`1 = standard, 2 = daylight, anything else = give up and return 0`. That is wrong:
+**`TIME_ZONE_ID_UNKNOWN` (0) still carries a valid `Bias`** — it means "this zone has no DST
+transitions this year", which is exactly what India returns. The whole grid was silently
+5½ hours out. It only surfaced because the seeded Monday landed on an *exact* UTC midnight,
+which no real local week start ever does. `0` and `1` now both take `StandardBias`.
+This is the shape of bug that unit tests cannot catch — the maths was right, the input to it
+was not — so the seeded round-trip earned its place.
+
+**Decisions §10.4 leaves open, recorded rather than assumed:**
+
+- **The week is Monday→Sunday in LOCAL time.** `start`/`end` are UTC epoch millis
+  (SW-07's decision), so every single day boundary has to cross a timezone. There is no
+  date library in the stack and this is not worth a dependency: `calendar_time` is ~50
+  lines of `div_euclid`/`rem_euclid` on epoch days, with 12 tests, and 1970-01-01 being a
+  Thursday is the only constant it needs.
+- **`top` is a fraction of the day (0–1), not a pixel offset.** Slint multiplies it by the
+  track height *less the chip's own height*. That is what makes a resize spread the chips
+  out instead of stranding them at the top, and it keeps a 23:00 event fully on screen.
+  Heights stay absolute because §10.4 fixes them at 24/32/40/56px — so the column is a
+  proportional time axis with fixed-size marks on it, not a scale drawing. Chips at nearby
+  times will overlap, which is what the design implies and what the artboard shows.
+- **Duration drives height and tone together:** ≤30min → 24px/tone 1, ≤60 → 32/2,
+  ≤120 → 40/3, longer → 56/4. `plate-tone(1)` is `peer-4`, the darkest, so tone rises with
+  duration and the longest event is the lightest plate — matching the artboard's 3-hour
+  Wednesday block, which is both the tallest and the palest thing on it.
+- **An event straddling the week boundary is drawn from the week's own edge** — day 0,
+  fraction 0 — but keeps its true start time as the label. `events_between` returns
+  *overlapping* events, so this case arrives whether or not it is wanted.
+- **The chip `TouchArea` and the `chip-activated`/`slot-activated` callbacks were deleted.**
+  Two chips at nearby times overlap, and overlapping `TouchArea`s are §13.3's documented
+  Slint trap. Nothing read either callback; they pointed at a design that does not exist.
+  What a click on a chip or on empty column space should do is now **open question 10**.
+
+**How the chip mapping was checked without eyes.** The 12 `calendar_time` tests pin the
+maths, but they cannot prove the mapping is hooked up. So a throwaway example ran the exact
+same functions over the seeded document and printed every chip. It came back
+`today=2` — Wednesday, and 2026-08-26 is a Wednesday — and the artboard's own eight chips:
+MON 09:30 · TUE 11:00 · WED 09:30 + 14:00 · THU 09:30 + 16:00 · FRI 13:00 · SUN 18:00, SAT
+empty, with the 3-hour block at 56px/tone 4 and the 30-minute stand-ups at 24px/tone 1.
+That is the layout in `handoff/screenshots/widget-types.png`. The throwaway was deleted.
+
+**A calendar has been seeded into the real database** so the queue item is one launch away:
+`cargo run -p canvas-app --example insert_calendar` (already run — the row is called
+`THIS WEEK`, holds 8 events, and is flagged open). `-- --remove` clears every calendar row.
+
+**Dependency surface:** no new crate. One new `windows-sys` feature, `Win32_System_Time`,
+for `GetTimeZoneInformation` — a feature on an already-approved dependency, per TASKS.md
+rule 5, listed here so the surface stays visible.
+
+**Standing instruction added mid-task, 2026-08-26:** the user asked that the
+**VERIFICATION QUEUE be cleared** — walked end to end, ticked or turned into numbered bugs —
+once the Stage W widgets are wired and working. It is no longer an indefinite parking lot.
+When the SW tasks run out, the next unit of work is the walk-through with the user at the
+keyboard, not another feature. This is now written at the top of the queue itself.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **134 tests pass**
+  (14 app · 103 doc · 17 storage) — up from 122, the 12 new ones all in `calendar_time`.
