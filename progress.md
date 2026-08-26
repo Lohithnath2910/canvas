@@ -50,7 +50,7 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W2, in order. `SW-22` and `SW-23` are done — start with `SW-18`.** The user walked the running app on 2026-08-26,
+**`SW-22`, `SW-23` and `SW-18` are done. Start with `SW-24`** — the user asked mid-run on 2026-08-26 for the `document` type to be ripped out, and said so after being told there is no difference worth a type. Then the rest of Stage W2 in order. The user walked the running app on 2026-08-26,
 answered ten questions, and the answers are all folded into `TASKS.md`'s **Stage W2**
 section — every one of them, with the quote that produced it. **Nothing below is blocked and
 nothing needs asking again.** Build straight through:
@@ -59,7 +59,8 @@ nothing needs asking again.** Build straight through:
 |---|---|---|
 | ~~1~~ | ~~**SW-22** — typing dies after one character~~ | **Done 2026-08-26**, 🟡 not watched. The lock is `rows_locked_by_editor`; read the entry below before writing any other repeater |
 | ~~2~~ | ~~**SW-23** — `--open-kind <kind>` dev flag~~ | **Done and watched 2026-08-26.** `--open-kind kanban` puts a board on screen; use it on every visual task below |
-| 3 | **SW-18** — the `Sheet` overlay | Everything after it needs it |
+| ~~3~~ | ~~**SW-18** — the `Sheet` overlay~~ | **Done 2026-08-26**, photographed. Read its **two caller contracts** in `TASKS.md` before building any editor on it |
+| 3.5 | **SW-24** — rip out the `document` type | The user's call mid-run. Small, and it shrinks what SW-15 has to audit |
 | 4 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
 | 5 | **SW-20** — Calendar editor, live event, info bar | The big one |
 | 6 | **SW-21** — Kanban drag fix, header alignment, card editor | Three reported defects plus the editor |
@@ -84,7 +85,9 @@ gated on the above.
    that is running away. **The touch region must not move**: leave the card where the model
    puts it and draw a separate floating card at board level.
 3. **§13.3, overlapping `TouchArea`s.** This project has hit it three times (note header,
-   Calendar chips, the Kanban `+` button). Stage W2 has two more chances: the Calendar's
+   Calendar chips, the Kanban `+` button) and `SW-18` found a fourth shape of it: **an
+   opaque `Sheet` does not stop the board underneath taking clicks.** Every caller must set
+   `enabled: !sheet-open` on what it covers. Stage W2 has two more chances: the Calendar's
    click-a-day handler (chips at nearby times overlap — **one area per column, resolve in
    Rust**) and the Spreadsheet's cell hit-testing (**one area over the grid, never one per
    cell**). Both are called out in their task entries.
@@ -2305,3 +2308,61 @@ rendering bug and is not one.
   minute:** add a card, wait two seconds, quit from the tray, relaunch. That line is now the
   first one in the Kanban block of the VERIFICATION QUEUE, marked ⚠, because if a card does
   not survive a restart it outranks the rest of Stage W2.
+
+---
+
+### 2026-08-26 — SW-18: the `Sheet`, and the two contracts every editor above it inherits
+
+The overlay §10.3 and §10.4 never specified, answering the user's *"overlay inside widget
+but seamless and awesome"*. `theme/sheet.slint` is **chrome only** — the slide-over
+rectangle, the top hairline, the scrolling field column, the footer buttons and the key
+handling. It carries no fields of its own; a caller passes typed `TextField`s as
+`@children` and sets `base-y` to the bottom of its own header band. That is deliberate:
+five typed fields in the Calendar's editor read better than a `[SheetField]` model and an
+indirection layer, and SW-18's own note said so.
+
+**Geometry, all from existing tokens.** The sheet covers the plate below the 48px header
+band and its 1px rule, so the glyph strip, the title and the three controls stay visible and
+the widget still reads as itself. Fill is `Palette.plate` at full opacity — the plate
+underneath is the 96% one, so the board behind is genuinely hidden rather than veiled. The
+footer is one new token, `Layout.sheet-footer-h: 66px`, which is 34px of button plus 16px of
+padding above and below — taken off the 8px scale, not invented.
+
+**Mount and unmount are two one-shot Timers, not a `changed` handler.** The sheet has to
+stay in the tree for the 100ms close fade, so `hold` goes true 1ms after `open` does and
+false `Motion.close` after `open` goes false; `visible` is the OR. Opening is `Motion.open`
+with `Motion.open-rise`, closing is opacity only — §5.5's own values, no new duration.
+
+**Two contracts a caller must honour, and they are written into SW-18's task entry so the
+three tasks above it do not each rediscover them:**
+1. **Wire every field's `accepted` to the sheet's `saved()`.** A `TextInput` consumes
+   `Return` itself, so an ancestor `FocusScope` never sees it. `Escape` does bubble, and the
+   sheet catches it — the sheet takes keyboard focus 1ms after it opens precisely so `Esc`
+   works before the user has clicked into anything.
+2. **Disable the TouchAreas behind it while it is open.** An opaque rectangle does **not**
+   block a `TouchArea` underneath it — that is §13.3 and trap 6 again — so the board would
+   keep taking clicks straight through the sheet. `enabled: !sheet-open`, the same shape as
+   the existing `confirming-delete` gating.
+
+**The demo lives in the gallery, not in the Kanban.** SW-18's DoD asked for a throwaway
+sheet over the Kanban; a throwaway inside the real Kanban is code SW-21 deletes two tasks
+later. Instead `--gallery` grew a second plate at the real 640×400 Kanban size, with three
+columns and a card behind it, and the sheet open over it. Same proof, nothing to unpick.
+
+- ✅ **Photographed.** The sheet covers the plate below the header band; the glyph strip
+  (all five lit) and the `SHEET DEMO` title stay visible; the board behind is completely
+  hidden; the five labelled fields scroll with the 4px thumb at the right; the footer reads
+  `SAVE` (solid white, black label) · `CANCEL` (dark, hairline) with `DELETE CARD`
+  right-aligned in `signal`, and red appears nowhere else on it.
+- 🟡 **Not watched:** the 160ms open with its 6px rise, the 100ms close, `Esc`, `SAVE`,
+  `CANCEL`, `DELETE CARD`, Enter-in-a-field, and dragging the thumb. Seven lines in the
+  VERIFICATION QUEUE under **The `Sheet` overlay**, all in the gallery.
+- ✅ 160 tests pass, clippy clean, `cargo fmt` applied.
+
+**Mid-run, the user asked for the `document` type to be ripped out** — *"no point of having
+document widget and all its code as note is the same as it rightyy?? answer me if no
+difference rip it off completely"*. They were told the honest answer: no difference worth a
+type. `KIND_DOCUMENT` shares `StickyNoteDoc` and `StickyNoteWindow` with the note and
+differs only by `set_pad(24px)`, a `DELETE DOCUMENT` label and a 520×420 default size.
+§10.2's real Shared Document is Stage 3 work that does not exist. They chose to rip it out;
+that is **SW-24**, and it is the next task.

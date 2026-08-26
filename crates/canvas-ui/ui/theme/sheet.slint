@@ -1,0 +1,136 @@
+import { Palette } from "palette.slint";
+import { Motion, Ease } from "motion.slint";
+import { Layout } from "layout.slint";
+import { Button, ButtonVariant, ScrollBar } from "controls.slint";
+
+export component Sheet inherits Rectangle {
+    in property <bool> open: false;
+    in property <bool> existing: false;
+    in property <length> base-y: 0px;
+    in property <string> save-label: "SAVE";
+    in property <string> delete-label: "DELETE";
+
+    callback saved();
+    callback cancelled();
+    callback delete-requested();
+
+    property <bool> hold: false;
+    property <length> footer-h: Layout.sheet-footer-h;
+
+    public function focus-body() { keys.focus(); }
+
+    Timer {
+        interval: 1ms;
+        running: root.open && !root.hold;
+        triggered => {
+            root.hold = true;
+            keys.focus();
+        }
+    }
+
+    Timer {
+        interval: Motion.close;
+        running: !root.open && root.hold;
+        triggered => { root.hold = false; }
+    }
+
+    visible: root.open || root.hold;
+
+    y: root.base-y + (root.open ? 0px : Motion.open-rise);
+    animate y { duration: Motion.open; easing: Ease.standard; }
+
+    background: Palette.plate;
+    opacity: root.open ? 1.0 : 0.0;
+    animate opacity {
+        duration: root.open ? Motion.open : Motion.close;
+        easing: Ease.standard;
+    }
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: 1px;
+        background: Palette.edge;
+    }
+
+    keys := FocusScope {
+        x: 0;
+        y: 1px;
+        width: parent.width;
+        height: parent.height - 1px - root.footer-h;
+        enabled: root.open;
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.cancelled();
+                return accept;
+            }
+            return reject;
+        }
+
+        scroll := Flickable {
+            x: Layout.pad;
+            y: Layout.pad - 1px;
+            width: parent.width - 2 * Layout.pad - Layout.scroll-gutter;
+            height: parent.height - Layout.pad;
+            viewport-height: max(fields.preferred-height, self.height);
+
+            fields := VerticalLayout {
+                width: 100%;
+                alignment: start;
+                spacing: Layout.field-gap;
+
+                @children
+            }
+        }
+
+        ScrollBar {
+            x: parent.width - Layout.pad - Layout.scroll-gutter;
+            y: scroll.y;
+            height: scroll.height;
+            view-height: scroll.height;
+            viewport-height: scroll.viewport-height;
+            viewport-y <=> scroll.viewport-y;
+        }
+    }
+
+    Rectangle {
+        x: 0;
+        y: parent.height - root.footer-h;
+        width: parent.width;
+        height: root.footer-h;
+        background: Palette.plate;
+
+        Rectangle {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        save-btn := Button {
+            x: Layout.pad;
+            y: Layout.pad;
+            label: root.save-label;
+            variant: ButtonVariant.primary;
+            clicked => { root.saved(); }
+        }
+
+        Button {
+            x: save-btn.x + save-btn.width + Layout.icon-gap;
+            y: Layout.pad;
+            label: "CANCEL";
+            variant: ButtonVariant.default;
+            clicked => { root.cancelled(); }
+        }
+
+        if root.existing: Button {
+            x: parent.width - Layout.pad - self.width;
+            y: Layout.pad;
+            label: root.delete-label;
+            variant: ButtonVariant.destructive;
+            clicked => { root.delete-requested(); }
+        }
+    }
+}

@@ -2,7 +2,9 @@ import { Palette } from "theme/palette.slint";
 import { Typography } from "theme/typography.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
-import { Checkbox, Tag, Divider, TextField, ScrollBar } from "theme/controls.slint";
+import { Checkbox, Tag, Divider, TextField, ScrollBar, Button, ButtonVariant } from "theme/controls.slint";
+import { Sheet } from "theme/sheet.slint";
+import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 
 component SectionLabel inherits Text {
     height: Typography.label-line;
@@ -14,7 +16,7 @@ component SectionLabel inherits Text {
 }
 
 export component GalleryWindow inherits Window {
-    preferred-width: 560px;
+    preferred-width: 1240px;
     preferred-height: 760px;
     min-width: 400px;
     min-height: 400px;
@@ -28,10 +30,18 @@ export component GalleryWindow inherits Window {
     in-out property <string> field-labelled: "Typed value";
     in-out property <string> field-error: "not a number";
 
+    in-out property <bool> sheet-open: true;
+    in-out property <string> sheet-name: "Ship the strip spec";
+    in-out property <string> sheet-who: "Mira";
+    in-out property <string> sheet-when: "25 AUG";
+    in-out property <string> sheet-where: "Demo room";
+    in-out property <string> sheet-notes: "";
+    in-out property <string> sheet-verdict: "NOTHING SAVED YET";
+
     Panel {
         x: Layout.pad;
         y: Layout.pad;
-        width: parent.width - 2 * Layout.pad;
+        width: 560px - 2 * Layout.pad;
         height: parent.height - 2 * Layout.pad;
         corner-radius: Layout.radius-plate;
 
@@ -120,6 +130,189 @@ export component GalleryWindow inherits Window {
             view-height: body.height;
             viewport-height: body.viewport-height;
             viewport-y <=> body.viewport-y;
+        }
+    }
+
+    demo := Panel {
+        x: 560px + Layout.pad;
+        y: Layout.pad;
+        width: Layout.kanban-w;
+        height: Layout.kanban-h;
+        corner-radius: Layout.radius-plate;
+
+        Rectangle {
+            x: Layout.pad;
+            y: Layout.header-y;
+            width: Layout.strip-w;
+            height: Layout.header-h;
+            GlyphStrip {
+                x: 0;
+                y: (Layout.header-h - Layout.strip-h) / 2;
+                width: Layout.strip-w;
+                height: Layout.strip-h;
+                state: root.sheet-open ? WidgetState.focused : WidgetState.idle;
+            }
+        }
+
+        Text {
+            x: Layout.title-x;
+            y: Layout.header-y;
+            width: parent.width - Layout.title-x - Layout.pad;
+            height: Layout.header-h;
+            vertical-alignment: center;
+            text: "SHEET DEMO";
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+            letter-spacing: Typography.title-tracking;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        Rectangle {
+            x: 0;
+            y: Layout.header-band;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        board := Rectangle {
+            x: Layout.pad;
+            y: Layout.header-band + 1px + Layout.pad;
+            width: parent.width - 2 * Layout.pad;
+            height: parent.height - self.y - Layout.pad;
+            clip: true;
+
+            for col[idx] in ["TODO", "DOING", "DONE"]: Rectangle {
+                x: idx * (parent.width + Layout.kanban-col-gap) / 3;
+                y: 0;
+                width: (parent.width - 2 * Layout.kanban-col-gap) / 3;
+                height: parent.height;
+                background: transparent;
+
+                Text {
+                    x: 0;
+                    y: 0;
+                    height: Layout.kanban-col-head-h - 1px;
+                    vertical-alignment: center;
+                    text: col;
+                    color: Palette.text;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.label-size;
+                    letter-spacing: Typography.label-tracking;
+                    wrap: no-wrap;
+                }
+
+                Rectangle {
+                    x: 0;
+                    y: Layout.kanban-col-head-h - 1px;
+                    width: parent.width;
+                    height: 1px;
+                    background: Palette.edge;
+                }
+
+                Rectangle {
+                    x: 0;
+                    y: Layout.kanban-col-head-h + Layout.kanban-card-gap;
+                    width: parent.width;
+                    height: Layout.kanban-card-h;
+                    background: Palette.elev-raised;
+                    border-width: 1px;
+                    border-color: Palette.edge;
+                    border-radius: Layout.radius-control;
+
+                    Text {
+                        x: Layout.kanban-card-pad;
+                        y: Layout.kanban-card-pad;
+                        width: parent.width - 2 * Layout.kanban-card-pad;
+                        height: 22px;
+                        vertical-alignment: center;
+                        text: "Behind the sheet";
+                        color: Palette.text;
+                        font-family: Typography.body-face;
+                        font-size: Typography.body-size;
+                        overflow: elide;
+                        wrap: no-wrap;
+                    }
+                }
+            }
+
+            Text {
+                x: 0;
+                y: parent.height - Typography.label-line;
+                width: parent.width - 140px;
+                height: Typography.label-line;
+                vertical-alignment: center;
+                text: root.sheet-verdict;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+
+            open-btn := Button {
+                x: parent.width - self.width;
+                y: parent.height - self.height;
+                label: "OPEN SHEET";
+                variant: ButtonVariant.default;
+                enabled: !root.sheet-open;
+                clicked => {
+                    root.sheet-verdict = "SHEET OPEN";
+                    root.sheet-open = true;
+                }
+            }
+        }
+
+        sheet := Sheet {
+            x: 0;
+            base-y: Layout.header-band + 1px;
+            width: parent.width;
+            height: parent.height - Layout.header-band - 1px;
+            open: root.sheet-open;
+            existing: true;
+            delete-label: "DELETE CARD";
+            saved => {
+                root.sheet-verdict = "SAVED — " + root.sheet-name;
+                root.sheet-open = false;
+            }
+            cancelled => {
+                root.sheet-verdict = "CANCELLED";
+                root.sheet-open = false;
+            }
+            delete-requested => {
+                root.sheet-verdict = "DELETE REQUESTED";
+                root.sheet-open = false;
+            }
+
+            TextField {
+                label: "NAME";
+                text <=> root.sheet-name;
+                accepted(v) => { sheet.saved(); }
+            }
+            TextField {
+                label: "ASSIGNEE";
+                text <=> root.sheet-who;
+                accepted(v) => { sheet.saved(); }
+            }
+            TextField {
+                label: "DUE";
+                text <=> root.sheet-when;
+                accepted(v) => { sheet.saved(); }
+            }
+            TextField {
+                label: "LOCATION";
+                text <=> root.sheet-where;
+                accepted(v) => { sheet.saved(); }
+            }
+            TextField {
+                label: "NOTES";
+                placeholder: "Scroll down to reach this one";
+                text <=> root.sheet-notes;
+                accepted(v) => { sheet.saved(); }
+            }
         }
     }
 }

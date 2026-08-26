@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-18` — the `Sheet` overlay every editor sits in. Then **Stage W2** in order: SW-19, SW-20, SW-21, SW-13, SW-14.
+**Current task:** `SW-24` — rip out the `document` widget type, the user's call on 2026-08-26. Then **Stage W2** in order: SW-19, SW-20, SW-21, SW-13, SW-14.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 29 ticked. 160 tests pass. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it.
+**Done:** 29 ticked. 160 tests pass. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -450,6 +450,27 @@ It should open already carrying three columns — you do not have to set anythin
       **both** the typed card and the new one are painted. Same for a Todo row: type into
       one, then tick another row's checkbox. Structural changes end the edit on purpose,
       because the rebuild they need is the one thing the fix suppresses
+
+**The `Sheet` overlay** → **SW-18**
+
+`cargo run -p canvas-app -- --gallery` — the right-hand plate is a mock Kanban at the real
+640×400 with the sheet already open over it.
+
+- [ ] The sheet **starts open**. Press `Esc` — it fades out over ~100ms, opacity only, no
+      travel, and the three columns and the `Behind the sheet` card are underneath
+- [ ] Click `OPEN SHEET` — it fades up over ~160ms **and rises 6px** into place. Nothing
+      scales or bounces
+- [ ] While it is open, the glyph strip and the `SHEET DEMO` title are still visible and the
+      board is **completely** hidden — no veil, no dimming, nothing showing through
+- [ ] Drag the 4px thumb at the right of the field column, and wheel-scroll the fields —
+      the fifth field `NOTES` comes into view. The footer does not move
+- [ ] Click `SAVE` — the sheet closes and the line at the bottom left of the board reads
+      `SAVED — Ship the strip spec`. `CANCEL` gives `CANCELLED`, `DELETE CARD` gives
+      `DELETE REQUESTED`
+- [ ] Press Enter inside any field — same as `SAVE`
+- [ ] `SAVE` is a solid white pill with black text, `CANCEL` is dark with a hairline, and
+      `DELETE CARD` is dark with a **red** border and red label — and red appears nowhere
+      else on the sheet (rule 2)
 
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
@@ -1570,6 +1591,26 @@ would otherwise be re-introduced three more times.
   rectangle, the hairline, the scroll, the footer buttons and the key handling.
   *DoD:* a throwaway sheet with three fields opens over the Kanban, scrolls, saves, cancels
   on `Esc`, and never lets the board behind it show through.
+  🟡 **Built 2026-08-26, partly watched.** `theme/sheet.slint`, chrome only: the slide-over
+  rectangle, the top hairline, the scrolling field column, the footer buttons and the key
+  handling. Callers pass their own typed `TextField`s as `@children` and set `base-y` to the
+  bottom of their header band. Two contracts a caller must honour, written here so SW-19,
+  SW-20 and SW-21 do not each rediscover them:
+  1. **Wire `accepted` on every field to the sheet's `saved()`.** `TextInput` consumes
+     `Return` itself, so Enter cannot be caught by an ancestor. `Escape` bubbles and the
+     sheet catches it.
+  2. **Disable the TouchAreas behind the sheet while it is open.** An opaque rectangle does
+     not block a `TouchArea` under it (§13.3), so the board would still take clicks through
+     the sheet. `enabled: !sheet-open` on the board, the same way `confirming-delete`
+     already gates things.
+  The demo is in `cargo run -p canvas-app -- --gallery`, over a mock Kanban plate at the
+  real 640×400 with three columns and a card behind it, rather than a throwaway inside the
+  real Kanban that SW-21 would delete two tasks later.
+  **Photographed: the sheet covers the plate below the header band, the glyph strip and
+  title stay visible, the board behind is completely hidden, the five labelled fields
+  scroll with the 4px thumb, and the footer reads `SAVE` / `CANCEL` with `DELETE CARD`
+  right-aligned in `signal`.** Opening motion, `Esc`, save and drag-scroll still need
+  clicks — the queue lines below.
 
 - [ ] **SW-19 · Date and time pickers in this design language** — `L`
   Needs: SW-18. **Answering the user's Q3, 2026-08-26**, who sent two Android screenshots
@@ -1778,6 +1819,32 @@ folded into the two tasks below; the questions are closed.
   `--open-kind whiteboard` was refused with the list of built types; `--open-kind` with no
   value said what it wanted; `--open <unknown-id>` printed `--open ignored` and launched
   normally. No flag, no behaviour change.
+### W2h — the user's call, mid-run on 2026-08-26
+
+- [ ] **SW-24 · Rip out the `document` widget type** — `S`
+  Needs: nothing. **The user, watching SW-18 land:**
+  > *"i actually think there is no point of having document widget and all its code as note
+  > is the same as it rightyy?? answer me if no difference rip it off completely"*
+
+  **They are right, and the answer they were given was: there is no difference worth a type.**
+  `KIND_DOCUMENT` shares `StickyNoteDoc` and `StickyNoteWindow` with the sticky note. The
+  only three things that differ are `set_pad(24px)`, a `DELETE DOCUMENT` label, and a
+  520×420 default size. That is a preset, not a widget type.
+  §10.2's real Shared Document — paragraph gap 16, collaborator cursors on **relative
+  positions** — is Stage 3 work and none of it exists. When it comes back it comes back as
+  its own window with its own document, not as three property overrides on a note.
+  **Their database has no `document` rows** (checked by `--dump` on 2026-08-26), so nothing
+  of theirs is lost. A row of that type arriving from somewhere else must still not crash
+  the app: leave it falling through to "no document type for this widget", the same path
+  every unbuilt kind already takes.
+  Remove: the entry in `widget_types::BUILT`, the `KIND_DOCUMENT` arms in `WidgetDoc::load`
+  and `WidgetWindow::create`, `DOC_PAD` and the delete-label override, the document glyph
+  mapping in home and the palette, the `document` default size in `WindowPlacement`, and
+  `KIND_DOCUMENT` itself if nothing else needs it. `widget_types`' own tests already assert
+  that `BUILT` and the set of kinds with documents agree, so they will catch a half-removal.
+  *DoD:* home's footer strip and the palette both offer four types, not five; the tests
+  still pass; a fresh launch still opens every remaining type.
+
 ### Wh — sign-off
 
 - [ ] **SW-15 · Stage W sign-off audit** — `M`
