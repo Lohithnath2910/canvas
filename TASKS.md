@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-24` — rip out the `document` widget type, the user's call on 2026-08-26. Then `SW-25` — the whole-app alignment pass they asked for in the same breath. Then **Stage W2** in order: SW-19, SW-20, SW-21, SW-13, SW-14.
+**Current task:** `SW-25` — the whole-app alignment pass. Commit `SW-25 (1/2)` landed the token work across all seven plates; what is left is the evidence half of the DoD, a `scripts/shot.ps1` screenshot and a written measurement line per surface. Then **Stage W2** in order: SW-19, SW-20, SW-21, SW-13, SW-14.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 29 ticked. 160 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 30 ticked. 160 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -1821,7 +1821,7 @@ folded into the two tasks below; the questions are closed.
   normally. No flag, no behaviour change.
 ### W2h — the user's call, mid-run on 2026-08-26
 
-- [ ] **SW-24 · Rip out the `document` widget type** — `S`
+- [x] **SW-24 · Rip out the `document` widget type** — `S`
   Needs: nothing. **The user, watching SW-18 land:**
   > *"i actually think there is no point of having document widget and all its code as note
   > is the same as it rightyy?? answer me if no difference rip it off completely"*
@@ -1844,6 +1844,12 @@ folded into the two tasks below; the questions are closed.
   that `BUILT` and the set of kinds with documents agree, so they will catch a half-removal.
   *DoD:* home's footer strip and the palette both offer four types, not five; the tests
   still pass; a fresh launch still opens every remaining type.
+  **Done 2026-08-26.** `--open-kind bogus` now answers `sticky_note (note), todo, calendar,
+  kanban (board)` — four — and `scripts/shot.ps1` photographed home's footer strip showing
+  four glyphs and `NEW`. `StickyNoteWindow` lost `pad` and `delete-label` with it: the
+  document override was the only thing that ever set either, so they were dead flexibility
+  once it went. A new test, `the_removed_document_kind_is_inert_rather_than_a_panic`, holds
+  the fall-through the entry asked for.
 
 - [ ] **SW-25 · Alignment and border pass over every surface in the app** — `L`
   Needs: nothing, but it wants **SW-23**'s `--open-kind` and the screenshot recipe.

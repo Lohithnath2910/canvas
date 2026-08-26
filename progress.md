@@ -50,43 +50,36 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-22`, `SW-23` and `SW-18` are done. Start with `SW-24`, then `SW-25`.**
-
-**The run of 2026-08-26 stopped on the usage limit, not the backlog** — the user said so:
-*"first fill the details etc of current task and update all the mds etc as the limit is almost
-finished for this 5 hour window we will see about this later"*. Nothing is half-built; the
-tree is committed and clean.
+**`SW-24` is done and watched. `SW-25` is in flight — one commit of it landed, the
+screenshot walk is what remains.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **SW-24** — rip out the `document` widget type | **The user's decision, 2026-08-26.** They asked *"no point of having document widget… if no difference rip it off completely"*, were told the honest answer (it is a note with 24px padding, a delete label and a 520×420 default — a preset, not a type), and chose to remove it. Their database has no `document` rows, so nothing of theirs is lost |
-| 2 | **SW-25** — the whole-app alignment and border pass | **They asked for this directly** and named the reviewer: *"all the alignments go through once in all the componenets of the full app and be thorough as codex is going to check the output"*. The root cause and the fix pattern are already found — read `SW-25`'s entry before touching a plate |
-| 3 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
-| 4 | **SW-20** — Calendar editor, live event, info bar | The big one |
-| 5 | **SW-21** — Kanban drag fix, header alignment, card editor | Three reported defects plus the editor |
-| 6 | **SW-13 / SW-14** — Spreadsheet | Unblocked |
-
-The user walked the running app on 2026-08-26,
-answered ten questions, and the answers are all folded into `TASKS.md`'s **Stage W2**
-section — every one of them, with the quote that produced it. **Nothing below is blocked and
-nothing needs asking again.** Build straight through:
-
-| # | Task | Why it is in this position |
-|---|---|---|
-| ~~1~~ | ~~**SW-22** — typing dies after one character~~ | **Done 2026-08-26**, 🟡 not watched. The lock is `rows_locked_by_editor`; read the entry below before writing any other repeater |
-| ~~2~~ | ~~**SW-23** — `--open-kind <kind>` dev flag~~ | **Done and watched 2026-08-26.** `--open-kind kanban` puts a board on screen; use it on every visual task below |
-| ~~3~~ | ~~**SW-18** — the `Sheet` overlay~~ | **Done 2026-08-26**, photographed. Read its **two caller contracts** in `TASKS.md` before building any editor on it |
-| ~~3.5~~ | **SW-24** — rip out the `document` type | Approved by the user, **not started**. See the table above |
-| 4 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
-| 5 | **SW-20** — Calendar editor, live event, info bar | The big one |
-| 6 | **SW-21** — Kanban drag fix, header alignment, card editor | Three reported defects plus the editor |
-| 7 | **SW-13 / SW-14** — Spreadsheet | Unblocked; open questions 5, 6 and 7 are answered |
+| 1 | **SW-25** — the whole-app alignment and border pass | **They asked for this directly** and named the reviewer: *"all the alignments go through once in all the componenets of the full app and be thorough as codex is going to check the output"*. Commit `SW-25 (1/2)` turned every hardcoded alignment number into a `Layout` token across all seven plates. **What is left is the evidence half of the DoD**: a screenshot of each surface via `scripts/shot.ps1`, and a written line per surface naming the token it was measured against |
+| 2 | **SW-19** — date and time pickers | SW-20 and SW-21 both need them |
+| 3 | **SW-20** — Calendar editor, live event, info bar | The big one |
+| 4 | **SW-21** — Kanban drag fix, header alignment, card editor | Three reported defects plus the editor |
+| 5 | **SW-13 / SW-14** — Spreadsheet | Unblocked; open questions 5, 6 and 7 are answered |
 
 **Then the VERIFICATION QUEUE walk-through**, which the user asked for directly and which is
 gated on the above.
 
+The user walked the running app on 2026-08-26, answered ten questions, and the answers are
+all folded into `TASKS.md`'s **Stage W2** section — every one of them, with the quote that
+produced it. **Nothing above is blocked and nothing needs asking again.**
+
+Closed in Stage W2 so far: `SW-22` (typing no longer dies after one character — the lock is
+`rows_locked_by_editor`; read its entry before writing any other repeater), `SW-23`
+(`--open-kind`, watched), `SW-18` (the `Sheet` — read its **two caller contracts** before
+building any editor on it), `SW-24` (the `document` type is gone).
+
 **`SW-12` (Whiteboard) is parked at the user's request** — *"for now ignore whiteboard"*.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
+
+**⚠ The run of 2026-08-26 left uncommitted work in the tree** despite its own log saying the
+tree was clean. It was a real, compiling, clippy-clean SW-25 pass across nine `.slint` files
+and it was nearly lost. It is now commit `SW-25 (1/2)`. **Check `git status` before believing
+this file's claim that nothing is half-built.**
 
 ### Three things that will bite, all already paid for once
 
@@ -2477,3 +2470,54 @@ looks like evidence and is not.
 
 - ✅ Recorded in open question 12, in the START HERE screenshot recipe, and in the GO block's
   open-questions list. User: *"i dont know, will test later"*.
+
+### 2026-08-26 — recovered the previous run's uncommitted SW-25 pass, then SW-24
+
+**The tree was dirty on arrival.** Nine `.slint` files carried an SW-25 alignment pass that
+the previous run never committed, even though its own GO block said *"Nothing is half-built;
+the tree is committed and clean."* It compiled, `cargo clippy --workspace --all-targets` was
+clean and all 160 tests passed, so it was committed as found rather than rebuilt — commit
+`SW-25 (1/2)`. **The lesson goes in the loop, not just here: run `git status` before you
+believe this file.** A run that stops on a usage limit can stop between the code and the
+commit, and nothing in the protocol catches that except looking.
+
+- ✅ **`SW-25 (1/2)` — every hardcoded alignment number is now a `Layout` token.** Verified by
+  clippy, the 160 tests, and a screenshot of home. `Layout` gained `footer-band` 48,
+  `gap-m` 12, `button-h` 34, `confirm-band` 78, `kanban-count-w` 24 and `ring`
+  (`focus-offset + focus-width` = 4px, which `Sheet` and the gallery had each been declaring
+  privately). `todo-row-tail` is gone — the Todo derives its tail from the delete icon and
+  the due `Tag` instead of one constant that only ever matched the no-tag case.
+  Every header now derives from its own controls (`trash` at `close-btn.x − icon-size −
+  icon-gap`, `pin` at `pad − cluster-w`, title to `pin-btn.x − gap-m`) and the drag band runs
+  `0,0` to `pin-btn.x − icon-gap` over the full `header-band` instead of the 16/6 inset that
+  left the glyph strip and the top 6px dead. Still disjoint from the icon cluster, so §13.3
+  holds. The four delete-confirm bands lost their magic 13/41/34 offsets, and the Todo's and
+  Calendar's gained the plate fill they were missing — the list used to show through them.
+  The Todo's `list-area` now uses the ring trick SW-18 found on the `Sheet`, so a row's focus
+  ring is no longer sliced by the `Flickable`.
+
+- ✅ **`SW-24` — the `document` widget type is gone.** Verified two ways.
+  `cargo run -p canvas-app -- --open-kind bogus` answers
+  `One of: sticky_note (note), todo, calendar, kanban (board)` — **four, not five** — and
+  `scripts/shot.ps1` photographed home's footer strip rendering four glyphs and `NEW`, with
+  `3 WIDGETS · 0 OPEN` sharing the strip's vertical centre.
+  Removed: `KIND_DOCUMENT` and its `(520, 420)` default size from `canvas-storage`, the
+  `BUILT` entry, the `ALL_KINDS` entry and the `"New document"` palette label from
+  `widget_types`, the `KIND_DOCUMENT` arms of `WidgetDoc::load` and `WidgetWindow::create`,
+  `DOC_PAD` and the delete-label override from `widget.rs`, and the `document` branch plus
+  its `IconDoc` import from `home.slint` and `palette.slint`. `IconDoc` itself stays —
+  it is one of §5.6's sixteen named glyphs.
+  **`StickyNoteWindow` lost `pad` and `delete-label` too.** The document override was the
+  only thing that ever set either, so once it went they were an `in property` nothing could
+  reach: `root.pad` is now `Layout.pad` and the button label is the literal `"DELETE NOTE"`.
+  A stray `document` row from elsewhere still falls through to the "no document type for this
+  widget" path rather than panicking, and a new test —
+  `the_removed_document_kind_is_inert_rather_than_a_panic` — holds that. 161 tests pass.
+
+- ✅ **`scripts/shot.ps1`** — the screenshot recipe that this file has described since
+  2026-08-26 is now a script instead of something each session re-derives. All five of the
+  recipe's "not optional" notes are in it, including the one that matters most: enumerate the
+  visible windows titled exactly `"Canvas"` **before** `MinimizeAll()`, so the hidden
+  `Slint Window` is never restored into a white rectangle over the desktop. It restores the
+  user's desktop in a `finally`. It runs the **debug** binary, so it settles geometry and
+  says nothing about speed.

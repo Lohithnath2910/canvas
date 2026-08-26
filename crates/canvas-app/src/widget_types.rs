@@ -1,4 +1,4 @@
-use canvas_storage::{KIND_CALENDAR, KIND_DOCUMENT, KIND_KANBAN, KIND_STICKY_NOTE, KIND_TODO};
+use canvas_storage::{KIND_CALENDAR, KIND_KANBAN, KIND_STICKY_NOTE, KIND_TODO};
 
 pub struct WidgetType {
     pub kind: &'static str,
@@ -19,12 +19,6 @@ pub const BUILT: &[WidgetType] = &[
         name: "todo",
         label: "NEW TODO",
         shortcut: "CTRL+T",
-    },
-    WidgetType {
-        kind: KIND_DOCUMENT,
-        name: "document",
-        label: "NEW DOCUMENT",
-        shortcut: "",
     },
     WidgetType {
         kind: KIND_CALENDAR,
@@ -80,13 +74,7 @@ mod tests {
     use super::*;
     use crate::widget::WidgetDoc;
 
-    const ALL_KINDS: &[&str] = &[
-        KIND_STICKY_NOTE,
-        KIND_TODO,
-        KIND_DOCUMENT,
-        KIND_CALENDAR,
-        KIND_KANBAN,
-    ];
+    const ALL_KINDS: &[&str] = &[KIND_STICKY_NOTE, KIND_TODO, KIND_CALENDAR, KIND_KANBAN];
 
     #[test]
     fn every_offered_type_has_a_document_behind_it() {
@@ -109,6 +97,13 @@ mod tests {
                 "{kind} has a document but is not offered, or the other way round"
             );
         }
+    }
+
+    #[test]
+    fn the_removed_document_kind_is_inert_rather_than_a_panic() {
+        assert!(WidgetDoc::load("document", None).is_none());
+        assert_eq!(resolve_kind("document"), None);
+        assert_eq!(kind_for_action("new:document"), None);
     }
 
     #[test]
@@ -169,13 +164,7 @@ mod tests {
         let labels: Vec<String> = BUILT.iter().map(palette_label).collect();
         assert_eq!(
             labels,
-            [
-                "New note",
-                "New todo",
-                "New document",
-                "New calendar",
-                "New board"
-            ]
+            ["New note", "New todo", "New calendar", "New board"]
         );
     }
 

@@ -4,7 +4,7 @@ import { Motion, Ease } from "theme/motion.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
-import { IconTrash, IconPlus, IconNote, IconCheck, IconColumns, IconCalendar, IconDoc, IconX } from "theme/icons.slint";
+import { IconTrash, IconPlus, IconNote, IconCheck, IconColumns, IconCalendar, IconX } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant, ScrollBar } from "theme/controls.slint";
 
 export struct WidgetTypeData {
@@ -29,7 +29,6 @@ component KindGlyph inherits Rectangle {
     if root.kind == "todo": IconCheck { stroke-color: root.stroke-color; }
     if root.kind == "kanban": IconColumns { stroke-color: root.stroke-color; }
     if root.kind == "calendar": IconCalendar { stroke-color: root.stroke-color; }
-    if root.kind == "document": IconDoc { stroke-color: root.stroke-color; }
     if root.kind == "sticky_note": IconNote { stroke-color: root.stroke-color; }
 }
 

@@ -8,7 +8,6 @@ pub const KIND_STICKY_NOTE: &str = "sticky_note";
 pub const KIND_TODO: &str = "todo";
 pub const KIND_KANBAN: &str = "kanban";
 pub const KIND_CALENDAR: &str = "calendar";
-pub const KIND_DOCUMENT: &str = "document";
 
 pub type Result<T> = std::result::Result<T, rusqlite::Error>;
 
@@ -55,7 +54,6 @@ pub fn default_size(widget_type: &str) -> (i32, i32) {
         KIND_TODO => (340, 360),
         KIND_KANBAN => (640, 400),
         KIND_CALENDAR => (480, 360),
-        KIND_DOCUMENT => (520, 420),
         _ => (320, 280),
     }
 }

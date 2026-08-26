@@ -3,7 +3,7 @@ import { Typography } from "theme/typography.slint";
 import { Motion, Ease } from "theme/motion.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
-import { IconSearch, IconPlus, IconCheck, IconSettings, IconNote, IconColumns, IconCalendar, IconDoc } from "theme/icons.slint";
+import { IconSearch, IconPlus, IconCheck, IconSettings, IconNote, IconColumns, IconCalendar } from "theme/icons.slint";
 
 export struct PaletteRow {
     id: string,
@@ -43,10 +43,6 @@ component PaletteGlyph inherits Rectangle {
         stroke-color: root.stroke-color;
     }
     if root.icon == "calendar": IconCalendar {
-        size: Layout.icon-size-palette;
-        stroke-color: root.stroke-color;
-    }
-    if root.icon == "document": IconDoc {
         size: Layout.icon-size-palette;
         stroke-color: root.stroke-color;
     }
