@@ -19,6 +19,7 @@ pub struct KanbanCard {
     pub title: String,
     pub assignee: String,
     pub due: i64,
+    pub description: String,
     pub pos: String,
 }
 
@@ -116,6 +117,7 @@ impl KanbanDoc {
                 title: string_field(&txn, &map, "title"),
                 assignee: string_field(&txn, &map, "assignee"),
                 due: int_field(&txn, &map, "due"),
+                description: string_field(&txn, &map, "description"),
                 pos: string_field(&txn, &map, "pos"),
             });
         }
@@ -160,6 +162,7 @@ impl KanbanDoc {
                 ("title", Any::String(title.into())),
                 ("assignee", Any::String(String::new().into())),
                 ("due", Any::BigInt(0)),
+                ("description", Any::String(String::new().into())),
                 ("pos", Any::String(pos.as_str().into())),
             ]),
         );
@@ -172,6 +175,10 @@ impl KanbanDoc {
 
     pub fn set_assignee(&self, id: &str, assignee: &str) -> Option<Vec<u8>> {
         self.set_string(id, "assignee", assignee)
+    }
+
+    pub fn set_description(&self, id: &str, description: &str) -> Option<Vec<u8>> {
+        self.set_string(id, "description", description)
     }
 
     fn set_string(&self, id: &str, key: &str, value: &str) -> Option<Vec<u8>> {
@@ -629,6 +636,112 @@ mod tests {
             .collect();
         for id in &a {
             assert!(!b.contains(id));
+        }
+    }
+}
+
+#[cfg(test)]
+mod card_description {
+    use super::*;
+
+    #[test]
+    fn a_new_card_has_an_empty_description() {
+        let doc = KanbanDoc::seeded();
+        let column = doc.columns()[0].id.clone();
+        let (id, _) = doc.add_card(&column, "ship the strip spec");
+        let card = doc.cards().into_iter().find(|c| c.id == id).unwrap();
+        assert_eq!(card.description, "");
+    }
+
+    #[test]
+    fn a_description_round_trips_through_a_snapshot() {
+        let doc = KanbanDoc::seeded();
+        let column = doc.columns()[0].id.clone();
+        let (id, _) = doc.add_card(&column, "ship it");
+        doc.set_description(&id, "two lines\nof detail");
+
+        let reloaded = KanbanDoc::load(&doc.snapshot());
+        let card = reloaded.cards().into_iter().find(|c| c.id == id).unwrap();
+        assert_eq!(card.description, "two lines\nof detail");
+        assert_eq!(card.title, "ship it");
+    }
+
+    #[test]
+    fn setting_the_same_description_twice_produces_no_update() {
+        let doc = KanbanDoc::seeded();
+        let column = doc.columns()[0].id.clone();
+        let (id, _) = doc.add_card(&column, "ship it");
+        assert!(doc.set_description(&id, "").is_none());
+        assert!(doc.set_description(&id, "detail").is_some());
+        assert!(doc.set_description(&id, "detail").is_none());
+    }
+
+    #[test]
+    fn setting_a_description_on_a_missing_card_is_none_not_a_panic() {
+        let doc = KanbanDoc::seeded();
+        assert!(doc.set_description("nope", "anything").is_none());
+    }
+
+    #[test]
+    fn a_description_survives_a_move_between_columns() {
+        let doc = KanbanDoc::seeded();
+        let columns = doc.columns();
+        let (id, _) = doc.add_card(&columns[0].id, "ship it");
+        doc.set_description(&id, "carried across");
+        doc.move_card(&id, &columns[2].id, 0);
+
+        let card = doc.cards().into_iter().find(|c| c.id == id).unwrap();
+        assert_eq!(card.column, columns[2].id);
+        assert_eq!(card.description, "carried across");
+    }
+
+    #[test]
+    fn a_card_written_before_the_field_existed_reads_as_empty() {
+        let old = KanbanDoc::seeded();
+        let column = old.columns()[0].id.clone();
+        {
+            let mut txn = old.doc.transact_mut();
+            old.cards_ref.insert(
+                &mut txn,
+                "legacy".to_string(),
+                MapPrelim::from([
+                    ("id", Any::String("legacy".into())),
+                    ("column", Any::String(column.as_str().into())),
+                    ("title", Any::String("from an older build".into())),
+                    ("assignee", Any::String("".into())),
+                    ("due", Any::BigInt(0)),
+                    ("pos", Any::String("a0".into())),
+                ]),
+            );
+        }
+
+        let reloaded = KanbanDoc::load(&old.snapshot());
+        let card = reloaded
+            .cards()
+            .into_iter()
+            .find(|c| c.id == "legacy")
+            .unwrap();
+        assert_eq!(card.title, "from an older build");
+        assert_eq!(card.description, "");
+        assert!(reloaded.set_description("legacy", "added later").is_some());
+    }
+
+    #[test]
+    fn two_peers_setting_description_and_assignee_converge() {
+        let a = KanbanDoc::seeded();
+        let column = a.columns()[0].id.clone();
+        let (id, _) = a.add_card(&column, "ship it");
+        let b = KanbanDoc::load(&a.snapshot());
+
+        let from_a = a.set_description(&id, "a's detail").unwrap();
+        let from_b = b.set_assignee(&id, "Mira").unwrap();
+        assert!(b.apply_update(&from_a));
+        assert!(a.apply_update(&from_b));
+
+        for doc in [&a, &b] {
+            let card = doc.cards().into_iter().find(|c| c.id == id).unwrap();
+            assert_eq!(card.description, "a's detail");
+            assert_eq!(card.assignee, "Mira");
         }
     }
 }

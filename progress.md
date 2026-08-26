@@ -1,6 +1,6 @@
 # Canvas — Progress Log
 
-**Last updated:** 2026-08-26
+**Last updated:** 2026-08-27
 
 ---
 
@@ -50,20 +50,21 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W2 is nearly closed. `SW-24`, `SW-25`, `SW-21a`, `SW-19` and `SW-20` are all done.**
+**Stage W2 is built except the Spreadsheet. The user stopped development on 2026-08-27 after
+`SW-21`, so this block is where a cold session picks up.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **SW-21**, the card editor half only | The drag shipped as `SW-21a` and the column header was fixed in `SW-25`. What is left is the four-field card sheet — `title`, `assignee`, `due date`, `description` — on `SW-18`'s `Sheet` and `SW-19`'s pickers. **`KanbanDoc` needs a `description` field adding**; it already has `set_title`/`set_assignee`/`set_due`. Copy `SW-20`'s two-mode sheet: it is the same shape with one picker instead of two |
-| 2 | **SW-13 / SW-14** — Spreadsheet | **Not built at all.** The user asked on 2026-08-26 whether it was and the answer was no. Open questions 5, 6 and 7 are answered in the entries |
-| 3 | **The VERIFICATION QUEUE walk-through** | The user asked for this directly, it is gated on the above, and it is now **four blocks longer** than when they asked: the Kanban drag, the two pickers, the Calendar editor, and everything that was already in it |
+| 1 | **SW-13** — `SheetDoc` | **Not started at all.** The user asked on 2026-08-26 whether the Spreadsheet existed and the answer was no. Its entry already carries the answer to open question 6, which decides the whole CRDT shape: rows and columns are `yrs::Array`s of `{id}` maps, cells are keyed by `(row_id, col_id)`, and **no fractional index is needed** — unlike the Kanban, rows never change parent |
+| 2 | **SW-14** — the Spreadsheet widget | **Read the ⚠ in its entry twice before writing the grid:** one `TouchArea` over the whole grid, never one per cell, and the inline cell editor must use `rows_locked_by_editor` the way `SW-22` did or typing will die after one character |
+| 3 | **The VERIFICATION QUEUE walk-through** | **This is now the critical path, not the backlog.** The user asked for the queue to be cleared and it has instead grown by four blocks in one run. Everything in it compiles, passes clippy at `-D warnings` and passes 188 tests, and none of it has been clicked |
+| 4 | **SW-15** — Stage W sign-off audit | After the queue |
 
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
-That is a condition on every remaining task, not an audit at the end.
 **The RAM half is measured and it passes** — 22.0 MB idle, 31.9 MB with all four types open,
-against §2's 20–40 idle and < 50 total. **The smoothness half still needs a release build in
-front of the user**; open question 12.
+against §2's 20–40 idle and < 50 total; per-widget marginal cost is ~2.5 MB. **The smoothness
+half still needs a release build in front of the user**; open question 12.
 
 Closed in Stage W2: `SW-22` (typing survives past one character — the lock is
 `rows_locked_by_editor`; read its entry before writing any other repeater), `SW-23`
@@ -71,12 +72,12 @@ Closed in Stage W2: `SW-22` (typing survives past one character — the lock is
 editor on it), `SW-24` (the `document` type is gone), `SW-25` (the alignment pass, every surface
 photographed), `SW-21a` (the card drag no longer fights the pointer), `SW-19` (pickers —
 arithmetic ✅ by 13 tests, faces 🟡), `SW-20` (Calendar — live chip and info bar ✅ photographed,
-editor sheet 🟡).
+editor sheet 🟡), `SW-21` (card editor 🟡, and the inline card title editor is deliberately gone).
 
 **`SW-12` (Whiteboard) is parked at the user's request** — *"for now ignore whiteboard"*.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
 
-### Four things that will bite, all already paid for once
+### Five things that will bite, all already paid for once
 
 0. **Run `git status` before believing this file.** The run of 2026-08-26 left a complete,
    compiling SW-25 pass across nine `.slint` files uncommitted while its own log said the tree
@@ -86,6 +87,17 @@ editor sheet 🟡).
    `-CSD` Perl reads latin-1 and writes UTF-8, double-encoding every em dash and emoji in the
    whole file. It happened once, on `TASKS.md`, and cost a `git checkout` and a redo. Write the
    replacement into a temp file and splice it with `awk` on line numbers.
+
+0b. **Do not compute a layout's own position or size from its own resolved size.** Two separate
+   bugs in one run: home's row text stack stretched to the full row because it had no explicit
+   height, and the `TimePicker`'s readout row sat 48px off centre because its `x` read
+   `self.preferred-width` while it also carried `alignment: center`. §13.4's family. Give the
+   child an explicit height, or centre it against a token expression, never against itself.
+
+0c. **A window taller than the work area is silently clamped by Windows.** At 150% display
+   scaling an 880px-tall window is 1320 device pixels; the OS shrank it and the frame looked
+   like a rendering bug. If a surface loses its bottom row of controls, check the window height
+   against the screen before debugging the layout.
 
 
 1. **A repeater rebuild under a live caret kills typing.** Fixed for the Kanban and the
@@ -2812,3 +2824,47 @@ bottom of the widget we can see the info, like name, timings and what time is le
 
 **What is left for the user's hands** is in the VERIFICATION QUEUE: clicking a day to create,
 clicking a chip to edit, the two picker modes, delete, and a restart to prove it persisted.
+
+### 2026-08-27 — SW-21 part 3: the Kanban card editor, and Stage W2's last feature named
+
+The user asked to stop for the day after this task, so this is the last thing built in the run.
+
+- ✅ **`KanbanDoc` gained `description`**, over the private `set_string` it already had.
+  **7 new tests, 120 in `canvas-doc`.** Three of them earn their place:
+  `a_card_written_before_the_field_existed_reads_as_empty` hand-builds a card map with only the
+  six original keys and asserts it loads and still takes a later `set_description`;
+  `a_description_survives_a_move_between_columns` proves the field is not tied to the fractional
+  position; and a two-peer test sets `description` and `assignee` concurrently and converges.
+- 🟡 **The card sheet. Written, compiling, NOT watched.** It copies `SW-20`'s two-mode shape with
+  **one** picker instead of two — mode 0 is `TITLE`, `ASSIGNEE`, `DUE DATE` (a `PickerField`) and
+  `DESCRIPTION`, and tapping the due date swaps the body for the `DatePicker` at `chrome: false`.
+  A card has no time of day, so there is no `TimePicker` here.
+  **The destructive slot is `CLEAR DUE DATE`, not a card delete.** The card's own trash icon
+  already deletes it; two ways to delete one thing is worse than one.
+- ✅ **The inline card title editor is gone, and that is what `SW-21`'s entry asked for**:
+  *"Opening it replaces the inline `TextInput` entirely, which also retires the single-letter bug
+  on this widget."* Double-clicking a card now opens the sheet.
+  **`editing-id` survives as the `refresh_kanban` lock and nothing else.** It is set to the open
+  card's id while the sheet is up, so the repeater cannot rebuild underneath it, and
+  `card-committed` clears it **before** calling `kanban_edit` so the refresh is not swallowed.
+  That ordering is the whole trap `SW-22` documented; it is the same lock, used for a sheet
+  instead of a caret.
+- ✅ **`IconButton` gained `enabled`**, gating both its `TouchArea` and its `FocusScope`.
+  SW-18's contract 2 required it and nothing had needed it before: an opaque sheet does not stop
+  an icon underneath from taking clicks (§13.3), and the board's three `+` buttons sit under this
+  sheet. This is the **fifth** distinct shape of §13.3 this project has hit.
+- **Photographed:** the board still renders correctly with the inline editor removed — three
+  columns, three rules, three `+` buttons, the count column holding its 24px. **The sheet itself
+  could not be photographed:** a fresh board has zero cards and opening the sheet needs a
+  double-click this session cannot synthesise.
+
+**Stage W2's state at the end of this run.** Everything in it is built except the Spreadsheet
+(`SW-13`/`SW-14`), which has **not been started at all** — the user asked on 2026-08-26 whether
+it existed and the honest answer was no. Its two entries already carry the answers to open
+questions 5, 6 and 7, so it is unblocked and ready to start cold.
+
+**What is waiting on the user, and it is now the larger half of the work.** Four blocks were
+added to the VERIFICATION QUEUE in this run alone — the Kanban card drag, the two pickers, the
+Calendar editor sheet, and the Kanban card sheet — on top of everything that was already there.
+Every one of them is code that compiles, passes clippy at `-D warnings`, passes 188 tests, and
+has never been clicked. **The queue is now the critical path, not the backlog.**

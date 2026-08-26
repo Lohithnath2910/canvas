@@ -4,10 +4,10 @@
 [progress.md](progress.md) first for the state of the project, then starts here at the
 first unticked box.
 
-**Last updated:** 2026-08-26
-**Current task:** `SW-21`'s card editor — the last piece of Stage W2 before the Spreadsheet. The drag half shipped as `SW-21a`. Then `SW-13`/`SW-14` (Spreadsheet, not started at all). `SW-21a`, `SW-19`'s two picker faces and `SW-20`'s editor sheet are all 🟡 at the top of the VERIFICATION QUEUE.
+**Last updated:** 2026-08-27
+**Current task:** `SW-13` / `SW-14` — the Spreadsheet, which is **not built at all**. It is the last feature in Stage W2. Everything before it is done; four blocks of it are 🟡 and waiting on the user in the VERIFICATION QUEUE, and the user asked on 2026-08-27 to stop development for the day after `SW-21`.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 31 ticked. 181 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 31 ticked. 188 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -135,6 +135,23 @@ board has zero cards and this session cannot synthesise a drag.
       no longer writes a CRDT update
 - [ ] Drag with the pointer well outside the board, then release — the card must not vanish
       or land in a column that was never outlined
+
+**The Kanban card editor, `SW-21` part 3** — `cargo run -p canvas-app -- --open-kind kanban`,
+then click `+` under **TODO** twice.
+- [ ] **Double-click a card** — the sheet slides over the board with `TITLE`, `ASSIGNEE`,
+      `DUE DATE` and `DESCRIPTION`. **There is no longer an inline title editor on a card** —
+      that is deliberate, this entry replaced it
+- [ ] Fill all four, press **SAVE** — the card's title changes and its meta line reads
+      `ASSIGNEE · DATE`, or `UNASSIGNED` if you left the assignee empty
+- [ ] Double-click it again — every field comes back, description included
+- [ ] Tap `DUE DATE` — the date grid appears with no clock. Pick a day, **OK**, then **SAVE** —
+      the meta line shows the date
+- [ ] Reopen and press **CLEAR DUE DATE** — the due date goes and the meta drops back to just
+      the assignee. It must **not** delete the card
+- [ ] `Esc` on the field list closes the sheet and writes nothing
+- [ ] While the sheet is open, click a card and the three `+` buttons underneath it — **nothing
+      must happen.** SW-18's contract 2, and `IconButton` only just gained `enabled` for it
+- [ ] Close and reopen the widget — titles, assignees, due dates and descriptions all survive
 
 **The Calendar editor, `SW-20`** — seed a week first so there is something to click:
 `cargo run -p canvas-app --example insert_calendar -- --now`, then
@@ -1837,21 +1854,33 @@ would otherwise be re-introduced three more times.
   outline says; the column header holds still as counts change; a card's four fields are
   editable from the sheet and survive a restart.
 
-  **Part (1), the drag, is built 2026-08-26 as `SW-21a` — 🟡 NOT WATCHED.** The user named it
-  again that day: *"kanban bvoard was resisting moving things around"*, so it was pulled ahead
-  of the editor and shipped on its own. `card-box.x`/`y` no longer add `held-dx`/`held-dy`, so
-  `card-touch` is stationary for the whole gesture and `mouse-x - pressed-x` cannot feed back
-  into its own origin. The card in the slot drops to `Layout.placeholder-opacity` and a single
-  floating `Rectangle` at **board level** carries `shadow-drag` and the held title/meta,
-  positioned from `held-x + held-dx`. A no-op drop — same column, same row — now skips
-  `card-moved` entirely, so click-without-moving stops writing a CRDT update and a
-  `revision_history` row.
-  **It could not be photographed:** a fresh board has three columns and zero cards, and this
-  session cannot synthesise a drag (the recipe's note 2 — Windows refuses `SetForegroundWindow`
-  to a background process). See the VERIFICATION QUEUE.
-  **Part (2), the column header, was done in `SW-25`** — the count column is a fixed
-  `Layout.kanban-count-w` 24px, so a two-digit count cannot shift the title. Photographed.
-  **Part (3), the card editor, is still open** and still needs `SW-19`'s pickers.
+  **All three parts are now built. 2026-08-26/27.**
+  **Part (1), the drag — `SW-21a`, 🟡 NOT WATCHED.** The user named it again on 2026-08-26:
+  *"kanban bvoard was resisting moving things around"*, so it was pulled ahead and shipped on
+  its own. `card-box.x`/`y` no longer add `held-dx`/`held-dy`, so `card-touch` is stationary for
+  the whole gesture and `mouse-x - pressed-x` cannot feed back into its own origin. The card in
+  the slot drops to `Layout.placeholder-opacity` and a single floating `Rectangle` at **board
+  level** carries `shadow-drag` and the held title/meta. A no-op drop — same column, same row —
+  skips `card-moved` entirely, so click-without-moving stops writing a CRDT update.
+  **Part (2), the column header — done in `SW-25`** and photographed. The count column is a
+  fixed `Layout.kanban-count-w` 24px, so a two-digit count cannot shift the title.
+  **Part (3), the card editor — 🟡 NOT WATCHED.** `KanbanDoc` gained `description` over the
+  existing private `set_string`, **7 new tests, 120 in `canvas-doc`**, including
+  `a_card_written_before_the_field_existed_reads_as_empty`,
+  `a_description_survives_a_move_between_columns` and a two-peer convergence test.
+  The sheet copies `SW-20`'s two-mode shape with **one** picker instead of two: mode 0 is
+  `TITLE`, `ASSIGNEE`, `DUE DATE` (a `PickerField`) and `DESCRIPTION`; tapping the due date
+  swaps the body for the `DatePicker` at `chrome: false`. Its footer's destructive slot is
+  **`CLEAR DUE DATE`**, not a card delete — the card's own trash icon already deletes it, and a
+  second delete in the sheet would be two ways to do one thing.
+  **As this entry says, the sheet replaces the inline `TextInput` entirely.** Double-clicking a
+  card now opens the sheet; the inline title editor is gone from the Kanban, which also retires
+  the single-letter bug on this widget. `editing-id` survives as the `refresh_kanban` lock only —
+  it is set to the open card's id while the sheet is up, so the repeater cannot rebuild under it,
+  and `card-committed` clears it *before* calling `kanban_edit` so the refresh lands.
+  **`IconButton` gained `enabled`**, gating both its `TouchArea` and its `FocusScope`. SW-18's
+  contract 2 needs it: an opaque sheet does not stop an icon underneath from taking clicks, and
+  the three `+` buttons sit under this one.
 
 ### W2e — Spreadsheet, unblocked
 

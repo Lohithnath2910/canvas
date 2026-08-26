@@ -2411,9 +2411,216 @@ fn kanban_edit(app: &SharedApp, id: &str, change: impl FnOnce(&KanbanDoc) -> Opt
     App::refresh_home(app);
 }
 
+#[derive(Clone, Default)]
+struct CardDraft {
+    id: String,
+    due: i64,
+    month: (i64, u32),
+}
+
+fn paint_card_month(window: &KanbanWindow, month: (i64, u32), today: i64) {
+    use crate::calendar_time as ct;
+
+    let (year, m) = month;
+    window.set_pick_month(format!("{} {year}", ct::month_name(m)).into());
+    window.set_pick_stamp(ct::date_stamp(window.get_pick_day() as i64 * ct::DAY_MS, 0).into());
+
+    let cells: Vec<DayCell> = ct::month_grid(year, m, FIRST_WEEKDAY)
+        .into_iter()
+        .map(|day| {
+            let (y, mm, d) = ct::civil_from_days(day);
+            DayCell {
+                label: d.to_string().into(),
+                epoch_day: day as i32,
+                in_month: (y, mm) == (year, m),
+                today: day == today,
+            }
+        })
+        .collect();
+    window.set_pick_days(slint::ModelRc::new(slint::VecModel::from(cells)));
+}
+
+fn due_label(due: i64, offset: i64) -> String {
+    if due == 0 {
+        String::new()
+    } else {
+        crate::calendar_time::date_stamp(due, offset)
+    }
+}
+
 fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer {
     let owned_id = id.to_string();
     let poll_timer = slint::Timer::default();
+    let card_draft: Rc<RefCell<CardDraft>> = Rc::new(RefCell::new(CardDraft::default()));
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        let draft = card_draft.clone();
+        window.on_card_opened(move |card_id| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let found = {
+                let Ok(a) = app.try_borrow() else {
+                    return;
+                };
+                let Some(widget) = a.widgets.get(&id) else {
+                    return;
+                };
+                let WidgetDoc::Kanban(doc) = &widget.doc else {
+                    return;
+                };
+                doc.cards().into_iter().find(|c| c.id == card_id.as_str())
+            };
+            let Some(card) = found else {
+                return;
+            };
+
+            let offset = crate::calendar_time::local_offset_ms();
+            window.set_card_title(card.title.clone().into());
+            window.set_card_assignee(card.assignee.clone().into());
+            window.set_card_description(card.description.clone().into());
+            window.set_card_due_label(due_label(card.due, offset).into());
+            *draft.borrow_mut() = CardDraft {
+                id: card.id.clone(),
+                due: card.due,
+                month: (0, 1),
+            };
+            window.set_pick_mode(0);
+            window.set_editing_id(card.id.into());
+            window.set_sheet_open(true);
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        let draft = card_draft.clone();
+        window.on_pick_opened(move || {
+            use crate::calendar_time as ct;
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let offset = ct::local_offset_ms();
+            let now = canvas_storage::now_millis();
+            let anchor = {
+                let d = draft.borrow();
+                if d.due == 0 {
+                    now
+                } else {
+                    d.due
+                }
+            };
+            let local_day = (anchor + offset).div_euclid(ct::DAY_MS);
+            let (y, m, _) = ct::civil_from_days(local_day);
+            draft.borrow_mut().month = (y, m);
+
+            window.set_pick_day(local_day as i32);
+            window.set_pick_heads(slint::ModelRc::new(slint::VecModel::from(weekday_heads(
+                FIRST_WEEKDAY,
+            ))));
+            paint_card_month(&window, (y, m), (now + offset).div_euclid(ct::DAY_MS));
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        let draft = card_draft.clone();
+        window.on_pick_month_stepped(move |delta| {
+            use crate::calendar_time as ct;
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let stepped = {
+                let mut d = draft.borrow_mut();
+                let (y, m) = d.month;
+                d.month = ct::month_step(y, m, delta);
+                d.month
+            };
+            let offset = ct::local_offset_ms();
+            let today = (canvas_storage::now_millis() + offset).div_euclid(ct::DAY_MS);
+            paint_card_month(&window, stepped, today);
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        let draft = card_draft.clone();
+        window.on_pick_committed(move || {
+            use crate::calendar_time as ct;
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let offset = ct::local_offset_ms();
+            let (y, m, d) = ct::civil_from_days(window.get_pick_day() as i64);
+            let due = ct::compose_local_ms(y, m, d, 0, offset);
+            draft.borrow_mut().due = due;
+            window.set_card_due_label(due_label(due, offset).into());
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        let draft = card_draft.clone();
+        window.on_pick_cleared(move || {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            draft.borrow_mut().due = 0;
+            window.set_card_due_label("".into());
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        let draft = card_draft.clone();
+        window.on_card_committed(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let d = draft.borrow().clone();
+            let title = window.get_card_title().to_string();
+            let title = if title.trim().is_empty() {
+                NEW_CARD_TITLE.to_string()
+            } else {
+                title
+            };
+            let assignee = window.get_card_assignee().to_string();
+            let description = window.get_card_description().to_string();
+
+            window.set_sheet_open(false);
+            window.set_pick_mode(0);
+            window.set_editing_id("".into());
+
+            kanban_edit(&app, &id, |doc| {
+                doc.set_title(&d.id, &title);
+                doc.set_assignee(&d.id, &assignee);
+                doc.set_description(&d.id, &description);
+                doc.set_due(&d.id, d.due);
+                Some(doc.snapshot())
+            });
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        window.on_card_cancelled(move || {
+            if let Some(window) = handle.upgrade() {
+                window.set_sheet_open(false);
+                window.set_pick_mode(0);
+                window.set_editing_id("".into());
+            }
+        });
+    }
 
     {
         let weak = Rc::downgrade(app);
