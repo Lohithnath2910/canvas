@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-17` — one table of built widget types behind both home and the palette. Carries a design decision — show the user before building it out. See its entry.
+**Current task:** `SW-10` — the Kanban widget window and card drag, on `KanbanDoc`'s fractional index.
 **Stage:** W — every widget type, single-player (Stage 1 is out of unblocked tasks)
-**Done:** 28 ticked, 43 open (5 dropped, 10 added — S1-46 to S1-51, SW-16, SW-17, and the two Spreadsheet tasks). 134 tests pass.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Done:** 28 ticked, 43 open (5 dropped, 10 added — S1-46 to S1-51, SW-16, SW-17, and the two Spreadsheet tasks). 143 tests pass.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -142,14 +142,15 @@ end-of-run report every time until it happens.
 - [ ] Move and resize a note, restart the app — it reopens exactly where it was → **S1-18**
 
 **Home window**
-- [ ] `NEW NOTE` — creates a note, opens its window, adds a row → **S1-25**
+- [ ] The **note glyph** in the footer strip — creates a note, opens its window, adds a row
+      → **S1-25**. It was a `NEW NOTE` button until **SW-17**
 - [ ] Click a row — toggles that note open/closed; the row's dots reflect it → **S1-24**
 - [ ] Row delete icon — confirm overlay, then gone from list and from disk → **S1-26**
 - [ ] Empty state shows on a fresh database (delete `%APPDATA%/Canvas`), centred in the
       list area, and disappears the moment the first note exists → **S1-28**
 - [ ] Open three notes at once — all independently draggable and editable → confirms **S1-20**
 - [ ] Home `x` closes home and leaves notes running
-- [ ] Make **ten or more** notes (hold `NEW NOTE`) so the list overflows: a 4px thumb
+- [ ] Make **ten or more** notes (hold the note glyph) so the list overflows: a 4px thumb
       appears at the home list's right edge, tracks the wheel, and drags to scroll →
       **S1-47**
 - [ ] With the list overflowing, hover a row — the row highlight and its delete icon must
@@ -162,7 +163,8 @@ end-of-run report every time until it happens.
       behind → **S1-47**
 
 **Open/close animation** → **S1-29**
-- [ ] `NEW NOTE` — the new note's plate fades up over ~160ms and rises 6px into place.
+- [ ] Create a note from the footer strip — its plate fades up over ~160ms and rises 6px
+      into place.
       Nothing scales, tilts or bounces
 - [ ] Click `x` on a note — the plate fades out over ~100ms and does **not** travel
       downward on the way out
@@ -235,7 +237,7 @@ end-of-run report every time until it happens.
 - [ ] Launch and read the console line `canvas: reduced motion = <bool>`. On a default
       Windows box it says `false`
 - [ ] Turn **Settings → Accessibility → Visual effects → Animation effects** OFF and watch
-      the *already running* app: within half a second the next `NEW NOTE` must appear with
+      the *already running* app: within half a second the next new note must appear with
       a **flat 100ms fade and no 6px rise**, and dragging a note must not deepen its shadow
       over time — the shadow changes instantly or not at all
 - [ ] With it still off, Ctrl+G a note to the `syncing` state — the lit dot must **stop
@@ -301,9 +303,9 @@ This is the first widget type other than the sticky note. Everything in the **No
 block above should behave the same way here — it is the same header, the same drag region,
 the same three controls.
 
-- [ ] Home now shows **two** buttons: `NEW NOTE` (white, primary) and `NEW TODO` (dark).
-      `NEW TODO` creates a todo, opens its window, and adds a row to the list with the
-      **check** glyph rather than the note glyph → **SW-02**
+- [ ] The **check glyph** in the footer strip creates a todo, opens its window, and adds a
+      row to the list with the **check** glyph rather than the note glyph → **SW-02**.
+      This was a pair of labelled `NEW NOTE` / `NEW TODO` buttons until **SW-17**
 - [ ] Ctrl+K → `New todo` (⌘T) does the same thing. It used to print "todo widgets do not
       exist yet" to the console → **SW-02**
 - [ ] The todo window is `340×360` with the same 32px header, glyph strip, editable title
@@ -354,6 +356,34 @@ is not there, run `cargo run -p canvas-app --example insert_calendar`.
 - [ ] 🟡 Nothing in the window can add, move or delete an event yet — §10.4 specifies the
       readout and no editing UI at all, so that is **open question 10**, not an oversight
 
+
+**The create control** → **SW-17**
+
+Home's two labelled buttons are gone. In their place is a strip of 16px glyphs, one per
+built type, with a single label to their right.
+
+- [ ] The footer shows **four glyphs** — note, check, doc, calendar — at 16px, gap 8,
+      `dim` at rest, in the same place the two buttons used to be
+- [ ] The label beside them reads `NEW` at rest and changes to `NEW NOTE`, `NEW TODO`,
+      `NEW DOCUMENT`, `NEW CALENDAR` as you hover each glyph. **The label must not move,
+      only its text changes**, and the glyph itself steps `dim` → `text`
+- [ ] Tab into the strip — the same label follows keyboard focus, and each glyph shows a
+      focus ring. Enter or Space creates that type
+- [ ] Click each of the four — each opens a window of the right type and adds a row to the
+      list with the matching glyph. **The Shared Document and the Calendar were previously
+      unreachable; this is the first time either can be created from the UI**
+- [ ] Ctrl+K with an empty query now lists **five** rows: New note, New todo, New document,
+      New calendar, Settings — each with the same glyph home uses for that type
+- [ ] `New note` still says `CTRL+N`; `New todo` still says `CTRL+T`; document and calendar
+      show no shortcut. 🟡 **`CTRL+T` is not actually registered** — only Ctrl+K and Ctrl+N
+      are. That is §9's own text and predates SW-17
+- [ ] Ctrl+K, type a note's title, Enter — it still **opens that note** rather than creating
+      anything. This is the one that would catch an action id colliding with a widget id
+- [ ] With nothing in the list, the empty state now reads
+      `Press Ctrl+K, or pick a type below.`
+- [ ] 🟡 The hover label is driven by Slint's `changed hovered` handler, which is the one
+      piece of this that has never been run. If the label sticks on a type after the pointer
+      leaves, or never changes at all, that is the handler not firing — open a task
 **Off-screen clamping** → **S1-30**
 - [ ] Drag a note off the left, right and bottom edges — it clips at the boundary, no
       push-back and no snap-in, and always leaves ~120px of plate plus the whole header
@@ -1072,6 +1102,10 @@ because the app is currently hardcoded to a single type.
   the row list, where they distinguish types at a glance; a `Button` in this design system
   is a labelled control (§6.3) and there is no icon-button-with-label variant. Adding one
   would be a new component, not a create control.
+  ⚠ **Superseded by SW-17 on 2026-08-26.** Two labelled buttons do not scale to seven types,
+  and the user said so. The footer is now a strip of 16px glyphs with a hover readout, and
+  the paragraph above — that a `Button` is a labelled control and glyphs belong in the row
+  list — is the argument the user overruled. Everything else in this entry still holds.
   *DoD:* each type creatable from home, appears in the list with the right glyph, opens
   its own window, and survives a restart.
   ✅ **creation, opening and persistence** — confirmed 2026-08-26 headlessly: a seeded
@@ -1116,17 +1150,34 @@ because the app is currently hardcoded to a single type.
   fit** — `NEW SPREADSHEET` alone is ~150px against a 420px plate — and the command palette
   still offers only `New note`, `New todo` and `Settings` (§9's three defaults, written when
   three was the whole list).
-  Both surfaces need the same list, and it should be **derived from one table of built
-  types** in Rust rather than written out twice and drifting.
-  The shape to decide (and it is a real design decision, so show the user before building
-  it out): home's footer probably becomes a **strip of 16px §5.6 glyph buttons**, one per
-  type, since the row list already uses those exact glyphs to mean those exact types and
-  the header cluster is already unlabelled icons — or a single `NEW` primary that opens the
-  palette, which is what §9 says the palette is *for*. **Only offer a type that can
-  actually open a window**; a control that prints "no window yet" to the console is worse
-  than no control.
+  **Built 2026-08-26**, both decisions taken by the user when asked:
+  **home's footer is a strip of 16px §5.6 glyph buttons**, one per built type — the row list
+  already uses those exact glyphs to mean those exact types and the header cluster is
+  already unlabelled icons, so it is a language already agreed to; and **an unbuilt type is
+  hidden, not disabled**, so nothing is ever offered that does not open.
+  Both surfaces read `canvas-app/src/widget_types.rs`, one `BUILT` table of
+  `{kind, name, label, shortcut}`. Home renders a glyph per row; the palette renders
+  `New <name>` with the kind as its icon key — which works because `PaletteGlyph` and home's
+  `KindGlyph` were both already keyed on the kind string. Adding a type is one row.
+  **The glyph strip has no labels, so it grew a hover readout**: a single interface-face-11
+  `dim` line to the right of the strip that says `NEW` at rest and `NEW CALENDAR` while a
+  glyph is hovered or keyboard-focused. Position never moves, only the string changes
+  (§7.4), and it elides rather than colliding with the `N WIDGETS · N OPEN` count. It is
+  driven by Slint's `changed hovered` / `changed focused` handlers per loop instance —
+  **there is no way to aggregate `has-hover` across a `for` loop**, and a strip-wide
+  `TouchArea` behind the buttons is exactly §13.3's trap.
+  **Palette action ids are now `new:<kind>`**, resolved through `kind_for_action`, replacing
+  the hand-written `ACTION_NEW_NOTE` / `ACTION_NEW_TODO` constants. A widget id can never
+  collide with one, which is what keeps the `_` arm — open an existing widget — correct.
+  **`CTRL+T` is shown against `New todo` but is not actually registered** — only Ctrl+K and
+  Ctrl+N are (`hotkey.rs`). That is §9's own text and predates this task; `document` and
+  `calendar` show no shortcut rather than inventing one.
   *DoD:* every built type is creatable from home and from the palette, both lists come from
   one place in Rust, and adding the next type touches that table only.
+  ✅ **the "one place" half is enforced by tests, not by hope** — `home_and_the_palette_offer_the_same_list`
+  compares the two rendered lists, and `a_kind_that_gains_a_document_must_be_added_to_this_table`
+  fails the moment `WidgetDoc::load` learns a kind that `BUILT` does not carry. 143 tests pass.
+  🟡 **the on-screen half is not watched** — the box stays open. See the VERIFICATION QUEUE.
 
 - [ ] **SW-03 · The four missing library components** — `M`
   Needs: S1-13. `controls.slint` currently has `IconButton` and `Button` only.
@@ -1193,10 +1244,10 @@ because the app is currently hardcoded to a single type.
   `delete-label = "DELETE DOCUMENT"`, and maps to `StickyNoteDoc` in `WidgetDoc`. The
   `520×420` size already came from `canvas_storage::default_size`.
   *DoD:* creates, edits, persists. Cursor work explicitly recorded as deferred.
-  🟡 **needs eyes** — clippy-clean, 122 tests pass, the app launches. **There is no way to
-  create one yet**: SW-17 is the create control for it. Use
-  `cargo run -p canvas-app --example insert_todo` as the model for seeding one by hand
-  until then. Cursors remain deferred to after Stage 3, as the task says.
+  🟡 **needs eyes** — clippy-clean, the app launches. **SW-17 closed the create gap on
+  2026-08-26**: the doc glyph in home's footer strip and `New document` in the palette both
+  make one, so this no longer needs seeding by hand. Cursors remain deferred to after
+  Stage 3, as the task says.
 
 ### Wd — Calendar
 

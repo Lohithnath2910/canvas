@@ -50,32 +50,42 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-17` — one table of built widget types, behind both home and the palette.** The user
-raised it directly while looking at the app: home has two labelled buttons and the palette
-offers three actions, and **neither scales to seven widget types**. Both lists should come
-from one table in Rust — kind, label, icon, shortcut — so adding a type touches one place.
-It is also the only thing standing between the user and the **Shared Document** and
-**Calendar**, which are both built and dispatch correctly but which nothing can create.
+**`SW-10` — the Kanban widget window and card drag.** `640×400`, three equal columns, gap
+12. Column header is interface-face-11 `text` plus a `dim` count, gap 8, then a 1px `edge`
+rule. Cards are `elev-raised`, 1px `edge`, radius 8, padding 12, gap 8, title body-face-14,
+meta interface-face-11 `dim` reading `ASSIGNEE · DATE` or `UNASSIGNED`.
+**The drop target is a 1px `text` outline around the whole column — no fill, no tint.**
+A dragged card gets `shadow-drag` and nothing else: no tilt, no scale (rule 5).
 
-**It carries a real design decision, so show the user before building it out:** does home
-grow a glyph strip of type buttons, or drop to a single `NEW` that opens the palette? Ask
-first, then build — that is what makes this one worth interrupting for.
+`KanbanDoc` is done and has 22 tests. `move_card(id, column, index)` is the API a drop
+gives you — it finds the neighbours in the destination column itself and mints the
+fractional key, so **the window never touches a key.** Cards live in a `yrs::Map` keyed by
+card id, so there is no array position to reorder.
 
-Then `SW-10` (Kanban window + card drag, on `KanbanDoc`'s fractional index), and after that
-the two that are genuinely blocked: `SW-12` needs **open question 4** (the Whiteboard has no
-artboard) and `SW-13`/`SW-14` need **open questions 5, 6 and 7** (Spreadsheet formulas,
-mid-sheet insertion, default size).
+**The one trap:** card drag needs disjoint `TouchArea`s (§13.3). Do not put a column-wide
+`TouchArea` behind the cards — that is the same overlap that got the Calendar's chip
+handler deleted in SW-08. One `TouchArea` per card, and work out the drop column from the
+pointer's x against the column bounds in the `moved` handler rather than from a second
+region.
+
+After that: `SW-12` needs **open question 4** (the Whiteboard has no artboard) and
+`SW-13`/`SW-14` need **open questions 5, 6 and 7** (Spreadsheet formulas, mid-sheet
+insertion, default size). Those three are genuinely blocked. **When they are the only
+thing left, the next unit of work is the verification walk-through, not a fourth attempt
+to unblock them** — see below.
 
 ### What is real and what is not
 
 **Wired into the running app and reachable by a user:** the sticky note, the **Todo**
-widget (SW-05), and — as of 2026-08-26 — the **Calendar** (SW-08), which has a seeded
-`THIS WEEK` row sitting in the database flagged open, so it should appear on next launch.
-Home and the palette create notes and todos only. The **Shared Document** (SW-06) and the
-Calendar both dispatch, but **nothing in the UI can create either** — that is SW-17.
+widget, the **Shared Document**, and the **Calendar**. As of SW-17 all four are creatable
+from home's footer glyph strip *and* from the command palette, both driven by one
+`BUILT` table in `canvas-app/src/widget_types.rs`. A seeded `THIS WEEK` calendar is
+sitting in the database flagged open, so it should appear on next launch.
 
 **Built, tested, and NOT reachable from the app:** `KanbanDoc` and `WhiteboardDoc`. Do not
-read 134 passing tests as a working Kanban.
+read 143 passing tests as a working Kanban. They are deliberately absent from `BUILT` —
+the table hides a type until it has a window, and a test fails if a kind gains a document
+without gaining a table row.
 
 **Only in `--gallery`:** the four §6 components (SW-03).
 
@@ -87,23 +97,23 @@ SW tasks run out, the next unit of work is the walk-through with the user at the
 not another feature. Raise it in every end-of-run report until it happens.
 
 It has a section per task: the Todo widget (SW-05/SW-02), the **Calendar** (SW-08, seeded
-and ready to look at), three header controls (SW-16), undo/redo (S1-43), reduced motion
-(S1-44), the home scrollbar (S1-47), the SW-01 regression check, and the four components
-via `--gallery` (SW-03) — on top of the palette, the global hotkey, the open/close
-animation, the screen clamp and the drag feel. `S1-45` cannot honestly close until it is
-walked.
+and ready to look at), the **create control** (SW-17), three header controls (SW-16),
+undo/redo (S1-43), reduced motion (S1-44), the home scrollbar (S1-47), the SW-01 regression
+check, and the four components via `--gallery` (SW-03) — on top of the palette, the global
+hotkey, the open/close animation, the screen clamp and the drag feel. `S1-45` cannot
+honestly close until it is walked.
 
 ### Questions worth raising in the end-of-run report — but never worth stalling for
 
-- **SW-17's own design decision** — glyph strip of type buttons on home, or a single `NEW`
-  that opens the palette. This one blocks the next task, so it is the first thing to ask.
-- **How a Calendar event is created, moved or deleted from inside the widget** — new
+- **How a Calendar event is created, moved or deleted from inside the widget** —
   **open question 10**. §10.4 specifies the readout and no editing UI at all. `CalendarDoc`
   already has every method needed, so nothing is blocked on the CRDT, only the interaction.
 - **Before SW-13:** does the Spreadsheet support formulas, and can rows and columns be
   inserted mid-sheet? The second decides the CRDT shape and cannot be retrofitted.
 - What pin should do beyond holding a note at the desktop layer.
 - The Whiteboard has no artboard (open question 4) — SW-12 needs one.
+- `CTRL+T` is shown against `New todo` in the palette but has never been registered — only
+  Ctrl+K and Ctrl+N are. §9's own text, not a regression, but it is a small lie on screen.
 
 All of them are in **Open questions** at the bottom of [TASKS.md](TASKS.md).
 ---
@@ -120,7 +130,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 134 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 143 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -1910,3 +1920,70 @@ keyboard, not another feature. This is now written at the top of the queue itsel
 
 - ✅ `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **134 tests pass**
   (14 app · 103 doc · 17 storage) — up from 122, the 12 new ones all in `calendar_time`.
+
+---
+
+### 2026-08-26 — SW-17: one table behind both create surfaces
+
+The user raised this looking at the running app: home had two labelled buttons, the palette
+offered three actions, and **neither scales to seven widget types.** Both decisions were put
+to them and both were answered.
+
+- 🟡 **Home's footer is now a strip of 16px §5.6 glyph buttons**, one per built type, with a
+  single label to their right. **An unbuilt type is hidden, not shown disabled** — nothing is
+  ever offered that does not open.
+- 🟡 **The Shared Document and the Calendar are creatable from the UI for the first time.**
+  Both had windows and both dispatched correctly; there was simply no control that made one.
+  That was the real cost of the two-button footer, and it is why this task was worth doing
+  before the Kanban.
+- ✅ **Both surfaces read one table** — `canvas-app/src/widget_types.rs`, `BUILT`, rows of
+  `{kind, name, label, shortcut}`. This half is enforced by tests rather than by hope.
+
+**Why the table works out so small.** `PaletteGlyph` in `palette.slint` and `KindGlyph` in
+`home.slint` were both *already* keyed on the kind string (`"todo"`, `"calendar"`, …) rather
+than on an icon name of their own. So the table does not need an icon column at all: the
+kind **is** the icon key on both surfaces. Adding a type is genuinely one row.
+
+**The glyph strip has no labels, so it grew a hover readout.** A single interface-face-11
+`dim` line to the right of the strip, reading `NEW` at rest and `NEW CALENDAR` while a glyph
+is hovered or keyboard-focused. Position never moves and only the string changes, which is
+§7.4's rule for hover reveals, and it elides rather than colliding with the
+`N WIDGETS · N OPEN` count.
+
+**The Slint problem that shaped it, worth remembering.** There is **no way to aggregate
+`has-hover` across a `for` loop** — you cannot ask "is any child of this repeater hovered".
+The obvious fix, a strip-wide `TouchArea` behind the buttons, is exactly §13.3's overlapping-
+`TouchArea` trap and would have been the third time this project walked into it. What works
+is a **`changed hovered` / `changed focused` handler on each loop instance**, each writing
+its own label into a root property and clearing it only if the property still holds its own
+label. Slint 1.17 accepts `changed <out-property>` on a component instance from outside the
+component, which is the piece that was not obvious. **It compiles; it has not been run.**
+
+**Palette action ids are now `new:<kind>`**, resolved through `kind_for_action`, replacing
+the hand-written `ACTION_NEW_NOTE` / `ACTION_NEW_TODO` constants. This matters more than it
+looks: `activate_palette_row`'s `_` arm treats anything unrecognised as a **widget id to
+open**, so an action id that could collide with a uuid would silently try to open a widget
+that does not exist. `an_action_id_is_not_a_widget_id` pins that.
+
+**Two tests do the actual guarding, and they are the DoD:**
+`home_and_the_palette_offer_the_same_list` builds both rendered lists and compares them, so
+the two surfaces cannot drift. `a_kind_that_gains_a_document_must_be_added_to_this_table`
+walks every `KIND_*` constant and asserts *"has a document"* and *"is offered"* agree — so
+the moment `WidgetDoc::load` learns `kanban`, the build fails until `BUILT` gains its row.
+That is the "adding the next type touches that table only" clause, made mechanical.
+
+**Not built, deliberately:** `CTRL+T` is still shown against `New todo` and is still not
+registered — only Ctrl+K and Ctrl+N are (`hotkey.rs`). That is §9's own text and predates
+this task, so it was left alone rather than quietly changed; it is now written down in the
+end-of-run questions instead. `document` and `calendar` show **no** shortcut rather than an
+invented one.
+
+**Superseded:** SW-02's argument that *"a `Button` is a labelled control (§6.3) and glyphs
+belong in the row list"* — the user overruled it, and SW-02's entry now says so.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **143 tests pass**
+  (23 app · 103 doc · 17 storage) — up from 134, the 9 new ones split between
+  `widget_types` and the palette/home agreement checks.
+- 🟡 Nothing on screen has been watched. The box stays open and the VERIFICATION QUEUE has
+  a new section for it, including the one thing most likely to be wrong: the `changed
+  hovered` handler.

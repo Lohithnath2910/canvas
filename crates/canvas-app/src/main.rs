@@ -9,6 +9,7 @@ mod hotkey;
 mod reduced_motion;
 mod screen;
 mod widget;
+mod widget_types;
 
 use app::{App, SharedApp};
 

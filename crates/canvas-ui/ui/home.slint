@@ -7,6 +7,11 @@ import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconTrash, IconPlus, IconNote, IconCheck, IconColumns, IconCalendar, IconDoc, IconX } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant, ScrollBar } from "theme/controls.slint";
 
+export struct WidgetTypeData {
+    kind: string,
+    label: string,
+}
+
 export struct NoteRow {
     id: string,
     title: string,
@@ -140,10 +145,10 @@ component Row inherits Rectangle {
 
 export component HomeWindow inherits Window {
     in property <[NoteRow]> rows: [];
+    in property <[WidgetTypeData]> types: [];
     in property <int> open-count: 0;
 
-    callback create-note();
-    callback create-todo();
+    callback create-widget(string);
     callback open-row(string);
     callback delete-row(string);
     callback window-moved(length, length);
@@ -167,6 +172,7 @@ export component HomeWindow inherits Window {
 
     property <bool> dragging: false;
     property <string> pending-delete: "";
+    property <string> type-label: "NEW";
 
     plate := Panel {
         x: Layout.plate-margin;
@@ -276,7 +282,7 @@ export component HomeWindow inherits Window {
                 x: 0;
                 y: empty-title.y + empty-title.height + 12px;
                 width: parent.width;
-                text: "Press NEW NOTE or NEW TODO to create your first widget.";
+                text: "Press Ctrl+K, or pick a type below.";
                 color: Palette.dim;
                 horizontal-alignment: center;
                 font-family: Typography.body-face;
@@ -327,27 +333,54 @@ export component HomeWindow inherits Window {
             background: Palette.edge;
         }
 
-        HorizontalLayout {
+        Rectangle {
             x: Layout.pad;
             y: parent.height - 49px;
             width: parent.width - 2 * Layout.pad;
-            height: 34px;
-            spacing: 8px;
-            alignment: start;
+            height: Layout.header-h;
 
-            Button {
-                label: "NEW NOTE";
-                variant: ButtonVariant.primary;
-                clicked => { root.create-note(); }
+            for entry[idx] in root.types: IconButton {
+                x: idx * (Layout.icon-size + Layout.icon-gap);
+                y: 0;
+                width: Layout.icon-size;
+                activated => { root.create-widget(entry.kind); }
+                changed hovered => {
+                    if (self.hovered) {
+                        root.type-label = entry.label;
+                    } else if (root.type-label == entry.label) {
+                        root.type-label = "NEW";
+                    }
+                }
+                changed focused => {
+                    if (self.focused) {
+                        root.type-label = entry.label;
+                    } else if (root.type-label == entry.label) {
+                        root.type-label = "NEW";
+                    }
+                }
+                KindGlyph {
+                    kind: entry.kind;
+                    stroke-color: parent.glyph-color;
+                }
             }
-            Button {
-                label: "NEW TODO";
-                variant: ButtonVariant.default;
-                clicked => { root.create-todo(); }
+
+            Text {
+                x: root.types.length * (Layout.icon-size + Layout.icon-gap) + 4px;
+                y: 0;
+                width: max(0px, parent.width - self.x - type-count.width - Layout.icon-gap);
+                height: parent.height;
+                vertical-alignment: center;
+                text: root.type-label;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                overflow: elide;
+                wrap: no-wrap;
             }
         }
 
-        Text {
+        type-count := Text {
             x: parent.width - Layout.pad - self.width;
             y: parent.height - 40px;
             text: root.rows.length + " WIDGETS · " + root.open-count + " OPEN";

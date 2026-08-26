@@ -8,14 +8,14 @@ use slint::ComponentHandle;
 use canvas_doc::{StickyNoteDoc, TodoListDoc, UndoHistory};
 
 use crate::widget::{LiveWidget, WidgetDoc, WidgetWindow};
+use crate::widget_types;
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
     platform_system_sans, CalendarChip, CalendarWindow, CanvasTray, HomeWindow, Motion, NoteRow,
     PaletteRow, PaletteWindow, StickyNoteWindow, TodoItemData, TodoWindow, Typography,
+    WidgetTypeData,
 };
 
-pub const ACTION_NEW_NOTE: &str = "new-note";
-pub const ACTION_NEW_TODO: &str = "new-todo";
 pub const ACTION_SETTINGS: &str = "settings";
 
 const PLATE_MARGIN: f32 = 24.0;
@@ -213,23 +213,13 @@ impl App {
         home.global::<Motion>()
             .set_reduced(app.borrow().reduced_motion);
 
-        {
-            let weak = Rc::downgrade(app);
-            home.on_create_note(move || {
-                if let Some(app) = weak.upgrade() {
-                    if let Err(e) = App::create_note(&app) {
-                        eprintln!("canvas: create failed: {e}");
-                    }
-                    App::refresh_home(&app);
-                }
-            });
-        }
+        home.set_types(built_types_model());
 
         {
             let weak = Rc::downgrade(app);
-            home.on_create_todo(move || {
+            home.on_create_widget(move |kind| {
                 if let Some(app) = weak.upgrade() {
-                    if let Err(e) = App::create_widget(&app, canvas_storage::KIND_TODO) {
+                    if let Err(e) = App::create_widget(&app, kind.as_ref()) {
                         eprintln!("canvas: create failed: {e}");
                     }
                     App::refresh_home(&app);
@@ -1162,27 +1152,34 @@ pub fn dump() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn built_types_model() -> slint::ModelRc<WidgetTypeData> {
+    let rows: Vec<WidgetTypeData> = widget_types::BUILT
+        .iter()
+        .map(|t| WidgetTypeData {
+            kind: t.kind.into(),
+            label: t.label.into(),
+        })
+        .collect();
+    slint::ModelRc::new(slint::VecModel::from(rows))
+}
+
 fn default_actions() -> Vec<PaletteRow> {
-    vec![
-        PaletteRow {
-            id: ACTION_NEW_NOTE.into(),
-            label: "New note".into(),
-            meta: "CTRL+N".into(),
-            icon: "plus".into(),
-        },
-        PaletteRow {
-            id: ACTION_NEW_TODO.into(),
-            label: "New todo".into(),
-            meta: "CTRL+T".into(),
-            icon: "check".into(),
-        },
-        PaletteRow {
-            id: ACTION_SETTINGS.into(),
-            label: "Settings".into(),
-            meta: "CTRL+,".into(),
-            icon: "settings".into(),
-        },
-    ]
+    let mut rows: Vec<PaletteRow> = widget_types::BUILT
+        .iter()
+        .map(|t| PaletteRow {
+            id: widget_types::action_id(t.kind).into(),
+            label: widget_types::palette_label(t).into(),
+            meta: t.shortcut.into(),
+            icon: t.kind.into(),
+        })
+        .collect();
+    rows.push(PaletteRow {
+        id: ACTION_SETTINGS.into(),
+        label: "Settings".into(),
+        meta: "CTRL+,".into(),
+        icon: "settings".into(),
+    });
+    rows
 }
 
 fn count_label(count: usize) -> String {
@@ -1425,25 +1422,18 @@ impl App {
 
     pub fn activate_palette_row(app: &SharedApp, id: &str) {
         match id {
-            ACTION_NEW_NOTE => {
-                App::hide_palette(app);
-                if let Err(e) = App::create_note(app) {
-                    eprintln!("canvas: create failed: {e}");
-                }
-                App::refresh_home(app);
-            }
-            ACTION_NEW_TODO => {
-                App::hide_palette(app);
-                if let Err(e) = App::create_widget(app, canvas_storage::KIND_TODO) {
-                    eprintln!("canvas: create failed: {e}");
-                }
-                App::refresh_home(app);
-            }
             ACTION_SETTINGS => {
                 eprintln!("canvas: there is no settings screen yet");
             }
             _ => {
                 App::hide_palette(app);
+                if let Some(kind) = widget_types::kind_for_action(id) {
+                    if let Err(e) = App::create_widget(app, kind) {
+                        eprintln!("canvas: create failed: {e}");
+                    }
+                    App::refresh_home(app);
+                    return;
+                }
                 let _ = app.borrow().store.set_open(id, true);
                 if let Err(e) = App::open_widget(app, id) {
                     eprintln!("canvas: open failed: {e}");
@@ -1760,7 +1750,9 @@ fn wire_calendar(app: &SharedApp, id: &str, window: &CalendarWindow) -> slint::T
 }
 #[cfg(test)]
 mod tests {
-    use super::{count_label, default_actions, ACTION_NEW_NOTE, ACTION_NEW_TODO, ACTION_SETTINGS};
+    use super::{built_types_model, count_label, default_actions, ACTION_SETTINGS};
+    use crate::widget_types;
+    use slint::Model;
 
     #[test]
     fn count_label_is_singular_plural_and_empty() {
@@ -1770,10 +1762,36 @@ mod tests {
     }
 
     #[test]
-    fn empty_query_offers_the_three_spec_actions() {
+    fn an_empty_query_offers_every_built_type_then_settings() {
         let rows = default_actions();
         let ids: Vec<String> = rows.iter().map(|r| r.id.to_string()).collect();
-        assert_eq!(ids, vec![ACTION_NEW_NOTE, ACTION_NEW_TODO, ACTION_SETTINGS]);
-        assert!(rows.iter().all(|r| r.meta.starts_with("CTRL+")));
+        let mut expected: Vec<String> = widget_types::BUILT
+            .iter()
+            .map(|t| widget_types::action_id(t.kind))
+            .collect();
+        expected.push(ACTION_SETTINGS.to_string());
+        assert_eq!(ids, expected);
+    }
+
+    #[test]
+    fn a_palette_row_icon_is_the_kind_the_glyph_map_keys_on() {
+        let rows = default_actions();
+        for (row, t) in rows.iter().zip(widget_types::BUILT) {
+            assert_eq!(row.icon, t.kind);
+        }
+    }
+
+    #[test]
+    fn home_and_the_palette_offer_the_same_list() {
+        let home: Vec<String> = built_types_model()
+            .iter()
+            .map(|t| t.kind.to_string())
+            .collect();
+        let palette: Vec<String> = default_actions()
+            .iter()
+            .filter_map(|r| widget_types::kind_for_action(&r.id).map(str::to_string))
+            .collect();
+        assert_eq!(home, palette);
+        assert_eq!(home.len(), widget_types::BUILT.len());
     }
 }
