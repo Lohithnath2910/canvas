@@ -100,7 +100,7 @@ export component PaletteWindow inherits Window {
         clip: true;
 
         IconSearch {
-            x: Layout.pad-doc;
+            x: Layout.pad-overlay;
             y: (Layout.palette-row-input - Layout.icon-size-palette) / 2;
             size: Layout.icon-size-palette;
             stroke-color: Palette.dim;
@@ -109,7 +109,7 @@ export component PaletteWindow inherits Window {
         if root.query == "": Text {
             x: Layout.query-x;
             y: 0;
-            width: parent.width - Layout.query-x - Layout.pad-doc;
+            width: parent.width - Layout.query-x - Layout.pad-overlay;
             height: Layout.palette-row-input;
             text: "TYPE A COMMAND";
             color: Palette.dim;
@@ -123,7 +123,7 @@ export component PaletteWindow inherits Window {
         query-input := TextInput {
             x: Layout.query-x;
             y: 0;
-            width: parent.width - Layout.query-x - Layout.pad-doc;
+            width: parent.width - Layout.query-x - Layout.pad-overlay;
             height: Layout.palette-row-input;
             text <=> root.query;
             single-line: true;
@@ -131,7 +131,7 @@ export component PaletteWindow inherits Window {
             color: Palette.text;
             selection-background-color: Palette.edge;
             selection-foreground-color: Palette.text;
-            text-cursor-width: 2px;
+            text-cursor-width: Layout.caret-w;
             font-family: Typography.interface-face;
             font-size: Typography.title-size;
             letter-spacing: Typography.title-tracking;
@@ -181,7 +181,7 @@ export component PaletteWindow inherits Window {
             }
 
             PaletteGlyph {
-                x: Layout.pad-doc;
+                x: Layout.pad-overlay;
                 y: (Layout.palette-row-result - Layout.icon-size-palette) / 2;
                 icon: row.icon;
                 stroke-color: i == root.selected ? Palette.text : Palette.dim;
@@ -190,7 +190,7 @@ export component PaletteWindow inherits Window {
             Text {
                 x: Layout.result-label-x;
                 y: 0;
-                width: parent.width - Layout.result-label-x - Layout.pad-doc - Layout.result-meta-w;
+                width: parent.width - Layout.result-label-x - Layout.pad-overlay - Layout.result-meta-w;
                 height: parent.height;
                 text: row.label;
                 color: Palette.text;
@@ -202,7 +202,7 @@ export component PaletteWindow inherits Window {
             }
 
             Text {
-                x: parent.width - Layout.pad-doc - Layout.result-meta-w;
+                x: parent.width - Layout.pad-overlay - Layout.result-meta-w;
                 y: 0;
                 width: Layout.result-meta-w;
                 height: parent.height;
@@ -232,7 +232,7 @@ export component PaletteWindow inherits Window {
             }
 
             Text {
-                x: Layout.pad-doc;
+                x: Layout.pad-overlay;
                 y: 0;
                 height: parent.height;
                 text: root.count-label;
@@ -245,7 +245,7 @@ export component PaletteWindow inherits Window {
             }
 
             Text {
-                x: parent.width - Layout.pad-doc - self.width;
+                x: parent.width - Layout.pad-overlay - self.width;
                 y: 0;
                 height: parent.height;
                 text: "UP/DOWN MOVE · ENTER OPEN · ESC CLOSE";

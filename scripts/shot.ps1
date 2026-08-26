@@ -1,7 +1,9 @@
 param(
     [string]$Out = "shot.png",
     [int]$Settle = 2500,
-    [string[]]$AppArgs = @()
+    [string[]]$AppArgs = @(),
+    [string]$Title = "Canvas",
+    [switch]$Arrange
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +18,9 @@ using System.Text;
 public class Win {
     [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int v);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int t, bool repaint);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr h);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -56,13 +61,24 @@ Start-Sleep -Milliseconds $Settle
 
 $shell = New-Object -ComObject Shell.Application
 try {
-    $wins = [Win]::VisibleTitled($proc.Id, "Canvas")
-    if ($wins.Count -eq 0) { throw "no visible window titled Canvas for pid $($proc.Id)" }
+    $wins = [Win]::VisibleTitled($proc.Id, $Title)
+    if ($wins.Count -eq 0) { throw "no visible window titled $Title for pid $($proc.Id)" }
 
     $shell.MinimizeAll()
     Start-Sleep -Milliseconds 900
     foreach ($h in $wins) { [void][Win]::ShowWindow($h, 9); [void][Win]::ShowWindow($h, 5) }
     Start-Sleep -Milliseconds 700
+
+    if ($Arrange) {
+        $x = 60
+        foreach ($h in $wins) {
+            $r = New-Object Win+RECT
+            [void][Win]::GetWindowRect($h, [ref]$r)
+            [void][Win]::MoveWindow($h, $x, 80, $r.R - $r.L, $r.B - $r.T, $true)
+            $x += ($r.R - $r.L) + 40
+        }
+        Start-Sleep -Milliseconds 500
+    }
 
     $vs = [System.Windows.Forms.SystemInformation]::VirtualScreen
     $bmp = New-Object System.Drawing.Bitmap $vs.Width, $vs.Height

@@ -61,9 +61,9 @@ component ItemRow inherits Rectangle {
         border-color: Palette.edge;
 
         edit-input := TextInput {
-            x: 6px;
+            x: Layout.edit-inset;
             y: 0;
-            width: parent.width - 12px;
+            width: parent.width - 2 * Layout.edit-inset;
             height: parent.height;
             text: root.item.text;
             single-line: true;
@@ -71,7 +71,7 @@ component ItemRow inherits Rectangle {
             color: Palette.text;
             selection-background-color: Palette.edge;
             selection-foreground-color: Palette.text;
-            text-cursor-width: 2px;
+            text-cursor-width: Layout.caret-w;
             font-family: Typography.body-face;
             font-size: Typography.body-size;
             init => { self.focus(); self.select-all(); }
@@ -162,7 +162,7 @@ export component TodoWindow inherits Window {
     property <length> confirm-h: Layout.confirm-band;
     property <length> footer-h: Layout.footer-band;
     property <length> compose-band: 2 * Layout.pad + Layout.checkbox-row-h;
-    property <length> list-top: Layout.header-band + 1px + Layout.pad;
+    property <length> list-top: Layout.body-top + Layout.pad;
     property <length> list-bottom: plate.height - root.footer-h - root.compose-band
         - (root.confirming-delete ? root.confirm-h : 0px);
 
@@ -274,7 +274,7 @@ export component TodoWindow inherits Window {
                 color: Palette.text;
                 selection-background-color: Palette.edge;
                 selection-foreground-color: Palette.text;
-                text-cursor-width: 2px;
+                text-cursor-width: Layout.caret-w;
                 font-family: Typography.body-face;
                 font-size: Typography.body-size;
                 accepted => {
@@ -423,7 +423,7 @@ export component TodoWindow inherits Window {
         }
 
         if root.editing-title: Rectangle {
-            x: Layout.title-x - 6px;
+            x: Layout.title-x - Layout.edit-inset;
             y: Layout.header-y;
             width: pin-btn.x - Layout.gap-m - self.x;
             height: Layout.header-h;
@@ -433,9 +433,9 @@ export component TodoWindow inherits Window {
             border-color: Palette.edge;
 
             title-input := TextInput {
-                x: 6px;
+                x: Layout.edit-inset;
                 y: 0;
-                width: parent.width - 12px;
+                width: parent.width - 2 * Layout.edit-inset;
                 height: parent.height;
                 text: root.note-title;
                 single-line: true;
@@ -443,7 +443,7 @@ export component TodoWindow inherits Window {
                 color: Palette.text;
                 selection-background-color: Palette.edge;
                 selection-foreground-color: Palette.text;
-                text-cursor-width: 2px;
+                text-cursor-width: Layout.caret-w;
                 font-family: Typography.interface-face;
                 font-size: Typography.title-size;
                 letter-spacing: Typography.title-tracking;

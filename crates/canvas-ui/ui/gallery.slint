@@ -23,6 +23,8 @@ export component GalleryWindow inherits Window {
     background: Palette.base;
     title: "Canvas — component gallery";
 
+    property <length> panel-w: 560px;
+
     in-out property <bool> box-rest: false;
     in-out property <bool> box-checked: true;
     in-out property <bool> box-done: true;
@@ -41,7 +43,7 @@ export component GalleryWindow inherits Window {
     Panel {
         x: Layout.pad;
         y: Layout.pad;
-        width: 560px - 2 * Layout.pad;
+        width: root.panel-w - 2 * Layout.pad;
         height: parent.height - 2 * Layout.pad;
         corner-radius: Layout.radius-plate;
 
@@ -136,7 +138,7 @@ export component GalleryWindow inherits Window {
     }
 
     demo := Panel {
-        x: 560px + Layout.pad;
+        x: root.panel-w + Layout.pad;
         y: Layout.pad;
         width: Layout.kanban-w;
         height: Layout.kanban-h;
@@ -181,7 +183,7 @@ export component GalleryWindow inherits Window {
 
         board := Rectangle {
             x: Layout.pad;
-            y: Layout.header-band + 1px + Layout.pad;
+            y: Layout.body-top + Layout.pad;
             width: parent.width - 2 * Layout.pad;
             height: parent.height - self.y - Layout.pad;
             clip: true;
@@ -228,7 +230,7 @@ export component GalleryWindow inherits Window {
                         x: Layout.kanban-card-pad;
                         y: Layout.kanban-card-pad;
                         width: parent.width - 2 * Layout.kanban-card-pad;
-                        height: 22px;
+                        height: Layout.checkbox-row-h;
                         vertical-alignment: center;
                         text: "Behind the sheet";
                         color: Palette.text;
@@ -243,7 +245,7 @@ export component GalleryWindow inherits Window {
             Text {
                 x: 0;
                 y: parent.height - Typography.label-line;
-                width: parent.width - 140px;
+                width: parent.width - Layout.result-meta-w - Layout.gap-m;
                 height: Typography.label-line;
                 vertical-alignment: center;
                 text: root.sheet-verdict;
@@ -270,7 +272,7 @@ export component GalleryWindow inherits Window {
 
         sheet := Sheet {
             x: 0;
-            base-y: Layout.header-band + 1px;
+            base-y: Layout.body-top;
             width: parent.width;
             height: parent.height - Layout.header-band - 1px;
             open: root.sheet-open;

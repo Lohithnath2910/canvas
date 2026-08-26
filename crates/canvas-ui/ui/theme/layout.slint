@@ -1,6 +1,6 @@
 export global Layout {
     out property <length> pad: 16px;
-    out property <length> pad-doc: 24px;
+    out property <length> pad-overlay: 24px;
 
     out property <length> header-h: 32px;
     out property <length> header-y: 8px;
@@ -11,12 +11,14 @@ export global Layout {
     out property <length> dot-gap: 4px;
     out property <length> strip-w: 56px;
     out property <length> strip-h: 8px;
-    out property <length> title-x: 84px;
+    out property <length> title-x: root.pad + root.strip-w + root.gap-m;
+    out property <length> body-top: root.header-band + 1px;
 
     out property <length> icon-size: 16px;
     out property <length> icon-size-palette: 24px;
     out property <length> icon-stroke: 1.5px;
     out property <length> icon-gap: 8px;
+    out property <length> gap-xs: 2px;
     out property <length> gap-m: 12px;
     out property <length> cluster-w: 64px;
 
@@ -72,6 +74,7 @@ export global Layout {
     out property <length> sheet-footer-h: 67px;
 
     out property <length> button-h: 34px;
+    out property <length> button-pad-x: 16px;
     out property <length> confirm-band: 78px;
 
     out property <length> field-h: 40px;
@@ -81,6 +84,10 @@ export global Layout {
     out property <length> scroll-gutter: 8px;
     out property <length> scroll-thumb-w: 4px;
     out property <length> scroll-thumb-min: 24px;
+
+    out property <length> caret-w: 2px;
+    out property <length> edit-inset: 6px;
+    out property <length> home-row-h: 56px;
 
     out property <length> focus-width: 2px;
     out property <length> focus-offset: 2px;

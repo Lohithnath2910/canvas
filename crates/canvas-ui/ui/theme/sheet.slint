@@ -75,7 +75,7 @@ export component Sheet inherits Rectangle {
             x: Layout.pad - Layout.ring;
             y: 0;
             width: parent.width - 2 * Layout.pad - Layout.scroll-gutter + Layout.ring;
-            height: parent.height - Layout.field-gap;
+            height: parent.height - Layout.pad;
             viewport-height: max(fields.preferred-height, self.height);
 
             fields := VerticalLayout {

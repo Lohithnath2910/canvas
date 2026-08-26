@@ -1,9 +1,10 @@
 
 import { Palette } from "palette.slint";
 import { Motion, Ease } from "motion.slint";
+import { Layout } from "layout.slint";
 
 export component Panel inherits Rectangle {
-    in property <length> corner-radius: 20px;
+    in property <length> corner-radius: Layout.radius-plate;
     in property <bool> dragging: false;
 
     in property <int> tone: 0;

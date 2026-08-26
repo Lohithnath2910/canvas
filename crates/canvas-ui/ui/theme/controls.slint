@@ -79,7 +79,7 @@ export component Button inherits Rectangle {
     property <bool> hovered: touch.has-hover && root.enabled;
 
     height: Layout.button-h;
-    width: text-label.width + 32px;
+    width: text-label.width + 2 * Layout.button-pad-x;
     border-radius: Layout.radius-control;
     border-width: 1px;
 
@@ -101,7 +101,7 @@ export component Button inherits Rectangle {
     animate background { duration: Motion.press; easing: Ease.standard; }
 
     text-label := Text {
-        x: 16px;
+        x: Layout.button-pad-x;
         y: (parent.height - self.height) / 2;
         text: root.label;
         color: root.is-destructive
@@ -380,7 +380,7 @@ export component TextField inherits Rectangle {
                 color: Palette.text;
                 selection-background-color: Palette.edge;
                 selection-foreground-color: Palette.text;
-                text-cursor-width: 2px;
+                text-cursor-width: Layout.caret-w;
                 font-family: Typography.body-face;
                 font-size: Typography.body-size;
                 edited => { root.edited(self.text); }

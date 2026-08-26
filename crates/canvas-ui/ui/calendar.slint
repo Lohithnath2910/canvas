@@ -92,7 +92,7 @@ export component CalendarWindow inherits Window {
 
         grid := Rectangle {
             x: Layout.pad;
-            y: Layout.header-band + 1px + Layout.pad;
+            y: Layout.body-top + Layout.pad;
             width: root.grid-w;
             height: parent.height - self.y - Layout.pad
                 - (root.confirming-delete ? root.confirm-h : 0px);
@@ -163,7 +163,6 @@ export component CalendarWindow inherits Window {
                 text: "NOTHING HERE YET";
                 color: Palette.text;
                 opacity: Layout.placeholder-opacity;
-                horizontal-alignment: center;
                 font-family: Typography.body-face;
                 font-size: Typography.body-size;
                 overflow: elide;
@@ -256,7 +255,7 @@ export component CalendarWindow inherits Window {
         }
 
         if root.editing-title: Rectangle {
-            x: Layout.title-x - 6px;
+            x: Layout.title-x - Layout.edit-inset;
             y: Layout.header-y;
             width: pin-btn.x - Layout.gap-m - self.x;
             height: Layout.header-h;
@@ -266,9 +265,9 @@ export component CalendarWindow inherits Window {
             border-color: Palette.edge;
 
             title-input := TextInput {
-                x: 6px;
+                x: Layout.edit-inset;
                 y: 0;
-                width: parent.width - 12px;
+                width: parent.width - 2 * Layout.edit-inset;
                 height: parent.height;
                 text: root.note-title;
                 single-line: true;
@@ -276,7 +275,7 @@ export component CalendarWindow inherits Window {
                 color: Palette.text;
                 selection-background-color: Palette.edge;
                 selection-foreground-color: Palette.text;
-                text-cursor-width: 2px;
+                text-cursor-width: Layout.caret-w;
                 font-family: Typography.interface-face;
                 font-size: Typography.title-size;
                 letter-spacing: Typography.title-tracking;

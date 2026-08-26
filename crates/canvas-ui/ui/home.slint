@@ -37,7 +37,7 @@ component Row inherits Rectangle {
     callback activated();
     callback delete-requested();
 
-    height: 56px;
+    height: Layout.home-row-h;
 
     out property <bool> hovered: touch.has-hover;
 
@@ -45,6 +45,7 @@ component Row inherits Rectangle {
     property <length> glyph-x: Layout.pad + root.dots-w + Layout.gap-m;
     property <length> text-x: root.glyph-x + Layout.icon-size + Layout.gap-m;
     property <length> tail: Layout.pad + Layout.icon-size + Layout.gap-m;
+    property <length> stack-h: 2 * Typography.label-line + Layout.gap-xs;
 
     background: (touch.has-hover || focus.has-focus)
         ? Palette.elev-raised
@@ -103,9 +104,10 @@ component Row inherits Rectangle {
 
     VerticalLayout {
         x: root.text-x;
-        y: 10px;
+        y: (parent.height - root.stack-h) / 2;
         width: parent.width - self.x - root.tail;
-        spacing: 2px;
+        height: root.stack-h;
+        spacing: Layout.gap-xs;
 
         Text {
             text: root.item.title;
@@ -264,13 +266,13 @@ export component HomeWindow inherits Window {
 
         if root.rows.length == 0: Rectangle {
             x: Layout.pad;
-            y: Layout.header-band + 1px;
+            y: Layout.body-top;
             width: parent.width - 2 * Layout.pad;
             height: parent.height - self.y - Layout.footer-band;
 
             empty-title := Text {
                 x: 0;
-                y: (parent.height - self.height - 12px - empty-hint.height) / 2;
+                y: (parent.height - self.height - Layout.gap-m - empty-hint.height) / 2;
                 width: parent.width;
                 text: "NOTHING HERE YET";
                 color: Palette.text;
@@ -284,7 +286,7 @@ export component HomeWindow inherits Window {
 
             empty-hint := Text {
                 x: 0;
-                y: empty-title.y + empty-title.height + 12px;
+                y: empty-title.y + empty-title.height + Layout.gap-m;
                 width: parent.width;
                 text: "Press Ctrl+K, or pick a type below.";
                 color: Palette.dim;
@@ -297,7 +299,7 @@ export component HomeWindow inherits Window {
 
         if root.rows.length > 0: Rectangle {
             x: 0;
-            y: Layout.header-band + 1px;
+            y: Layout.body-top;
             width: parent.width;
             height: parent.height - self.y - Layout.footer-band;
 

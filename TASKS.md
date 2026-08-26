@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-25` — the whole-app alignment pass. Commit `SW-25 (1/2)` landed the token work across all seven plates; what is left is the evidence half of the DoD, a `scripts/shot.ps1` screenshot and a written measurement line per surface. Then **Stage W2** in order: SW-19, SW-20, SW-21, SW-13, SW-14.
+**Current task:** `SW-21`, but **the drag fix first and on its own** — the user named it directly on 2026-08-26: *"kanban bvoard was resisting moving things around"*. The root cause is already known and is `S1-51`'s bug: the card's `TouchArea` moves with the card. Then `SW-19` (pickers), then `SW-20` and the rest of `SW-21` (the editors), then `SW-13`/`SW-14` (Spreadsheet).
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 30 ticked. 160 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 31 ticked. 161 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -1851,7 +1851,7 @@ folded into the two tasks below; the questions are closed.
   once it went. A new test, `the_removed_document_kind_is_inert_rather_than_a_panic`, holds
   the fall-through the entry asked for.
 
-- [ ] **SW-25 · Alignment and border pass over every surface in the app** — `L`
+- [x] **SW-25 · Alignment and border pass over every surface in the app** — `L`
   Needs: nothing, but it wants **SW-23**'s `--open-kind` and the screenshot recipe.
   **The user, mid-run on 2026-08-26, looking at two screenshots of the `Sheet`:**
   > *"you see the alignment and the borders etc etc"* … *"all the alignments go through once
@@ -1890,6 +1890,17 @@ folded into the two tasks below; the questions are closed.
     border with no visual break
   *DoD:* a screenshot of every surface, a written line per surface saying what was measured
   against which token, and no number introduced that is not already in §5.
+  **Done 2026-08-26, in two commits, every surface photographed with `scripts/shot.ps1`.**
+  The per-surface measurement lines are in `progress.md`'s entry for the day. Two defects the
+  entry named were found still live and are now fixed and watched: the `Sheet`'s bottom field
+  was sliced through its own border by the footer hairline (the break is `Layout.pad` now, not
+  `field-gap`, and the field's border reappears), and home's row text stack had no explicit
+  height, so the `VerticalLayout` stretched to the full 56px row and distributed the slack —
+  the two lines sat 18px apart instead of the `gap-xs` 2px the token asked for.
+  **Two numbers are named rather than corrected**, because correcting them is a visual change
+  the user has not seen: `Layout.edit-inset` is 6px and `Layout.home-row-h` is 56px, neither of
+  which is on §5.3's 8px scale. They ship as they were; the tokens exist so a future change is
+  one edit.
 
 ### Wh — sign-off
 
