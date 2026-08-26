@@ -54,6 +54,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         doc.add_event(title, start, start + minutes * MINUTE_MS);
     }
 
+    if std::env::args().any(|a| a == "--now") {
+        let start = now - 10 * MINUTE_MS;
+        let (id, _) = doc.add_event("happening now", start, start + 30 * MINUTE_MS);
+        doc.set_location(&id, "Demo room");
+        doc.set_notes(
+            &id,
+            "seeded by --now so the live chip and the NOW bar can be seen",
+        );
+    }
+
     store.save_document(&row.id, &doc.snapshot(), &doc.state_vector())?;
 
     println!(

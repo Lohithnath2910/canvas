@@ -74,6 +74,7 @@ component FaceCell inherits Rectangle {
 export component TimePicker inherits Rectangle {
     in-out property <int> minute-of-day: 0;
     in property <string> save-label: "OK";
+    in property <bool> chrome: true;
     callback accepted();
     callback cancelled();
 
@@ -92,7 +93,8 @@ export component TimePicker inherits Rectangle {
     property <length> hand-r: (!root.on-minutes && root.hour >= 12) ? root.inner-r : root.outer-r;
 
     width: Layout.picker-face;
-    height: root.readout-h + Layout.pad + Layout.picker-face + Layout.pad + Layout.button-h;
+    height: root.readout-h + Layout.pad + Layout.picker-face
+        + (root.chrome ? Layout.pad + Layout.button-h : 0px);
     background: Colors.transparent;
 
     public function show-hours() { root.on-minutes = false; }
@@ -203,7 +205,7 @@ export component TimePicker inherits Rectangle {
         }
     }
 
-    HorizontalLayout {
+    if root.chrome: HorizontalLayout {
         x: 0;
         y: parent.height - Layout.button-h;
         width: parent.width;
@@ -223,6 +225,7 @@ export component TimePicker inherits Rectangle {
             clicked => { root.accepted(); }
         }
     }
+
 }
 
 export component DatePicker inherits Rectangle {
@@ -232,6 +235,7 @@ export component DatePicker inherits Rectangle {
     in property <[DayCell]> days: [];
     in-out property <int> selected-day: 0;
     in property <string> save-label: "OK";
+    in property <bool> chrome: true;
     callback month-stepped(int);
     callback accepted();
     callback cancelled();
@@ -242,8 +246,8 @@ export component DatePicker inherits Rectangle {
     property <length> grid-h: 6 * Layout.picker-row-h;
 
     width: Layout.picker-face;
-    height: root.head-h + 1px + root.nav-h + root.nav-h + root.grid-h
-        + Layout.pad + Layout.button-h;
+    height: root.head-h + 1px + 2 * root.nav-h + root.grid-h
+        + (root.chrome ? Layout.pad + Layout.button-h : 0px);
     background: Colors.transparent;
 
     Text {
@@ -379,7 +383,7 @@ export component DatePicker inherits Rectangle {
         }
     }
 
-    HorizontalLayout {
+    if root.chrome: HorizontalLayout {
         x: 0;
         y: parent.height - Layout.button-h;
         width: parent.width;
@@ -398,5 +402,89 @@ export component DatePicker inherits Rectangle {
             variant: ButtonVariant.primary;
             clicked => { root.accepted(); }
         }
+    }
+}
+
+
+export component PickerField inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <bool> enabled: true;
+    callback picked();
+
+    height: Typography.label-line + Layout.field-gap + Layout.field-h;
+    background: Colors.transparent;
+
+    Text {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: Typography.label-line;
+        vertical-alignment: center;
+        text: root.label;
+        color: Palette.dim;
+        font-family: Typography.interface-face;
+        font-size: Typography.label-size;
+        letter-spacing: Typography.label-tracking;
+        wrap: no-wrap;
+    }
+
+    box := Rectangle {
+        x: 0;
+        y: Typography.label-line + Layout.field-gap;
+        width: parent.width;
+        height: Layout.field-h;
+        border-radius: Layout.radius-control;
+        border-width: 1px;
+        border-color: (touch.has-hover || focus.has-focus) ? Palette.dim : Palette.edge;
+        background: Palette.elev-recessed;
+        animate border-color { duration: Motion.hover; easing: Ease.standard; }
+
+        Text {
+            x: Layout.field-pad-x;
+            y: 0;
+            width: parent.width - 2 * Layout.field-pad-x;
+            height: parent.height;
+            vertical-alignment: center;
+            text: root.value;
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            clicked => { root.picked(); }
+        }
+    }
+
+    focus := FocusScope {
+        x: 0;
+        y: box.y;
+        width: 0px;
+        height: box.height;
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.picked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: -Layout.ring;
+        y: box.y - Layout.ring;
+        width: parent.width + 2 * Layout.ring;
+        height: box.height + 2 * Layout.ring;
+        background: Colors.transparent;
+        border-width: Layout.focus-width;
+        border-color: Palette.text;
+        border-radius: Layout.radius-control + Layout.ring;
     }
 }

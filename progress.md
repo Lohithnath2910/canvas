@@ -50,47 +50,43 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**`SW-24`, `SW-25`, `SW-21a` (the drag) and `SW-19` are done. Next is `SW-20`.**
+**Stage W2 is nearly closed. `SW-24`, `SW-25`, `SW-21a`, `SW-19` and `SW-20` are all done.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **SW-20** — Calendar editor, live event, info bar | The user asked for it directly: *"the calendar and kanban board need entry stuff like thats why component gallery exists i think"* — and they are right, the gallery's `Sheet` demo is the prototype. Both prerequisites now exist: `SW-18`'s `Sheet` and `SW-19`'s pickers. **Read the ⚠ hit-testing note in its entry before writing the click handler** — one `TouchArea` per day column, resolve chip-vs-empty in Rust |
-| 2 | **SW-21**, the card editor half | Same `Sheet`, same pickers. The drag half is already done as `SW-21a` |
-| 3 | **SW-13 / SW-14** — Spreadsheet | **Not built at all.** The user asked on 2026-08-26 whether it was, and the answer was no |
-
-**Then the VERIFICATION QUEUE walk-through**, which the user asked for directly and which is
-gated on the above. It is now three items longer, and the first two are the newest: the Kanban
-card drag (`SW-21a`) and the two pickers (`SW-19`).
+| 1 | **SW-21**, the card editor half only | The drag shipped as `SW-21a` and the column header was fixed in `SW-25`. What is left is the four-field card sheet — `title`, `assignee`, `due date`, `description` — on `SW-18`'s `Sheet` and `SW-19`'s pickers. **`KanbanDoc` needs a `description` field adding**; it already has `set_title`/`set_assignee`/`set_due`. Copy `SW-20`'s two-mode sheet: it is the same shape with one picker instead of two |
+| 2 | **SW-13 / SW-14** — Spreadsheet | **Not built at all.** The user asked on 2026-08-26 whether it was and the answer was no. Open questions 5, 6 and 7 are answered in the entries |
+| 3 | **The VERIFICATION QUEUE walk-through** | The user asked for this directly, it is gated on the above, and it is now **four blocks longer** than when they asked: the Kanban drag, the two pickers, the Calendar editor, and everything that was already in it |
 
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
-That is a condition on every remaining Stage W2 task, not a separate audit at the end.
+That is a condition on every remaining task, not an audit at the end.
 **The RAM half is measured and it passes** — 22.0 MB idle, 31.9 MB with all four types open,
-against §2's 20–40 idle and < 50 total. See the entry below. **The smoothness half is still
-open** and needs a release build in front of the user; open question 12.
+against §2's 20–40 idle and < 50 total. **The smoothness half still needs a release build in
+front of the user**; open question 12.
 
-Closed in Stage W2 so far: `SW-22` (typing survives past one character — the lock is
+Closed in Stage W2: `SW-22` (typing survives past one character — the lock is
 `rows_locked_by_editor`; read its entry before writing any other repeater), `SW-23`
-(`--open-kind`, watched), `SW-18` (the `Sheet` — read its **two caller contracts** before
-building any editor on it), `SW-24` (the `document` type is gone), `SW-25` (the alignment pass,
-every surface photographed), `SW-21a` (the card drag no longer fights the pointer),
-`SW-19` (the pickers — arithmetic ✅ by 13 tests, the two faces 🟡).
+(`--open-kind`), `SW-18` (the `Sheet` — read its **two caller contracts** before building any
+editor on it), `SW-24` (the `document` type is gone), `SW-25` (the alignment pass, every surface
+photographed), `SW-21a` (the card drag no longer fights the pointer), `SW-19` (pickers —
+arithmetic ✅ by 13 tests, faces 🟡), `SW-20` (Calendar — live chip and info bar ✅ photographed,
+editor sheet 🟡).
 
 **`SW-12` (Whiteboard) is parked at the user's request** — *"for now ignore whiteboard"*.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
 
-**⚠ Run `git status` before believing this file.** The run of 2026-08-26 left a complete,
-compiling SW-25 pass across nine `.slint` files uncommitted while its own log said the tree was
-clean. It was nearly lost. A run that stops on a usage limit can stop between the code and the
-commit, and nothing in this protocol catches that except looking.
+### Four things that will bite, all already paid for once
 
-**⚠ Never use `perl -0pi -e` with `\x{...}` escapes on these files.** Without `-CSD` Perl reads
-the file as latin-1 and writes it back as UTF-8, which double-encodes **every** existing
-accented character, em dash and emoji in the whole file. It happened once on `TASKS.md` on
-2026-08-26 and cost a `git checkout` and a redo. Write the replacement text into a temp file and
-splice it with `awk` on line numbers instead.
+0. **Run `git status` before believing this file.** The run of 2026-08-26 left a complete,
+   compiling SW-25 pass across nine `.slint` files uncommitted while its own log said the tree
+   was clean. It was nearly lost. A run that stops on a usage limit can stop between the code
+   and the commit, and nothing in this protocol catches that except looking.
+   **And never use `perl -0pi -e` with `\x{...}` escapes on these markdown files** — without
+   `-CSD` Perl reads latin-1 and writes UTF-8, double-encoding every em dash and emoji in the
+   whole file. It happened once, on `TASKS.md`, and cost a `git checkout` and a redo. Write the
+   replacement into a temp file and splice it with `awk` on line numbers.
 
-### Three things that will bite, all already paid for once
 
 1. **A repeater rebuild under a live caret kills typing.** Fixed for the Kanban and the
    Todo in `SW-22`: `rows_locked_by_editor` makes `refresh_todo`/`refresh_kanban` return
@@ -2754,3 +2750,65 @@ how you want but style should be matching our app"* — that interaction, none o
   timestamp print in the readout line under the date grid. That line is the round-trip made
   visible — it prints the epoch millis *and* the value converted back — and it is the fastest
   way to confirm by eye what the tests already assert.
+
+### 2026-08-27 — SW-20: the Calendar becomes usable
+
+The user's brief, answering open question 10: *"they should be able to click on a day or
+something and then it should open a popup ... name, timings, location etc etc all important
+stuff ... we can have sparky or highlighted card if currently that is going on ... at the top or
+bottom of the widget we can see the info, like name, timings and what time is left"*.
+
+- ✅ **`CalendarDoc` gained `location` and `notes`**, exactly as the task authorised, over one
+  private `set_string`. `attendees` stays in the document unused — §11.3 names it and Stage 3
+  will want it. **7 new tests, 113 in `canvas-doc`.** The one that matters most is
+  `an_event_written_before_these_fields_existed_reads_as_empty`: it hand-builds a map with only
+  the four original keys, asserts it loads with empty strings, and asserts a later
+  `set_location` still lands. **A document written by yesterday's build is not corrupted by
+  today's.** Another asserts two peers setting `location` and `notes` concurrently converge.
+- ✅ **The live event, photographed.** `insert_calendar --now` seeds one event from `now − 10min`
+  to `now + 20min`, which is the only way this session could see the state at all. The chip
+  renders with a **`signal` 3×3 dot at its leading edge and its border stepped from `edge` to
+  `text`** — that is **override 15** and it is the third and last place red appears in this
+  product. Do not extend it.
+  **One defect the first photograph caught:** the dot was inset by `icon-gap − hand-dot` and the
+  text pushed right by `dot-gap` on top of the existing `icon-gap`, which left the live chip
+  ~4px narrower than the others and elided `23:46` to `23:…`. The dot sits at `dot-gap` now and
+  the label starts at `2 * dot-gap + hand-dot`, so a live chip has *marginally more* label room
+  than a dead one rather than less. Re-shot: `23:48` renders in full.
+- ✅ **The info bar, photographed.** It reads `NOW · HAPPENING NOW · 23:48–00:18 · 20 MIN LEFT`,
+  in the Todo's footer slot — 1px `edge` rule, `header-h` band above the plate's 16px padding —
+  so the two widgets agree, which is what the entry asked for. `NOW` at `text` while something
+  runs, `NEXT UP` at `dim` when nothing does, `NOTHING SCHEDULED` for an empty week; nothing
+  moves and nothing else recolours between the states.
+  **One wording decision:** the third part reads `20 MIN LEFT` while running and `IN 20 MIN`
+  when it is the next one up. *"The same three parts"* cannot literally mean `MIN LEFT` for an
+  event that has not started.
+  **It ticks.** The existing 700ms poll now also refreshes when the wall-clock minute changes,
+  tracked in a `Cell` — so the number is never stale, and a 700ms timer does not repaint the
+  widget 85 times a minute to say the same thing.
+- ✅ **Hit-testing, done the way the ⚠ demanded.** Seven `TouchArea`s, one per day column,
+  disjoint, gated `!sheet-open && !confirming-delete` per SW-18's contract 2. Chips carry **no
+  `TouchArea` at all** — they are paint. §13.3 has nothing to bite here.
+  **What the entry left open was how Rust resolves chip-vs-empty, and the answer is: in time
+  space, not pixel space.** The column reports a y fraction, Rust turns it into a minute of the
+  day, and an event is hit when that minute is in `[start, end)`. A chip is *drawn* at a minimum
+  bucket height (§10.4) so its pixels are taller than its span, and Rust has no pixel heights
+  anyway. The consequence is deliberate: clicking where a chip is drawn but outside its real
+  span creates a new event at that time. That is the more useful of the two behaviours.
+- 🟡 **The editor sheet. Written, compiling, NOT watched — it cannot be opened without a click.**
+  Five fields plus two full pickers is ~1100px of content against a 360px plate, so **the sheet
+  has two modes.** Mode 0 is the field list — `NAME`, `START`, `END`, `LOCATION`, `NOTES` — where
+  `START` and `END` are a new **`PickerField`**: a read-only box shaped exactly like a
+  `TextField`'s input, with its own focus ring and `Enter`/`Space` activation. Tapping one swaps
+  the sheet's body for the `DatePicker` + `TimePicker` pair, and the sheet's own footer becomes
+  `OK` / `CANCEL` and returns to mode 0. **`chrome: false`** on both pickers suppresses their own
+  footer so there is never a second button pair on screen — that property is why `SW-19` built
+  the footer as a switch rather than a fixture.
+  Nothing touches the document until `SAVE`. The draft is one `Rc<RefCell<EventDraft>>` in
+  `wire_calendar`, and moving `START` carries `END` with it by the old duration.
+  A click on empty space pre-fills `start` at the clicked time **rounded down to 30 minutes** and
+  `end` at +1 hour; a click on an existing event opens the same sheet on it with `DELETE EVENT`
+  shown. Saving a nameless event stores `UNTITLED` rather than an empty title.
+
+**What is left for the user's hands** is in the VERIFICATION QUEUE: clicking a day to create,
+clicking a chip to edit, the two picker modes, delete, and a restart to prove it persisted.

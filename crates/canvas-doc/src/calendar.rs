@@ -10,6 +10,8 @@ pub struct CalendarEvent {
     pub title: String,
     pub start: i64,
     pub end: i64,
+    pub location: String,
+    pub notes: String,
     pub attendees: Vec<String>,
 }
 
@@ -61,6 +63,8 @@ impl CalendarDoc {
                 title: string_field(&txn, &map, "title"),
                 start: int_field(&txn, &map, "start"),
                 end: int_field(&txn, &map, "end"),
+                location: string_field(&txn, &map, "location"),
+                notes: string_field(&txn, &map, "notes"),
                 attendees: list_field(&txn, &map, "attendees"),
             });
         }
@@ -92,6 +96,8 @@ impl CalendarDoc {
                 ("title", Any::String(title.into())),
                 ("start", Any::BigInt(start)),
                 ("end", Any::BigInt(end.max(start))),
+                ("location", Any::String("".into())),
+                ("notes", Any::String("".into())),
                 ("attendees", Any::Array(Vec::new().into())),
             ]),
         );
@@ -117,6 +123,24 @@ impl CalendarDoc {
         }
         target.insert(&mut txn, "start", Any::BigInt(start));
         target.insert(&mut txn, "end", Any::BigInt(end));
+        Some(txn.encode_update_v1())
+    }
+
+    pub fn set_location(&self, id: &str, location: &str) -> Option<Vec<u8>> {
+        self.set_string(id, "location", location)
+    }
+
+    pub fn set_notes(&self, id: &str, notes: &str) -> Option<Vec<u8>> {
+        self.set_string(id, "notes", notes)
+    }
+
+    fn set_string(&self, id: &str, key: &str, value: &str) -> Option<Vec<u8>> {
+        let mut txn = self.doc.transact_mut();
+        let target = find_map(&txn, &self.events_ref, id)?;
+        if string_field(&txn, &target, key) == value {
+            return None;
+        }
+        target.insert(&mut txn, key, Any::String(value.into()));
         Some(txn.encode_update_v1())
     }
 
@@ -446,5 +470,112 @@ mod tests {
         assert_eq!(doc.events()[0].title, "héllo 🎉🎉");
         doc.set_title(&id, "");
         assert_eq!(doc.events()[0].title, "");
+    }
+}
+
+#[cfg(test)]
+mod location_and_notes {
+    use super::*;
+
+    const HOUR: i64 = 3_600_000;
+
+    #[test]
+    fn a_new_event_has_an_empty_location_and_notes() {
+        let doc = CalendarDoc::new();
+        doc.add_event("stand-up", HOUR, 2 * HOUR);
+        let event = &doc.events()[0];
+        assert_eq!(event.location, "");
+        assert_eq!(event.notes, "");
+    }
+
+    #[test]
+    fn location_and_notes_round_trip_through_a_snapshot() {
+        let doc = CalendarDoc::new();
+        let (id, _) = doc.add_event("review", HOUR, 2 * HOUR);
+        doc.set_location(&id, "Demo room");
+        doc.set_notes(&id, "Bring the strip spec\nand the artboard");
+
+        let reloaded = CalendarDoc::load(&doc.snapshot());
+        let event = &reloaded.events()[0];
+        assert_eq!(event.location, "Demo room");
+        assert_eq!(event.notes, "Bring the strip spec\nand the artboard");
+        assert_eq!(event.title, "review");
+    }
+
+    #[test]
+    fn setting_the_same_value_twice_produces_no_update() {
+        let doc = CalendarDoc::new();
+        let (id, _) = doc.add_event("review", HOUR, 2 * HOUR);
+        assert!(doc.set_location(&id, "Demo room").is_some());
+        assert!(doc.set_location(&id, "Demo room").is_none());
+        assert!(doc.set_notes(&id, "").is_none());
+        assert!(doc.set_notes(&id, "x").is_some());
+    }
+
+    #[test]
+    fn setting_a_field_on_a_missing_event_is_none_not_a_panic() {
+        let doc = CalendarDoc::new();
+        assert!(doc.set_location("nope", "anywhere").is_none());
+        assert!(doc.set_notes("nope", "anything").is_none());
+    }
+
+    #[test]
+    fn an_event_written_before_these_fields_existed_reads_as_empty() {
+        let old = CalendarDoc::new();
+        {
+            let mut txn = old.doc.transact_mut();
+            let len = old.events_ref.len(&txn);
+            old.events_ref.insert(
+                &mut txn,
+                len,
+                MapPrelim::from([
+                    ("id", Any::String("legacy".into())),
+                    ("title", Any::String("from an older build".into())),
+                    ("start", Any::BigInt(HOUR)),
+                    ("end", Any::BigInt(2 * HOUR)),
+                ]),
+            );
+        }
+
+        let reloaded = CalendarDoc::load(&old.snapshot());
+        let event = &reloaded.events()[0];
+        assert_eq!(event.title, "from an older build");
+        assert_eq!(event.location, "");
+        assert_eq!(event.notes, "");
+        assert!(event.attendees.is_empty());
+
+        assert!(reloaded.set_location("legacy", "added later").is_some());
+        assert_eq!(reloaded.events()[0].location, "added later");
+    }
+
+    #[test]
+    fn the_two_fields_are_independent() {
+        let doc = CalendarDoc::new();
+        let (id, _) = doc.add_event("review", HOUR, 2 * HOUR);
+        doc.set_location(&id, "Room A");
+        doc.set_notes(&id, "note");
+        doc.set_location(&id, "Room B");
+        let event = &doc.events()[0];
+        assert_eq!(event.location, "Room B");
+        assert_eq!(event.notes, "note");
+    }
+
+    #[test]
+    fn two_peers_setting_different_fields_converge() {
+        let a = CalendarDoc::new();
+        let (id, add) = a.add_event("review", HOUR, 2 * HOUR);
+        let b = CalendarDoc::new();
+        assert!(b.apply_update(&add));
+
+        let from_a = a.set_location(&id, "Room A").unwrap();
+        let from_b = b.set_notes(&id, "b's note").unwrap();
+        assert!(b.apply_update(&from_a));
+        assert!(a.apply_update(&from_b));
+
+        for doc in [&a, &b] {
+            let event = &doc.events()[0];
+            assert_eq!(event.location, "Room A");
+            assert_eq!(event.notes, "b's note");
+        }
     }
 }

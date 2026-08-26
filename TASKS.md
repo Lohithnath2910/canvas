@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-26
-**Current task:** `SW-20` — the Calendar editor, live event and info bar, on `SW-18`'s `Sheet` and `SW-19`'s pickers. Then `SW-21`'s card editor. Then `SW-13`/`SW-14` (Spreadsheet, not started). `SW-21a` (the Kanban drag) and `SW-19`'s two picker faces are 🟡 at the top of the VERIFICATION QUEUE.
+**Current task:** `SW-21`'s card editor — the last piece of Stage W2 before the Spreadsheet. The drag half shipped as `SW-21a`. Then `SW-13`/`SW-14` (Spreadsheet, not started at all). `SW-21a`, `SW-19`'s two picker faces and `SW-20`'s editor sheet are all 🟡 at the top of the VERIFICATION QUEUE.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 31 ticked. 174 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 31 ticked. 181 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -135,6 +135,25 @@ board has zero cards and this session cannot synthesise a drag.
       no longer writes a CRDT update
 - [ ] Drag with the pointer well outside the board, then release — the card must not vanish
       or land in a column that was never outlined
+
+**The Calendar editor, `SW-20`** — seed a week first so there is something to click:
+`cargo run -p canvas-app --example insert_calendar -- --now`, then
+`cargo run -p canvas-app -- --open-kind calendar`. The live chip and the info bar are already
+photographed and confirmed; everything below is the sheet, which needs a click.
+- [ ] Click empty space in a day column — the sheet slides over the plate below the header, with
+      `START` pre-filled to the clicked time rounded down to the half hour and `END` at +1 hour
+- [ ] Type a name, press **SAVE** — a chip appears on that day at that height, and the info bar
+      updates if the event is the next one up
+- [ ] Click the chip you just made — the same sheet reopens on it, with `DELETE EVENT` now shown
+- [ ] Tap `START` — the body becomes the date grid and the clock. Pick a day and a time, press
+      **OK** — you land back on the field list with both `START` and `END` moved, `END` keeping
+      the same duration
+- [ ] Press **CANCEL** inside a picker — it must return to the field list, **not** close the sheet
+- [ ] Press `Esc` on the field list — the sheet closes and nothing is written
+- [ ] **DELETE EVENT** — the chip goes and the info bar recomputes
+- [ ] Close the widget and reopen it — every event, its location and its notes are still there
+- [ ] While the sheet is open, click where a day column is underneath it — **nothing must
+      happen.** That is SW-18's contract 2 and it has been got wrong once already
 
 **The pickers, `SW-19`** — `cargo run -p canvas-app -- --gallery`, third column. Photographed,
 never clicked.
@@ -1751,6 +1770,41 @@ would otherwise be re-introduced three more times.
   *DoD:* create an event by clicking a day, it lands on the right day at the right height,
   survives a restart, is editable and deletable from the same sheet; a currently-running
   event shows the red dot and the outline; the bar counts down and flips to `NEXT UP`.
+
+  **Built 2026-08-26/27. The live event and the info bar are ✅ photographed; the editor sheet
+  is 🟡 — it cannot be opened without a click.**
+  `CalendarDoc` gained `location` and `notes` as the entry says, with `set_location`/`set_notes`
+  over one private `set_string`. `attendees` stays. **7 new tests, 113 in `canvas-doc`**, and one
+  of them matters more than the rest: `an_event_written_before_these_fields_existed_reads_as_empty`
+  builds a map with only the four old keys and asserts it loads with empty strings and still
+  takes a later `set_location` — so a document written by the previous build is not corrupted by
+  this one. Another asserts two peers setting `location` and `notes` concurrently converge.
+  **Hit-testing followed the ⚠ exactly: one `TouchArea` per day column**, seven of them, disjoint,
+  gated on `!sheet-open && !confirming-delete`. Chips carry **no** `TouchArea` at all — they are
+  paint. The column reports `(column index, y fraction)` and **Rust decides chip-vs-empty**.
+  **How Rust decides, which the entry left open:** the fraction becomes a minute of the day, and
+  an event is hit when that minute falls in `[start, end)`. Deliberately **time space, not pixel
+  space** — a chip is drawn at a minimum bucket height (§10.4), so its pixels are taller than its
+  span, and Rust has no pixel heights anyway. Clicking where a chip *is drawn* but outside its
+  actual span creates a new event at that time, which is the more useful of the two behaviours.
+  **The sheet has two modes**, because five fields plus two full pickers is ~1100px of content
+  and the plate is 360px tall. Mode 0 is the field list — `NAME`, `START`, `END`, `LOCATION`,
+  `NOTES` — where `START` and `END` are a new `PickerField` (a `TextField`-shaped read-only box
+  with its own focus ring and `Enter`/`Space` activation). Tapping one switches the sheet body to
+  the `DatePicker` + `TimePicker` pair for that value; the sheet's own footer becomes `OK` /
+  `CANCEL` and returns to mode 0. **`chrome: false`** on both pickers suppresses their own footer
+  buttons so there is only ever one pair on screen. Nothing is written to the document until
+  `SAVE`; the draft lives in one `Rc<RefCell<EventDraft>>` in `wire_calendar`.
+  Moving `START` carries `END` with it by the old duration, which is what every calendar does.
+  **The info bar** sits in the Todo's footer slot — 1px `edge` rule, `header-h` band above the
+  16px padding — so the two widgets agree. `NOW` at `text` when something is running, `NEXT UP`
+  at `dim` when not, `NOTHING SCHEDULED` when the week is empty. **One wording decision:** the
+  third part reads `20 MIN LEFT` while running and `IN 20 MIN` when it is the next one up.
+  *"the same three parts"* could not literally mean `MIN LEFT` for an event that has not started.
+  **It ticks.** The existing 700ms poll in `wire_calendar` now also refreshes when the wall-clock
+  minute changes, tracked in a `Cell` so a 700ms tick does not repaint 85 times a minute.
+  **`insert_calendar --now` was added** — it seeds one event from `now − 10min` to `now + 20min`,
+  which is the only way a session can photograph the live chip and the `NOW` bar at all.
 
 ### W2d — Kanban, fixed and finished
 

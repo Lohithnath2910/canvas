@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use slint::ComponentHandle;
 
-use canvas_doc::{KanbanDoc, StickyNoteDoc, TodoListDoc, UndoHistory};
+use canvas_doc::{CalendarDoc, KanbanDoc, StickyNoteDoc, TodoListDoc, UndoHistory};
 
 use crate::widget::{LiveWidget, WidgetDoc, WidgetWindow};
 use crate::widget_types;
@@ -1751,22 +1751,26 @@ fn refresh_calendar(app: &SharedApp, id: &str) {
     let week_end = week_start + ct::DAYS_PER_WEEK * ct::DAY_MS;
     let today = ct::day_index(now, week_start, offset);
 
-    let chips: Vec<CalendarChip> = doc
-        .events_between(week_start, week_end)
-        .into_iter()
+    let week = doc.events_between(week_start, week_end);
+
+    let chips: Vec<CalendarChip> = week
+        .iter()
         .map(|event| {
             let (height, tone) = ct::chip_bucket(event.duration());
             let shown_from = event.start.max(week_start);
             CalendarChip {
-                id: event.id.into(),
+                id: event.id.clone().into(),
                 label: ct::hhmm(event.start, offset).into(),
                 day: ct::day_index(shown_from, week_start, offset),
                 top: ct::day_fraction(shown_from, offset),
                 height,
                 tone,
+                live: event.start <= now && now < event.end,
             }
         })
         .collect();
+
+    let bar = info_bar(&week, now, offset);
 
     let window = window.clone_strong();
     drop(a);
@@ -1774,13 +1778,358 @@ fn refresh_calendar(app: &SharedApp, id: &str) {
     let model: slint::VecModel<CalendarChip> = slint::VecModel::from(chips);
     window.set_chips(slint::ModelRc::new(model));
     window.set_today(today);
+    window.set_info_label(bar.label.into());
+    window.set_info_name(bar.name.into());
+    window.set_info_span(bar.span.into());
+    window.set_info_left(bar.left.into());
+    window.set_info_live(bar.live);
+}
+
+struct InfoBar {
+    label: String,
+    name: String,
+    span: String,
+    left: String,
+    live: bool,
+}
+
+fn info_bar(week: &[canvas_doc::CalendarEvent], now: i64, offset: i64) -> InfoBar {
+    use crate::calendar_time as ct;
+
+    let span = |e: &canvas_doc::CalendarEvent| {
+        format!(
+            "{}\u{2013}{}",
+            ct::hhmm(e.start, offset),
+            ct::hhmm(e.end, offset)
+        )
+    };
+    let minutes = |ms: i64| (ms + ct::MINUTE_MS - 1) / ct::MINUTE_MS;
+
+    if let Some(running) = week.iter().find(|e| e.start <= now && now < e.end) {
+        return InfoBar {
+            label: "NOW".into(),
+            name: running.title.clone(),
+            span: span(running),
+            left: format!("{} MIN LEFT", minutes(running.end - now)),
+            live: true,
+        };
+    }
+
+    if let Some(next) = week
+        .iter()
+        .filter(|e| e.start > now)
+        .min_by_key(|e| e.start)
+    {
+        return InfoBar {
+            label: "NEXT UP".into(),
+            name: next.title.clone(),
+            span: span(next),
+            left: format!("IN {} MIN", minutes(next.start - now)),
+            live: false,
+        };
+    }
+
+    InfoBar {
+        label: "NOTHING SCHEDULED".into(),
+        name: String::new(),
+        span: String::new(),
+        left: String::new(),
+        live: false,
+    }
+}
+
+#[derive(Clone, Default)]
+struct EventDraft {
+    id: Option<String>,
+    start: i64,
+    end: i64,
+    month: (i64, u32),
+}
+
+type Draft = Rc<RefCell<EventDraft>>;
+
+fn calendar_edit(app: &SharedApp, id: &str, change: impl FnOnce(&CalendarDoc) -> Option<Vec<u8>>) {
+    {
+        let Ok(mut a) = app.try_borrow_mut() else {
+            return;
+        };
+        let Some(widget) = a.widgets.get_mut(id) else {
+            return;
+        };
+        let WidgetDoc::Calendar(doc) = &widget.doc else {
+            return;
+        };
+        let Some(update) = change(doc) else {
+            return;
+        };
+        widget.pending_updates.push(update);
+        widget.text_dirty = true;
+    }
+    refresh_calendar(app, id);
+    App::refresh_home(app);
+}
+
+fn draft_labels(window: &CalendarWindow, draft: &EventDraft, offset: i64) {
+    use crate::calendar_time as ct;
+    let stamp = |ts: i64| format!("{} {}", ct::date_stamp(ts, offset), ct::hhmm(ts, offset));
+    window.set_ev_start_label(stamp(draft.start).into());
+    window.set_ev_end_label(stamp(draft.end).into());
+}
+
+fn paint_draft_month(window: &CalendarWindow, month: (i64, u32), today: i64) {
+    use crate::calendar_time as ct;
+
+    let (year, m) = month;
+    window.set_pick_month(format!("{} {year}", ct::month_name(m)).into());
+    window.set_pick_stamp(ct::date_stamp(window.get_pick_day() as i64 * ct::DAY_MS, 0).into());
+
+    let cells: Vec<DayCell> = ct::month_grid(year, m, FIRST_WEEKDAY)
+        .into_iter()
+        .map(|day| {
+            let (y, mm, d) = ct::civil_from_days(day);
+            DayCell {
+                label: d.to_string().into(),
+                epoch_day: day as i32,
+                in_month: (y, mm) == (year, m),
+                today: day == today,
+            }
+        })
+        .collect();
+    window.set_pick_days(slint::ModelRc::new(slint::VecModel::from(cells)));
+}
+
+fn open_picker(window: &CalendarWindow, draft: &Draft, which: i32, offset: i64) {
+    use crate::calendar_time as ct;
+
+    let mut d = draft.borrow_mut();
+    let ts = if which == 1 { d.start } else { d.end };
+    let local_day = (ts + offset).div_euclid(ct::DAY_MS);
+    let (y, m, _) = ct::civil_from_days(local_day);
+    d.month = (y, m);
+    drop(d);
+
+    window.set_pick_day(local_day as i32);
+    window.set_pick_minute(ct::minute_of_day(ts, offset) as i32);
+    window.set_pick_heads(slint::ModelRc::new(slint::VecModel::from(weekday_heads(
+        FIRST_WEEKDAY,
+    ))));
+    let today = (canvas_storage::now_millis() + offset).div_euclid(ct::DAY_MS);
+    paint_draft_month(window, (y, m), today);
 }
 
 fn wire_calendar(app: &SharedApp, id: &str, window: &CalendarWindow) -> slint::Timer {
     let owned_id = id.to_string();
     let poll_timer = slint::Timer::default();
+    let draft: Draft = Rc::new(RefCell::new(EventDraft::default()));
 
     let anchor: DragAnchor = Rc::new(std::cell::Cell::new(None));
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        let draft = draft.clone();
+        window.on_day_clicked(move |col, frac| {
+            use crate::calendar_time as ct;
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+
+            let offset = ct::local_offset_ms();
+            let now = canvas_storage::now_millis();
+            let week_start = ct::week_start_utc(now, offset);
+            let day_start = week_start + col.max(0) as i64 * ct::DAY_MS;
+            let clicked_minute = (frac.clamp(0.0, 1.0) as f64 * 1440.0) as i64;
+
+            let existing = {
+                let Ok(a) = app.try_borrow() else {
+                    return;
+                };
+                let Some(widget) = a.widgets.get(&id) else {
+                    return;
+                };
+                let WidgetDoc::Calendar(doc) = &widget.doc else {
+                    return;
+                };
+                doc.events_between(day_start, day_start + ct::DAY_MS)
+                    .into_iter()
+                    .find(|e| {
+                        let from = ct::minute_of_day(e.start, offset);
+                        let until = from + (e.duration() / ct::MINUTE_MS).max(1);
+                        clicked_minute >= from && clicked_minute < until
+                    })
+            };
+
+            match existing {
+                Some(event) => {
+                    window.set_ev_name(event.title.clone().into());
+                    window.set_ev_location(event.location.clone().into());
+                    window.set_ev_notes(event.notes.clone().into());
+                    *draft.borrow_mut() = EventDraft {
+                        id: Some(event.id.clone()),
+                        start: event.start,
+                        end: event.end,
+                        month: (0, 1),
+                    };
+                    window.set_sheet_existing(true);
+                }
+                None => {
+                    let snapped = (clicked_minute / 30) * 30;
+                    let start = day_start + snapped * ct::MINUTE_MS;
+                    window.set_ev_name("".into());
+                    window.set_ev_location("".into());
+                    window.set_ev_notes("".into());
+                    *draft.borrow_mut() = EventDraft {
+                        id: None,
+                        start,
+                        end: start + 60 * ct::MINUTE_MS,
+                        month: (0, 1),
+                    };
+                    window.set_sheet_existing(false);
+                }
+            }
+
+            draft_labels(&window, &draft.borrow(), offset);
+            window.set_pick_mode(0);
+            window.set_sheet_open(true);
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        let draft = draft.clone();
+        window.on_pick_opened(move |which| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            open_picker(
+                &window,
+                &draft,
+                which,
+                crate::calendar_time::local_offset_ms(),
+            );
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        let draft = draft.clone();
+        window.on_pick_month_stepped(move |delta| {
+            use crate::calendar_time as ct;
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let stepped = {
+                let mut d = draft.borrow_mut();
+                let (y, m) = d.month;
+                d.month = ct::month_step(y, m, delta);
+                d.month
+            };
+            let offset = ct::local_offset_ms();
+            let today = (canvas_storage::now_millis() + offset).div_euclid(ct::DAY_MS);
+            paint_draft_month(&window, stepped, today);
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        let draft = draft.clone();
+        window.on_pick_committed(move |which| {
+            use crate::calendar_time as ct;
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let offset = ct::local_offset_ms();
+            let (y, m, d) = ct::civil_from_days(window.get_pick_day() as i64);
+            let picked = ct::compose_local_ms(y, m, d, window.get_pick_minute() as i64, offset);
+
+            {
+                let mut draft = draft.borrow_mut();
+                if which == 1 {
+                    let span = (draft.end - draft.start).max(0);
+                    draft.start = picked;
+                    draft.end = picked + span;
+                } else {
+                    draft.end = picked.max(draft.start);
+                }
+            }
+            draft_labels(&window, &draft.borrow(), offset);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        let draft = draft.clone();
+        window.on_event_saved(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let d = draft.borrow().clone();
+            let name = window.get_ev_name().to_string();
+            let name = if name.trim().is_empty() {
+                canvas_storage::DEFAULT_TITLE.to_string()
+            } else {
+                name
+            };
+            let location = window.get_ev_location().to_string();
+            let notes = window.get_ev_notes().to_string();
+
+            calendar_edit(&app, &id, |doc| {
+                let event_id = match &d.id {
+                    Some(existing) => {
+                        doc.set_title(existing, &name);
+                        doc.set_span(existing, d.start, d.end);
+                        existing.clone()
+                    }
+                    None => doc.add_event(&name, d.start, d.end).0,
+                };
+                doc.set_location(&event_id, &location);
+                doc.set_notes(&event_id, &notes);
+                Some(doc.snapshot())
+            });
+
+            window.set_sheet_open(false);
+            window.set_pick_mode(0);
+        });
+    }
+
+    {
+        let handle = window.as_weak();
+        window.on_event_cancelled(move || {
+            if let Some(window) = handle.upgrade() {
+                window.set_sheet_open(false);
+                window.set_pick_mode(0);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        let draft = draft.clone();
+        window.on_event_deleted(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let existing = draft.borrow().id.clone();
+            if let Some(event_id) = existing {
+                calendar_edit(&app, &id, |doc| doc.delete_event(&event_id));
+            }
+            if let Some(window) = handle.upgrade() {
+                window.set_sheet_open(false);
+                window.set_pick_mode(0);
+            }
+        });
+    }
 
     {
         let anchor = anchor.clone();
@@ -1930,6 +2279,7 @@ fn wire_calendar(app: &SharedApp, id: &str, window: &CalendarWindow) -> slint::T
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
         let handle = window.as_weak();
+        let painted_minute = Rc::new(std::cell::Cell::new(i64::MIN));
         poll_timer.start(slint::TimerMode::Repeated, PIN_POLL_INTERVAL, move || {
             let Some(window) = handle.upgrade() else {
                 return;
@@ -1963,7 +2313,11 @@ fn wire_calendar(app: &SharedApp, id: &str, window: &CalendarWindow) -> slint::T
             let offset = crate::calendar_time::local_offset_ms();
             let now = canvas_storage::now_millis();
             let week_start = crate::calendar_time::week_start_utc(now, offset);
-            if window.get_today() != crate::calendar_time::day_index(now, week_start, offset) {
+            let minute = now.div_euclid(crate::calendar_time::MINUTE_MS);
+            if window.get_today() != crate::calendar_time::day_index(now, week_start, offset)
+                || painted_minute.get() != minute
+            {
+                painted_minute.set(minute);
                 refresh_calendar(&app, &id);
             }
         });

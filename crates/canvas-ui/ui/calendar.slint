@@ -5,7 +5,9 @@ import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPin, IconTrash, IconX } from "theme/icons.slint";
-import { IconButton, Button, ButtonVariant } from "theme/controls.slint";
+import { IconButton, Button, ButtonVariant, TextField } from "theme/controls.slint";
+import { Sheet } from "theme/sheet.slint";
+import { TimePicker, DatePicker, DayCell, PickerField } from "theme/pickers.slint";
 
 export struct CalendarChip {
     id: string,
@@ -14,6 +16,7 @@ export struct CalendarChip {
     top: float,
     height: length,
     tone: int,
+    live: bool,
 }
 
 export component CalendarWindow inherits Window {
@@ -25,6 +28,37 @@ export component CalendarWindow inherits Window {
     in property <int> peer-count: 0;
     in-out property <bool> pinned: false;
     in property <bool> keyboard-focused: false;
+
+    in property <string> info-label: "";
+    in property <string> info-name: "";
+    in property <string> info-span: "";
+    in property <string> info-left: "";
+    in property <bool> info-live: false;
+
+    in property <bool> sheet-open: false;
+    in property <bool> sheet-existing: false;
+    in-out property <string> ev-name: "";
+    in-out property <string> ev-location: "";
+    in-out property <string> ev-notes: "";
+    in property <string> ev-start-label: "";
+    in property <string> ev-end-label: "";
+
+    in-out property <int> pick-mode: 0;
+    in-out property <int> pick-minute: 0;
+    in-out property <int> pick-day: 0;
+    in property <string> pick-stamp: "";
+    in property <string> pick-month: "";
+    in property <[string]> pick-heads: [];
+    in property <[DayCell]> pick-days: [];
+
+    callback day-clicked(int, float);
+    callback chip-clicked(string);
+    callback pick-opened(int);
+    callback pick-committed(int);
+    callback pick-month-stepped(int);
+    callback event-saved();
+    callback event-cancelled();
+    callback event-deleted();
 
     callback window-moved(length, length);
     callback drag-started();
@@ -63,6 +97,8 @@ export component CalendarWindow inherits Window {
     property <length> grid-w: plate.width - 2 * Layout.pad;
     property <length> column-w:
         (root.grid-w - 6 * Layout.calendar-col-gap) / 7;
+    property <length> time-top: Layout.calendar-label-h + 1px;
+    property <length> info-band: Layout.header-h + Layout.pad;
 
     plate := Panel {
         x: Layout.plate-margin;
@@ -94,9 +130,21 @@ export component CalendarWindow inherits Window {
             x: Layout.pad;
             y: Layout.body-top + Layout.pad;
             width: root.grid-w;
-            height: parent.height - self.y - Layout.pad
+            height: parent.height - self.y - Layout.pad - root.info-band
                 - (root.confirming-delete ? root.confirm-h : 0px);
             clip: true;
+
+            for col in 7: TouchArea {
+                x: col * (root.column-w + Layout.calendar-col-gap);
+                y: root.time-top;
+                width: root.column-w;
+                height: parent.height - root.time-top;
+                enabled: !root.sheet-open && !root.confirming-delete;
+                mouse-cursor: pointer;
+                clicked => {
+                    root.day-clicked(col, self.mouse-y / self.height);
+                }
+            }
 
             for day in 7: Rectangle {
                 x: day * (root.column-w + Layout.calendar-col-gap);
@@ -138,12 +186,23 @@ export component CalendarWindow inherits Window {
                 border-radius: Layout.radius-control;
                 background: Palette.plate-tone(chip.tone);
                 border-width: 1px;
-                border-color: Palette.edge;
+                border-color: chip.live ? Palette.text : Palette.edge;
+
+                if chip.live: Rectangle {
+                    x: Layout.dot-gap;
+                    y: (min(parent.height, Layout.calendar-label-h)
+                        - Layout.picker-hand-dot) / 2;
+                    width: Layout.picker-hand-dot;
+                    height: Layout.picker-hand-dot;
+                    background: Palette.signal;
+                }
 
                 Text {
-                    x: Layout.icon-gap;
+                    x: chip.live
+                        ? 2 * Layout.dot-gap + Layout.picker-hand-dot
+                        : Layout.icon-gap;
                     y: 0;
-                    width: parent.width - 2 * Layout.icon-gap;
+                    width: parent.width - self.x - Layout.dot-gap;
                     height: min(parent.height, Layout.calendar-label-h);
                     vertical-alignment: center;
                     text: chip.label;
@@ -167,6 +226,156 @@ export component CalendarWindow inherits Window {
                 font-size: Typography.body-size;
                 overflow: elide;
                 wrap: no-wrap;
+            }
+        }
+
+        if !root.confirming-delete: Rectangle {
+            x: 0;
+            y: parent.height - root.info-band;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        if !root.confirming-delete: Rectangle {
+            x: Layout.pad;
+            y: parent.height - root.info-band + Layout.header-y;
+            width: parent.width - 2 * Layout.pad;
+            height: Layout.header-h;
+
+            info-label := Text {
+                x: 0;
+                y: 0;
+                height: parent.height;
+                vertical-alignment: center;
+                text: root.info-label;
+                color: root.info-live ? Palette.text : Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                wrap: no-wrap;
+            }
+
+            info-tail := Text {
+                x: parent.width - self.width;
+                y: 0;
+                height: parent.height;
+                vertical-alignment: center;
+                text: root.info-left;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                wrap: no-wrap;
+            }
+
+            info-span := Text {
+                x: info-tail.x - Layout.gap-m - self.width;
+                y: 0;
+                height: parent.height;
+                vertical-alignment: center;
+                text: root.info-span;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                wrap: no-wrap;
+            }
+
+            Text {
+                x: info-label.width > 0px
+                    ? info-label.width + Layout.gap-m
+                    : 0px;
+                y: 0;
+                width: max(0px, info-span.x - Layout.gap-m - self.x);
+                height: parent.height;
+                vertical-alignment: center;
+                text: root.info-name;
+                color: Palette.text;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+        }
+
+        sheet := Sheet {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: parent.height - Layout.header-band;
+            base-y: Layout.header-band;
+            open: root.sheet-open;
+            existing: root.sheet-existing && root.pick-mode == 0;
+            save-label: root.pick-mode == 0 ? "SAVE" : "OK";
+            delete-label: "DELETE EVENT";
+            saved => {
+                if (root.pick-mode == 0) {
+                    root.event-saved();
+                } else {
+                    root.pick-committed(root.pick-mode);
+                    root.pick-mode = 0;
+                }
+            }
+            cancelled => {
+                if (root.pick-mode == 0) {
+                    root.event-cancelled();
+                } else {
+                    root.pick-mode = 0;
+                }
+            }
+            delete-requested => { root.event-deleted(); }
+
+            if root.pick-mode == 0: TextField {
+                label: "NAME";
+                text <=> root.ev-name;
+                accepted(v) => { root.event-saved(); }
+            }
+
+            if root.pick-mode == 0: PickerField {
+                label: "START";
+                value: root.ev-start-label;
+                picked => {
+                    root.pick-opened(1);
+                    root.pick-mode = 1;
+                }
+            }
+
+            if root.pick-mode == 0: PickerField {
+                label: "END";
+                value: root.ev-end-label;
+                picked => {
+                    root.pick-opened(2);
+                    root.pick-mode = 2;
+                }
+            }
+
+            if root.pick-mode == 0: TextField {
+                label: "LOCATION";
+                text <=> root.ev-location;
+                accepted(v) => { root.event-saved(); }
+            }
+
+            if root.pick-mode == 0: TextField {
+                label: "NOTES";
+                text <=> root.ev-notes;
+                accepted(v) => { root.event-saved(); }
+            }
+
+            if root.pick-mode != 0: DatePicker {
+                stamp: root.pick-stamp;
+                month-label: root.pick-month;
+                weekday-heads: root.pick-heads;
+                days: root.pick-days;
+                selected-day <=> root.pick-day;
+                chrome: false;
+                month-stepped(delta) => { root.pick-month-stepped(delta); }
+            }
+
+            if root.pick-mode != 0: TimePicker {
+                minute-of-day <=> root.pick-minute;
+                chrome: false;
             }
         }
 
