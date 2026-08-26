@@ -2660,3 +2660,33 @@ there is nothing to photograph, and a drag cannot be synthesised from here — t
 recipe's note 2 is the reason: Windows refuses `SetForegroundWindow` to a background process,
 so this session cannot give the window focus and send input to it. The six-line click-through
 is at the top of the VERIFICATION QUEUE.
+
+### 2026-08-26 — RSS measured on the release build, because the user asked
+
+The user, mid-run: *"i want whole app to be awesomely smooth all over while taking very less
+ram usage"*. Smoothness needs their eyes. **RAM does not**, so it is measured here rather than
+guessed at. Release build, `winit-software` (the default — GPU is opt-in and stays that way,
+§3), `mimalloc` as the global allocator, five seconds after launch, fresh database each time.
+
+| Configuration | Working set | Private bytes |
+|---|---|---|
+| home only, no widgets | 22.0 MB | 9.6 MB |
+| home + sticky note | 22.0 MB | 9.7 MB |
+| home + todo | 22.1 MB | 9.7 MB |
+| home + kanban | 22.3 MB | 9.8 MB |
+| home + calendar | 25.1 MB | 12.4 MB |
+| **home + all four types** | **31.9 MB** | **16.0 MB** |
+
+- ✅ **§2's budgets hold, with room.** "App idle 20–40 MB" — 22.0. "App total under typical
+  use < 50 MB" — 31.9 with every built type on screen at once. It did not move over a further
+  8 seconds idle, so nothing is leaking on the paint path.
+- ✅ **Per-widget marginal cost is ~2.5 MB**, which is *below* §2's 5–15 MB per-widget figure.
+  Every widget shares one process, one renderer and one font set, so a second widget costs a
+  window and its model, not a second runtime.
+- The Calendar is the outlier at +3.1 MB, and it is seeded with eight events on a fresh
+  database while the other three start empty. Worth re-measuring once `SW-20` gives it a
+  populated month rather than one seeded week.
+- ⚠ **This says nothing about smoothness.** Frame time is a separate question and open
+  question 12 is still open on it: the software renderer may be taking an opaque
+  partial-redraw path and repainting whole windows per scroll frame. The user's word on that
+  was *"i dont know, will test later"*.
