@@ -71,21 +71,21 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W3 is past half. The user walked every widget on 2026-08-27 and reported 19 issues
-across five of them; the Note, the Todo and the Calendar are rebuilt and committed, and the
-Kanban is in hand — `W3-09` landed 🟡. The rest of the Kanban and the whole Spreadsheet are
-what is left.** Stage W2's documents are all correct — **nothing in W3
+**Stage W3 is BUILT, end to end.** The user walked every widget on 2026-08-27 and reported 19
+issues across five of them. All five widgets have been rebuilt against that walk-through and
+committed, plus one more the user rejected mid-run (`W3-15`, the time picker). **Nothing is
+left in W3 that can be done without a hand on the mouse.** Stage W2's documents are all correct — **nothing in W3
 is a CRDT bug.** It is surface work, and it is the whole of the work.
 
 **The build order is the user's, and it is not negotiable:**
 **Note → Todo → Calendar → Kanban → Spreadsheet.** Each widget is *finished* before the next
-one starts. Do not jump ahead because a task looks easy. **Four are done. `W3-14` is the last unticked task in the whole of Stage W3 —
-after it, the verification queue is the work.**
+one starts. Do not jump ahead because a task looks easy. **All five are built. Stage W3 has no task left that can be done without the user —
+the VERIFICATION QUEUE is the work now, and every block in it is unclicked.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **W3-14** — resize that can be found | It *is* built. Find out **which** of the three failure modes it is before changing anything — **the 1px guide is the tell**: if it appears, the hit test works and this is discoverability; if it does not, the press is not landing |
-| 2 | **The VERIFICATION QUEUE** | **The last thing in Stage W3.** Nine fresh blocks — Todo, Calendar, Spreadsheet, the three Kanban ones, the typed time field, and leaving a spreadsheet cell — none clicked |
+| 1 | **THE VERIFICATION QUEUE** | **Every task in Stage W3 is built.** Nothing is left that can be done without the user. Ten fresh blocks are waiting, none of them clicked — start at the top of `TASKS.md` and walk them |
+| 2 | Whatever the walk-through turns up | Open a numbered `W4-` task per real bug, in the user's widget order, and work it the same way |
 
 **Answers already taken. Do not re-ask these:**
 - **The Calendar is day ROWS with time left→right** — built. An event is a bar whose length is
@@ -126,6 +126,7 @@ open question 12.
 `W3-11` (no more `UNASSIGNED`, priority dots, two card heights, `insert_kanban`, 🟡),
 `W3-12` (a press anywhere else leaves a spreadsheet cell, 🟡),
 `W3-13` (the sheet scrolls sideways, `ScrollBarH`, 🟡),
+`W3-14` (resize ticks that light, and a cursor that stops lying, 🟡),
  `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
 (priority dots), `W3-04` (todo drag-reorder on a fractional index, 🟡), `W3-05` (Calendar day
 rows), `W3-05b` (the readability pass the user demanded mid-run), `W3-06` (NOW rule), `W3-07`
@@ -3536,3 +3537,44 @@ The user: *"very bad overall, cant scroll around like a normal excel"*. It grate
 
 - 📸 Photographed: the empty grid is unchanged, and **both scrollbars are correctly invisible**
   because nothing overflows. Scrolling itself is a gesture and needs a hand.
+
+### 2026-08-27 — W3-14: the resize grip can be found, and the cursor stops lying
+
+The user asked it as a question — *"the rows and cols are not expandable by dragging their
+corressponding columns etc right??"* — which means they tried and nothing happened. The task
+said to diagnose before changing anything. So:
+
+- ✅ **It is not broken, and the press is landing.** `head-area`'s `pointer-event` fires
+  `head-pressed`, `sheet_axis_boundary` finds a boundary within `SHEET_GRIP`, `head_dragged`
+  clamps and moves the guide, and `resize_ended` writes `set_col_width` / `set_row_height` into
+  the document so it survives a restart. Every link works — **if you happen to land on it.**
+  Failure mode two, discoverability. Plus a third the task had not listed.
+
+- ⚠ **The cursor was lying, and that is the part that made it feel broken.**
+  `mouse-cursor: col-resize` was set across the **entire** head band — all 23px of it — when
+  only 8 pixels of it did anything. It promised a resize everywhere and delivered one almost
+  nowhere. It is now conditional: resize arrows only while a boundary is actually lit, the
+  ordinary cursor otherwise. Same for the row gutter.
+
+- ✅ **There was nothing to aim at.** The head band drew letters and no separators; the gutter
+  drew numbers and no separators. Both now draw a **half-height 1px `edge` tick at every
+  boundary**, stepping to `Palette.text` over `Motion.hover` when the pointer is within the
+  grip. Half-height on purpose — a full rule would read as chrome, a half one reads as a grip.
+
+- ✅ **The grip went 4 → 8.** `Layout.sheet-grip` and `SHEET_GRIP` in `app.rs` **mirror each
+  other and must be changed together** — the Slint side draws the affordance, the Rust side
+  does the hit test. A 16px target, still well inside the 48px minimum column width, so two
+  grips can never overlap.
+
+- **How the cursor knows which boundary is near.** Each tick owns a `near` property and a
+  `changed near` handler that writes its own position into `root.head-near` / `root.row-near`
+  and clears it on the way out. Because grips cannot overlap, at most one tick is ever lit, so
+  a single slot is enough. This is the way round it: **Slint cannot iterate a model inside a
+  binding**, so "is the pointer near *any* boundary" cannot be asked directly — the elements
+  have to answer for themselves.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo test --workspace` 267 pass,
+  `cargo fmt --all`.
+
+- 📸 Photographed at rest: ticks visible between `A|B`, `B|C` and between every row number.
+  **Hover and drag need a hand**, so the box stays open.

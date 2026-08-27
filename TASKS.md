@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-14` — spreadsheet row and column resize that can actually be found. It **is** built; find out *which* of the three failure modes it is before changing anything, and the 1px guide is the tell. `W3-13` landed 🟡 on 2026-08-27: a `ScrollBarH` sibling, `view-x` through every drawn thing and every hit test, the head band clipped and scrolling while the row gutter holds still. **The Kanban is finished.** 267 tests pass. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. `W3-14` is the last one.
+**Current task:** **THE VERIFICATION QUEUE.** Every task in Stage W3 is built and committed — `W3-09` to `W3-15` — and nothing is left in it that can be done without a hand on the mouse. Ten blocks in the queue at the top of this file have never been clicked. 267 tests pass, clippy clean. `W3-14` landed 🟡 last, on 2026-08-27: the spreadsheet resize was never broken, it was invisible, and the cursor claimed a resize across the whole band while only 8px of it worked.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
-**Done:** 40 ticked. 267 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is **done**: `W3-09`, `W3-10`, `W3-11` and the out-of-band `W3-15` all landed 🟡. **The Spreadsheet is all that is left.** The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not), `W3-11` (the Kanban card face — clicking the dots, and dragging a mixed-height column), `W3-12` (leaving a spreadsheet cell, which is six presses and no pixels), `W3-13` (scrolling the sheet sideways) — see the verification queue, which now has three fresh blocks
+**Done:** 40 ticked. 267 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and **Stage W3 is built end to end** — `W3-09` to `W3-15`, all 🟡, all committed. **The verification queue is the only work left.** The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not), `W3-11` (the Kanban card face — clicking the dots, and dragging a mixed-height column), `W3-12` (leaving a spreadsheet cell, which is six presses and no pixels), `W3-13` (scrolling the sheet sideways), `W3-14` (the resize ticks lighting on hover, and the drag itself) — see the verification queue, which now has three fresh blocks
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -122,6 +122,21 @@ feature. Say so in the end-of-run report every time until it happens.
 correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
 `MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
 cannot reach.
+
+**FINDING THE RESIZE GRIP — `W3-14`, 2026-08-27.** The ticks were photographed at rest. Hovering
+and dragging need a hand. `cargo run -p canvas-app -- --open-kind sheet`.
+- [ ] **Without being told where it is**, look at the `A B C …` band. There should now be a
+      short vertical tick between each letter, and a short horizontal one between each row
+      number. **If you still cannot see where to grab, that is the finding** — say so
+- [ ] Move the pointer slowly across the band. A tick **lights white** as you come within 8px of
+      it, and the cursor becomes the column-resize arrows **only then**. Away from a boundary
+      the cursor must be the ordinary one — it used to be resize arrows everywhere, which is
+      what made this feel broken
+- [ ] Press on a lit tick and drag — a 1px white guide follows. Release: the column keeps the
+      new width
+- [ ] The same for a row, in the left gutter
+- [ ] Close the widget and reopen it — the width and the height are still there
+- [ ] Drag a column narrower and narrower — it must stop at 48px, not collapse
 
 **SCROLLING THE SHEET SIDEWAYS — `W3-13`, 2026-08-27.** The empty grid was photographed and is
 unchanged (A–G, 1–7, `A1` outlined, both bars correctly invisible because nothing overflows).
@@ -2759,6 +2774,30 @@ easy — the user asked for each one to be *done* before the next begins.
   resize cursor appear only near a boundary rather than across the whole band.
   *DoD:* the user can find and drag a column boundary without being told it exists · the same
   for a row · a width survives a restart.
+  🟡 **built 2026-08-27, box stays open. Diagnosed first, as the task asked.** It is **not**
+  broken and the press **is** landing. `head-area`'s `pointer-event` fires `head-pressed`,
+  `sheet_axis_boundary` finds a boundary within `SHEET_GRIP`, `resize_ended` writes
+  `set_col_width` / `set_row_height` to the document. All of it works — **if you happen to land
+  on it.** It is failure mode two, discoverability, made worse by a third thing the task did not
+  list: the cursor was **lying**.
+  1. **`mouse-cursor: col-resize` was set across the entire head band**, all 23px of it, when
+     only 8 of those pixels did anything. It promised a resize everywhere and delivered one
+     almost nowhere — which is exactly *"they tried it and nothing happened"*. It is now
+     conditional: `col-resize` only while a boundary is actually lit, `default` otherwise. Same
+     for the row gutter.
+  2. **There was nothing to aim at.** The head band drew column letters and no separators at
+     all; the row gutter drew numbers and no separators. Both now draw a **half-height 1px
+     `edge` tick at every boundary**, stepping to `Palette.text` over `Motion.hover` when the
+     pointer is within the grip. Half-height so it reads as a grip mark rather than a rule.
+  3. **The grip went from 4 to 8** — `Layout.sheet-grip` and `SHEET_GRIP` in `app.rs`, which
+     **mirror each other and must move together.** A 16px target, still comfortably inside the
+     48px minimum column width, so two grips can never overlap.
+  How the cursor knows: each tick owns a `near` property and a `changed near` handler that
+  writes its own position into `root.head-near` / `root.row-near`, clearing it again on the way
+  out. Grips cannot overlap, so at most one is ever lit and the single slot is enough — no
+  counter, no iteration inside a binding, which Slint cannot do anyway.
+  Photographed at rest: the ticks are visible between `A|B`, `B|C` and between every row number.
+  **Hover and drag need a hand.**
 
 ## Stages 2, 3 — after Stage W
 

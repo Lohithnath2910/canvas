@@ -3060,7 +3060,7 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
 }
 const SHEET_COL_W: i32 = 80;
 const SHEET_ROW_H: i32 = 28;
-const SHEET_GRIP: i32 = 4;
+const SHEET_GRIP: i32 = 8;
 const SHEET_MIN_COL_W: i32 = 48;
 const SHEET_MAX_COL_W: i32 = 400;
 const SHEET_MIN_ROW_H: i32 = 20;

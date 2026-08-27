@@ -99,6 +99,8 @@ export component SpreadsheetWindow inherits Window {
 
     property <length> view-y: 0px;
     property <length> view-x: 0px;
+    property <length> head-near: -1px;
+    property <length> row-near: -1px;
 
     property <bool> controls-visible:
         drag-area.has-hover
@@ -171,6 +173,28 @@ export component SpreadsheetWindow inherits Window {
                     overflow: elide;
                     wrap: no-wrap;
                 }
+
+                for column in root.cols: Rectangle {
+                    property <length> at: root.view-x + (column.x + column.w) * 1px;
+                    property <bool> near: head-area.has-hover
+                        && abs(head-area.mouse-x - root.gutter-w - self.at)
+                            <= Layout.sheet-grip;
+
+                    x: self.at - 1px;
+                    y: Layout.sheet-head-h / 2 - self.height / 2;
+                    width: 1px;
+                    height: Layout.sheet-head-h / 2;
+                    background: self.near ? Palette.text : Palette.edge;
+                    animate background { duration: Motion.hover; easing: Ease.standard; }
+
+                    changed near => {
+                        if (self.near) {
+                            root.head-near = self.at;
+                        } else if (root.head-near == self.at) {
+                            root.head-near = -1px;
+                        }
+                    }
+                }
             }
 
             Rectangle {
@@ -187,7 +211,7 @@ export component SpreadsheetWindow inherits Window {
                 width: board.cols-w;
                 height: Layout.sheet-head-h - 1px;
                 enabled: !root.confirming-delete;
-                mouse-cursor: col-resize;
+                mouse-cursor: (self.has-hover && root.head-near >= 0px) ? col-resize : default;
                 pointer-event(event) => {
                     if (event.kind == PointerEventKind.down) {
                         if (root.editing-id != "") {
@@ -223,6 +247,27 @@ export component SpreadsheetWindow inherits Window {
                     letter-spacing: Typography.label-tracking;
                     overflow: elide;
                     wrap: no-wrap;
+                }
+
+                for line in root.rows: Rectangle {
+                    property <length> at: root.view-y + (line.y + line.h) * 1px;
+                    property <bool> near: gutter-area.has-hover
+                        && abs(gutter-area.mouse-y - self.at) <= Layout.sheet-grip;
+
+                    x: root.gutter-w / 2 - self.width / 2;
+                    y: self.at - 1px;
+                    width: root.gutter-w / 2;
+                    height: 1px;
+                    background: self.near ? Palette.text : Palette.edge;
+                    animate background { duration: Motion.hover; easing: Ease.standard; }
+
+                    changed near => {
+                        if (self.near) {
+                            root.row-near = self.at;
+                        } else if (root.row-near == self.at) {
+                            root.row-near = -1px;
+                        }
+                    }
                 }
 
                 Rectangle {
@@ -420,7 +465,7 @@ export component SpreadsheetWindow inherits Window {
                     width: root.gutter-w - 1px;
                     height: parent.height;
                     enabled: !root.confirming-delete;
-                    mouse-cursor: row-resize;
+                    mouse-cursor: (self.has-hover && root.row-near >= 0px) ? row-resize : default;
                     pointer-event(event) => {
                         if (event.kind == PointerEventKind.down) {
                             if (root.editing-id != "") {
