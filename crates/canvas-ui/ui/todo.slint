@@ -3,7 +3,7 @@ import { Typography } from "theme/typography.slint";
 import { Motion, Ease } from "theme/motion.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
-import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
+import { GlyphStrip, PriorityDots, WidgetState } from "theme/glyphstrip.slint";
 import { IconPin, IconTrash, IconX, IconPlus } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant, ScrollBar, Checkbox, Tag } from "theme/controls.slint";
 
@@ -12,6 +12,7 @@ export struct TodoItemData {
     text: string,
     done: bool,
     due: string,
+    priority: int,
 }
 
 component ItemRow inherits Rectangle {
@@ -22,14 +23,16 @@ component ItemRow inherits Rectangle {
     callback commit();
     callback remove();
     callback begin-edit();
+    callback priority-cycled();
 
     height: Layout.todo-row-h;
 
     out property <bool> hovered: touch.has-hover || del.hovered || del.focused;
 
     property <bool> show-tag: root.item.due != "" && !root.editing;
-    property <length> tail: Layout.icon-size + Layout.icon-gap
-        + (root.show-tag ? due-tag.width + Layout.icon-gap : 0px);
+    property <length> tag-w: root.show-tag ? due-tag.width + Layout.icon-gap : 0px;
+    property <length> dots-w: 3 * Layout.dot-size + 2 * Layout.dot-gap + Layout.icon-gap;
+    property <length> tail: Layout.icon-size + Layout.icon-gap + root.tag-w + root.dots-w;
 
     touch := TouchArea {
         x: 0;
@@ -94,6 +97,16 @@ component ItemRow inherits Rectangle {
         visible: root.show-tag;
     }
 
+    prio := PriorityDots {
+        x: parent.width - Layout.icon-size - Layout.icon-gap - root.tag-w - self.width;
+        y: 0;
+        height: parent.height;
+        level: root.item.priority;
+        revealed: root.hovered;
+        visible: !root.editing;
+        cycled => { root.priority-cycled(); }
+    }
+
     del := IconButton {
         x: parent.width - Layout.icon-size;
         y: (parent.height - Layout.header-h) / 2;
@@ -123,6 +136,7 @@ export component TodoWindow inherits Window {
     callback item-text-edited(string, string);
     callback item-removed(string);
     callback item-added(string);
+    callback item-priority-cycled(string);
     callback edit-committed();
     callback pin-toggled(bool);
     callback delete-confirmed();
@@ -162,6 +176,15 @@ export component TodoWindow inherits Window {
     property <length> confirm-h: Layout.confirm-band;
     property <length> footer-h: Layout.footer-band;
     property <length> compose-band: 2 * Layout.pad + Layout.checkbox-row-h;
+
+    function commit-new() {
+        if (new-input.text != "") {
+            root.item-added(new-input.text);
+            new-input.text = "";
+        }
+        new-input.focus();
+    }
+
     property <length> list-top: Layout.body-top + Layout.pad;
     property <length> list-bottom: plate.height - root.footer-h - root.compose-band
         - (root.confirming-delete ? root.confirm-h : 0px);
@@ -236,6 +259,7 @@ export component TodoWindow inherits Window {
                         commit => { root.edit-committed(); }
                         remove => { root.item-removed(entry.id); }
                         begin-edit => { root.editing-id = entry.id; }
+                        priority-cycled => { root.item-priority-cycled(entry.id); }
                     }
                 }
             }
@@ -257,11 +281,18 @@ export component TodoWindow inherits Window {
             height: Layout.checkbox-row-h;
             visible: !root.confirming-delete;
 
-            IconPlus {
+            add-btn := IconButton {
                 x: 0;
-                y: (parent.height - Layout.checkbox-size) / 2;
-                size: Layout.checkbox-size;
-                stroke-color: new-input.has-focus ? Palette.text : Palette.dim;
+                y: (parent.height - Layout.header-h) / 2;
+                width: Layout.checkbox-size;
+                enabled: new-input.text != "";
+                activated => { root.commit-new(); }
+                IconPlus {
+                    size: Layout.checkbox-size;
+                    stroke-color: new-input.has-focus || add-btn.hovered
+                        ? Palette.text
+                        : Palette.dim;
+                }
             }
 
             new-input := TextInput {
@@ -277,12 +308,7 @@ export component TodoWindow inherits Window {
                 text-cursor-width: Layout.caret-w;
                 font-family: Typography.body-face;
                 font-size: Typography.body-size;
-                accepted => {
-                    if (self.text != "") {
-                        root.item-added(self.text);
-                        self.text = "";
-                    }
-                }
+                accepted => { root.commit-new(); }
                 key-pressed(event) => {
                     if (event.text == Key.Escape) {
                         new-input.clear-focus();

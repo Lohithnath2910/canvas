@@ -123,6 +123,15 @@ replaced by W3-10**).
    against the screen before debugging the layout.
 
 
+
+1c. **A binding loop between a child and its parent compiles clean and silently evaluates to
+   zero.** `PriorityDots.opacity` read `revealed`, the row passed `revealed: root.hovered`, and
+   the row's `hovered` had `|| prio.hovered` in it. Slint reported nothing and the component
+   rendered **completely invisible** with correct data all the way to the model. **Never let a
+   child's `out` property feed a parent property the same child reads back as an `in`.**
+   §13.7's loud marker (`background: #ff00ff; opacity: 1.0;`) is what turned an open-ended
+   layout hunt into a one-line fix — reach for it on the *first* "it renders nothing", not the
+   third.
 1. **A repeater rebuild under a live caret kills typing.** Fixed for the Kanban and the
    Todo in `SW-22`: `rows_locked_by_editor` makes `refresh_todo`/`refresh_kanban` return
    before `set_items`/`set_cards` while `editing-id` is set, `edit-committed` clears the id
@@ -203,7 +212,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 220 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 228 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -241,7 +250,7 @@ Canvas/
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
     canvas-doc/      CRDT documents (yrs). StickyNoteDoc, UndoHistory, TodoListDoc,
                      CalendarDoc, KanbanDoc, WhiteboardDoc, SheetDoc + a hand-written fractional
-                     index. 141 tests. Only WhiteboardDoc has NO window — SheetDoc got one in SW-14.
+                     index. 149 tests. Only WhiteboardDoc has NO window — SheetDoc got one in SW-14.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -260,12 +269,30 @@ cargo run -p canvas-app -- --open-kind kanban    # put one widget of that kind o
                                                  # Takes either word: kanban or board
 cargo run -p canvas-app -- --open <widget-id>    # the same for one specific widget
 cargo run -p canvas-app -- --open-kind spreadsheet   # the Spreadsheet; "sheet" works too
-cargo test --workspace               # 220 tests
+cargo test --workspace               # 228 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
 ```
 
 Database lives at `%APPDATA%/Canvas/canvas_local.db`. Delete that folder for a clean slate.
+
+**⚠ Point `APPDATA` at a scratch folder before running an example or a screenshot.** Both the
+seeding examples and the shot script write to the **user's real database** otherwise. On
+2026-08-27 a debug run of `insert_todo` seeded a widget into their live data, and the
+`--remove` that cleaned it up deleted **every** todo row, including one of theirs — `--remove`
+is type-wide, not scoped to what the example inserted.
+
+```powershell
+$fake = "<scratch>\appdata"
+New-Item -ItemType Directory -Force (Join-Path $fake "Canvas") | Out-Null   # the app does
+$real = $env:APPDATA; $env:APPDATA = $fake                                 # NOT mkdir for you
+try   { cargo run -q -p canvas-app --example insert_todo
+        & .\scripts\shot.ps1 -Out shot.png -AppArgs @("--open-kind","todo") -Arrange }
+finally { $env:APPDATA = $real }
+```
+
+A scratch database is also **much** easier to photograph than the user's — two windows instead
+of six, and `-Arrange` actually fits them on screen.
 
 ### 📸 Taking your own screenshots — this works, as of 2026-08-26
 
@@ -3000,3 +3027,59 @@ cannot see it.
   ~3.2 MB** — the same as the Kanban, inside §2's 5–15 MB per widget, and it moves neither the
   idle nor the total budget. A first reading of 33.2 MB was taken at 6s on a brand-new database
   and is a settling artefact; give it 7s.
+
+---
+
+### 2026-08-27 — Stage W3 opens, and the Note and Todo halves of it land
+
+The user walked every widget and reported **19 issues across five of them** — the second such
+walk-through, and the same pattern as the first: the documents are right, the surfaces are not.
+**Nothing in W3 is a CRDT bug.** Three answers were taken before building: the Calendar becomes
+**day rows with time on the x-axis**, priority reads as **a count of 1–3 dots**, and the order is
+**widget by widget as they listed it** — Note → Todo → Calendar → Kanban → Spreadsheet.
+
+- 🟡 **W3-01 — the scrollbar hides until it is wanted, and loses its capsule.** Not
+  photographable: the whole task is hover and timing. `ScrollBar` gained a `revealed` input and
+  a `woken` flag; `changed viewport-y` restarts a 900ms `Motion.scroll-linger` timer, so the bar
+  appears with the wheel and fades about a second after it stops. **`changed <property>` and
+  `Timer.restart()` both exist in Slint 1.17** — confirmed by compiling, not assumed. The 8px
+  gutter is still reserved unconditionally and only the opacity animates, because making the
+  gutter conditional on overflow is the reflow-oscillation trap already written down. The thumb
+  went from a 4px capsule (radius 2 on a 4px bar *is* a capsule — the most generic-web element
+  in the product) to a **hard-edged 2px bar**; the hit target is still the full 8px.
+  **Every scrollbar in the app inherits this**, which is the consistency asked for.
+  ⚠ **One honest limit:** moving the pointer over the body *text* alone does not reveal it.
+  Slint gives the `TextInput` that hover, and both ways to intercept it break a `DO NOT REGRESS`
+  line. What shipped is the standard overlay-scrollbar behaviour. If they want literal
+  whole-plate hover it needs its own task.
+- ✅ **W3-02 — the `+` is a real control.** It was a decorative `IconPlus` with no `TouchArea`.
+  Now an `IconButton` with `enabled: new-input.text != ""`, and both it and Enter go through one
+  `commit-new()` function so they cannot drift apart. Whitespace-only was already refused in
+  Rust and still is.
+- ✅ **W3-03 — priority, as 1–3 dots.** Photographed: a seeded list rendered `▪□□`, `▪▪▪`,
+  `▪▪□`, and **nothing at all** for the unset item, which was the requirement. `PriorityDots`
+  lives next to the glyph strip it borrows its vocabulary from, so **W3-11 gets it for free**.
+  Clicking cycles 0→1→2→3→0 — no editor, no menu, no new surface. The `priority` int is
+  additive to the item map, and **a test builds the pre-priority shape by hand through raw
+  `yrs`** and loads it rather than assuming the default works. The row reserves the 32px
+  unconditionally — same lesson as the scroll gutter: a control that fades in must not reflow
+  what is beside it.
+
+⚠ **A new trap, worth more than the feature that found it.** W3-03's first build rendered
+**nothing** — dots absent even at level 3, with correct data all the way to the model. The cause
+was a **binding loop Slint did not report**: `opacity → revealed → ItemRow.hovered →
+prio.hovered`. It compiled clean and silently evaluated the opacity to `0`. **Never let a
+child's `out` property feed a parent property the same child reads back as an `in`.** §13.7's
+loud marker (`background: #ff00ff; opacity: 1.0;`) is what found it, and it should be the
+*first* move on any "it renders nothing", not the third.
+
+⚠ **A mistake worth recording so it is not repeated.** Debugging W3-03 I ran
+`cargo run -p canvas-app --example insert_todo` **without** redirecting `APPDATA`, which seeded
+a widget into the user's real database. Removing it with `--remove` then deleted **every** todo
+row, including an empty untitled one of theirs. It was recreated with `--open-kind todo` and the
+count is back to five, but nothing in the example warns that `--remove` is type-wide rather than
+scoped to what it inserted. **Always point `APPDATA` at a scratch folder before running an
+example or a screenshot** — the recipe for that is now in START HERE.
+
+`cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **228 tests pass** (was 220;
+canvas-doc is 149).

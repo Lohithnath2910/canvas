@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-02` — the Todo compose row: a clickable `+` that refuses an empty item. `W3-01` is built (🟡, hover-and-timing, not photographable). **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet, each widget finished before the next starts.
+**Current task:** `W3-04` — drag to reorder todo items, which needs a fractional index on the item map because §10.3 forbids reordering a nested array. `W3-01` (🟡), `W3-02` and `W3-03` are done. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
-**Done:** 32 ticked. 220 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 34 ticked. 228 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel), `SW-14` (the Spreadsheet — it renders, photographed; typing, merge and column resize are unwatched) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -2219,7 +2219,7 @@ easy — the user asked for each one to be *done* before the next begins.
 
 ### W3b — Todo
 
-- [ ] **W3-02 · The `+` is a real control, and an empty item can never be added** — `S`
+- [x] **W3-02 · The `+` is a real control, and an empty item can never be added** — `S`
   Needs: nothing. **The user:** *"to type the todo thing and only press enter, we cant press
   the + button over there with mouse, and again i dont want to just add emoty todos"*.
   The `IconPlus` in the compose row is decorative — it has no `TouchArea`. Give it one (an
@@ -2227,8 +2227,15 @@ easy — the user asked for each one to be *done* before the next begins.
   Enter and the `+` — must refuse an empty or whitespace-only string.
   *DoD:* clicking `+` adds the typed item · `+` with an empty field does nothing at all ·
   Enter still works · a string of spaces is refused by both.
+  ✅ **Done and photographed 2026-08-27.** The decorative `IconPlus` became an `IconButton`
+  with `enabled: new-input.text != ""`, so a click with an empty field does nothing at all —
+  no callback, no cursor change, no flash. Both paths now go through one `commit-new()`
+  function on the window instead of the add being written inline in `accepted`, so Enter and
+  `+` cannot drift apart. Whitespace-only was **already** refused in Rust (`on_item_added`
+  trims and returns early) and still is; the Slint guard only catches the empty case, because
+  Slint has no `trim()`.
 
-- [ ] **W3-03 · Priority on todo items — 1–3 dots** — `M`
+- [x] **W3-03 · Priority on todo items — 1–3 dots** — `M`
   Needs: W3-02. **The user:** *"would love to have the priority thing going on please"*.
   Answered above: **a count of 1–3 lit dots**, right-aligned on the row, in the same 3×3
   `dot-lit`/`dot-unlit` vocabulary as the glyph strip. Three lit is high, one is low, **none
@@ -2237,6 +2244,28 @@ easy — the user asked for each one to be *done* before the next begins.
   `TodoListDoc` — no reshape, and an old snapshot that lacks the field reads as `0`.
   *DoD:* priority survives a restart · a list with no priorities set is visually unchanged ·
   a doc written before this task still opens.
+  ✅ **Done and photographed 2026-08-27** — a seeded list rendered `▪□□`, `▪▪▪`, `▪▪□` and,
+  for the unset item, **nothing at all**, which was the requirement.
+  **`PriorityDots` lives in `theme/glyphstrip.slint`** next to the strip it borrows its
+  vocabulary from, so the Kanban gets it for free in **W3-11**. Three 8px cells, 4px gaps,
+  `dot-lit` up to `level` and `dot-unlit` beyond. **Clicking cycles 0→1→2→3→0** — no editor,
+  no menu, no new surface; `cycle_priority` in `TodoListDoc` owns the wrap.
+  **CRDT:** one additive `priority` int on the existing item map. A snapshot written before
+  this task reads it as `0` — proven by a test that builds the **old shape by hand** through
+  raw `yrs` and loads it, rather than by assuming `int_field` does the right thing.
+  **The row reserves the 32px unconditionally** rather than growing when a priority appears.
+  This is the same lesson as W3-01's scroll gutter: a control that fades in must not also
+  reflow what is beside it.
+  ⚠ **A new trap, and it cost a magenta-marker round trip to find.** The first build rendered
+  **nothing** — dots absent even at level 3, with correct data all the way to the model. The
+  cause was a **binding loop Slint did not report**: `PriorityDots.opacity` read
+  `root.revealed`, the row passed `revealed: root.hovered`, and `ItemRow.hovered` had
+  `|| prio.hovered` in it. That is `opacity → revealed → hovered → hovered`. **It compiled
+  clean and silently evaluated the opacity to 0.** Dropping `prio.hovered` from the row's
+  `hovered` fixed it outright. **Never let a child's `out` property feed a parent property
+  that the same child reads back as an `in`.** §13.7's loud-marker technique is what found it:
+  forcing `background: #ff00ff; opacity: 1.0;` showed the dots were positioned and counted
+  correctly all along, which turned an open-ended layout hunt into a one-line binding fix.
 
 - [ ] **W3-04 · Drag to reorder todo items** — `M`
   Needs: W3-03. **The user:** *"i want to be able to drag and re arrange the todos"*.

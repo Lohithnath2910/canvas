@@ -744,6 +744,7 @@ fn refresh_todo(app: &SharedApp, id: &str) {
             text: item.text.into(),
             done: item.done,
             due: slint::SharedString::new(),
+            priority: item.priority,
         })
         .collect();
     let window = window.clone_strong();
@@ -782,6 +783,19 @@ fn todo_edit(app: &SharedApp, id: &str, change: impl FnOnce(&TodoListDoc) -> Opt
 fn wire_todo(app: &SharedApp, id: &str, window: &TodoWindow) -> slint::Timer {
     let owned_id = id.to_string();
     let poll_timer = slint::Timer::default();
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        window.on_item_priority_cycled(move |item_id| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            end_todo_row_edit(&handle);
+            todo_edit(&app, &id, |doc| doc.cycle_priority(item_id.as_ref()));
+        });
+    }
 
     {
         let weak = Rc::downgrade(app);

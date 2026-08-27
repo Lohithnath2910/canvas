@@ -19,9 +19,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let doc = canvas_doc::TodoListDoc::new();
     let (first, _) = doc.add_item("walk the verification queue");
-    doc.add_item("answer open question 9");
-    doc.add_item("look at the gallery");
+    let (second, _) = doc.add_item("answer open question 9");
+    let (third, _) = doc.add_item("look at the gallery");
+    doc.add_item("no priority set on this one");
     doc.set_done(&first, true);
+    doc.set_priority(&first, 1);
+    doc.set_priority(&second, 3);
+    doc.set_priority(&third, 2);
     store.save_document(&row.id, &doc.snapshot(), &doc.state_vector())?;
 
     println!(

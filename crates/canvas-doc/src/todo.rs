@@ -4,11 +4,14 @@ use yrs::{
     Any, Array, ArrayRef, Doc, Map, MapPrelim, MapRef, Out, ReadTxn, StateVector, Transact, Update,
 };
 
+pub const MAX_PRIORITY: i32 = 3;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TodoItem {
     pub id: String,
     pub text: String,
     pub done: bool,
+    pub priority: i32,
 }
 
 pub struct TodoListDoc {
@@ -52,6 +55,7 @@ impl TodoListDoc {
                 id: string_field(&txn, &map, "id"),
                 text: string_field(&txn, &map, "text"),
                 done: matches!(map.get(&txn, "done"), Some(Out::Any(Any::Bool(true)))),
+                priority: int_field(&txn, &map, "priority"),
             });
         }
         items
@@ -84,6 +88,7 @@ impl TodoListDoc {
                 ("id", Any::String(id.into())),
                 ("text", Any::String(text.into())),
                 ("done", Any::Bool(false)),
+                ("priority", Any::BigInt(0)),
             ]),
         );
         txn.encode_update_v1()
@@ -108,6 +113,31 @@ impl TodoListDoc {
         }
         target.insert(&mut txn, "done", Any::Bool(done));
         Some(txn.encode_update_v1())
+    }
+
+    pub fn set_priority(&self, id: &str, level: i32) -> Option<Vec<u8>> {
+        let level = level.clamp(0, MAX_PRIORITY);
+        let mut txn = self.doc.transact_mut();
+        let target = find_map(&txn, &self.items_ref, id)?;
+        if int_field(&txn, &target, "priority") == level {
+            return None;
+        }
+        target.insert(&mut txn, "priority", Any::BigInt(level as i64));
+        Some(txn.encode_update_v1())
+    }
+
+    pub fn cycle_priority(&self, id: &str) -> Option<Vec<u8>> {
+        let current = {
+            let txn = self.doc.transact();
+            let target = find_map(&txn, &self.items_ref, id)?;
+            int_field(&txn, &target, "priority")
+        };
+        let next = if !(0..MAX_PRIORITY).contains(&current) {
+            0
+        } else {
+            current + 1
+        };
+        self.set_priority(id, next)
     }
 
     pub fn toggle_item(&self, id: &str) -> Option<Vec<u8>> {
@@ -158,6 +188,14 @@ fn string_field<T: ReadTxn>(txn: &T, map: &MapRef, key: &str) -> String {
     match map.get(txn, key) {
         Some(Out::Any(Any::String(s))) => s.to_string(),
         _ => String::new(),
+    }
+}
+
+fn int_field<T: ReadTxn>(txn: &T, map: &MapRef, key: &str) -> i32 {
+    match map.get(txn, key) {
+        Some(Out::Any(Any::BigInt(n))) => n as i32,
+        Some(Out::Any(Any::Number(n))) => n as i32,
+        _ => 0,
     }
 }
 
@@ -383,5 +421,110 @@ mod tests {
         let (doc, _) = seeded(&["intact"]);
         assert!(!doc.apply_update(&[0xde, 0xad, 0xbe, 0xef]));
         assert_eq!(doc.items()[0].text, "intact");
+    }
+
+    #[test]
+    fn a_new_item_has_no_priority() {
+        let doc = TodoListDoc::new();
+        doc.add_item("plain");
+        assert_eq!(doc.items()[0].priority, 0);
+    }
+
+    #[test]
+    fn priority_cycles_up_and_wraps_to_none() {
+        let doc = TodoListDoc::new();
+        let (id, _) = doc.add_item("cycle me");
+        for expected in [1, 2, 3, 0, 1] {
+            doc.cycle_priority(&id);
+            assert_eq!(doc.items()[0].priority, expected);
+        }
+    }
+
+    #[test]
+    fn priority_is_clamped_to_the_scale() {
+        let doc = TodoListDoc::new();
+        let (id, _) = doc.add_item("clamp me");
+        doc.set_priority(&id, 99);
+        assert_eq!(doc.items()[0].priority, MAX_PRIORITY);
+        doc.set_priority(&id, -5);
+        assert_eq!(doc.items()[0].priority, 0);
+    }
+
+    #[test]
+    fn setting_the_same_priority_produces_no_update() {
+        let doc = TodoListDoc::new();
+        let (id, _) = doc.add_item("steady");
+        assert!(doc.set_priority(&id, 2).is_some());
+        assert!(doc.set_priority(&id, 2).is_none());
+    }
+
+    #[test]
+    fn priority_survives_a_snapshot() {
+        let doc = TodoListDoc::new();
+        let (a, _) = doc.add_item("high");
+        let (b, _) = doc.add_item("low");
+        doc.set_priority(&a, 3);
+        doc.set_priority(&b, 1);
+
+        let restored = TodoListDoc::load(&doc.snapshot());
+        assert_eq!(restored.items(), doc.items());
+        assert_eq!(restored.items()[0].priority, 3);
+        assert_eq!(restored.items()[1].priority, 1);
+    }
+
+    #[test]
+    fn a_list_written_before_priority_existed_still_opens() {
+        let legacy = Doc::new();
+        let items = legacy.get_or_insert_array("items");
+        {
+            let mut txn = legacy.transact_mut();
+            items.insert(
+                &mut txn,
+                0,
+                MapPrelim::from([
+                    ("id", Any::String("old-1".into())),
+                    ("text", Any::String("written last week".into())),
+                    ("done", Any::Bool(false)),
+                ]),
+            );
+        }
+        let snapshot = {
+            let txn = legacy.transact();
+            txn.encode_state_as_update_v1(&StateVector::default())
+        };
+
+        let doc = TodoListDoc::load(&snapshot);
+        let items = doc.items();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].text, "written last week");
+        assert_eq!(items[0].priority, 0);
+
+        doc.set_priority("old-1", 2);
+        assert_eq!(doc.items()[0].priority, 2);
+    }
+
+    #[test]
+    fn two_docs_setting_priority_on_different_items_converge() {
+        let a = TodoListDoc::new();
+        let (one, _) = a.add_item("one");
+        let (two, _) = a.add_item("two");
+        let b = TodoListDoc::load(&a.snapshot());
+
+        let from_a = a.set_priority(&one, 3).unwrap();
+        let from_b = b.set_priority(&two, 1).unwrap();
+        a.apply_update(&from_b);
+        b.apply_update(&from_a);
+
+        assert_eq!(a.items(), b.items());
+        assert_eq!(a.items()[0].priority, 3);
+        assert_eq!(a.items()[1].priority, 1);
+    }
+
+    #[test]
+    fn priority_on_an_unknown_item_is_a_no_op() {
+        let doc = TodoListDoc::new();
+        doc.add_item("real");
+        assert!(doc.set_priority("ghost", 2).is_none());
+        assert!(doc.cycle_priority("ghost").is_none());
     }
 }
