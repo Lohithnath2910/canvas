@@ -116,6 +116,10 @@ export component KanbanWindow inherits Window {
         return col * root.col-step;
     }
 
+    pure function card-x(col: int) -> length {
+        return col * root.col-step + Layout.kanban-col-pad;
+    }
+
     pure function card-y(row: int) -> length {
         return Layout.kanban-col-head-h + Layout.kanban-card-gap + row * root.card-step;
     }
@@ -168,14 +172,22 @@ export component KanbanWindow inherits Window {
                 width: root.column-w;
                 height: parent.height;
                 background: transparent;
-                border-width: (root.held-card != "" && root.drop-col == idx) ? 1px : 0px;
-                border-color: Palette.text;
-                border-radius: Layout.radius-control;
+
+                if root.held-card != "" && root.drop-col == idx: Rectangle {
+                    x: 0;
+                    y: Layout.kanban-col-head-h;
+                    width: parent.width;
+                    height: parent.height - Layout.kanban-col-head-h;
+                    background: transparent;
+                    border-width: 1px;
+                    border-color: Palette.text;
+                    border-radius: Layout.radius-control;
+                }
 
                 Text {
-                    x: 0;
+                    x: Layout.kanban-col-pad;
                     y: 0;
-                    width: parent.width - Layout.kanban-count-w - Layout.icon-gap;
+                    width: parent.width - 2 * Layout.kanban-col-pad - Layout.kanban-count-w - Layout.icon-gap;
                     height: Layout.kanban-col-head-h - 1px;
                     vertical-alignment: center;
                     text: column.title;
@@ -188,7 +200,7 @@ export component KanbanWindow inherits Window {
                 }
 
                 count-text := Text {
-                    x: parent.width - Layout.kanban-count-w;
+                    x: parent.width - Layout.kanban-col-pad - Layout.kanban-count-w;
                     y: 0;
                     width: Layout.kanban-count-w;
                     height: Layout.kanban-col-head-h - 1px;
@@ -203,9 +215,9 @@ export component KanbanWindow inherits Window {
                 }
 
                 Rectangle {
-                    x: 0;
+                    x: Layout.kanban-col-pad;
                     y: Layout.kanban-col-head-h - 1px;
-                    width: parent.width;
+                    width: parent.width - 2 * Layout.kanban-col-pad;
                     height: 1px;
                     background: Palette.edge;
                 }
@@ -214,9 +226,9 @@ export component KanbanWindow inherits Window {
             for card in root.cards: card-box := Rectangle {
                 property <bool> held: root.held-card == card.id;
 
-                x: root.column-x(card.col);
+                x: root.card-x(card.col);
                 y: root.card-y(card.row);
-                width: root.column-w;
+                width: root.column-w - 2 * Layout.kanban-col-pad;
                 height: Layout.kanban-card-h;
                 background: Palette.elev-raised;
                 border-width: 1px;
@@ -234,7 +246,7 @@ export component KanbanWindow inherits Window {
                     double-clicked => { root.card-opened(card.id); }
                     moved => {
                         root.held-card = card.id;
-                        root.held-x = root.column-x(card.col);
+                        root.held-x = root.card-x(card.col);
                         root.held-y = root.card-y(card.row);
                         root.held-title = card.title;
                         root.held-meta = card.meta;
@@ -299,7 +311,7 @@ export component KanbanWindow inherits Window {
             if root.held-card != "": Rectangle {
                 x: root.held-x + root.held-dx;
                 y: root.held-y + root.held-dy;
-                width: root.column-w;
+                width: root.column-w - 2 * Layout.kanban-col-pad;
                 height: Layout.kanban-card-h;
                 background: Palette.elev-raised;
                 border-width: 1px;
@@ -348,7 +360,7 @@ export component KanbanWindow inherits Window {
             height: root.add-row-h;
 
             for column[idx] in root.columns: add-btn := IconButton {
-                x: root.column-x(idx);
+                x: root.card-x(idx);
                 y: 0;
                 width: Layout.icon-size;
                 enabled: !root.sheet-open;

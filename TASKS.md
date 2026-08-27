@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-09` — Kanban board spacing (padding, margins, the column outline). **The Calendar is done**: `W3-05`, `W3-05b`, `W3-06`, `W3-07` ticked and photographed; `W3-08` is 🟡 because the month grid cannot be filled in a forced-open frame. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet — the Kanban is next.
+**Current task:** `W3-10` — the Kanban card editor becomes a `CardOverlay`. `W3-09` landed 🟡 on 2026-08-27: the column gained an 8px inner pad, the drop outline moved below the head rule, and the head text, count, rule, cards and `+` all share one inset. The outline itself needs a live drag to see, so its box stays open. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet — the Kanban is in hand.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
-**Done:** 40 ticked. 246 tests pass. **Stage W3 is half done** — Note, Todo and Calendar rebuilt on 2026-08-27; Kanban and Spreadsheet are what is left. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill) — see the verification queue, which now has three fresh blocks
+**Done:** 40 ticked. 246 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is in hand: `W3-09` landed 🟡. Spreadsheet is what is left after it. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag) — see the verification queue, which now has three fresh blocks
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -122,6 +122,20 @@ feature. Say so in the end-of-run report every time until it happens.
 correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
 `MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
 cannot reach.
+
+**THE KANBAN BOARD SPACING — `W3-09`, 2026-08-27.** The empty board was photographed and the
+heads, rules and `+` buttons all sit on one 24px inset. The **drop outline only exists while a
+card is held**, which no screenshot can reach.
+- [ ] `cargo run -p canvas-app -- --open-kind kanban`, then `+` under **TODO** twice
+- [ ] Press and hold a card, move it inside its own column. The 1px white outline must appear
+      around **the card area only** — it starts at the head rule, **not** wrapped around the
+      `TODO 2` head text the way it used to
+- [ ] Look at the gap between that outline and the cards inside it. It should read as a clear
+      8px margin on all four sides, not a doubled border. **This is the whole task** — if it
+      still looks tight, say so and `kanban-col-pad` in `theme/layout.slint` is the one number
+      to move
+- [ ] Drag across to **DOING** — the outline still switches on the dragged card's centre
+      crossing the gap. The pad must not have shifted where the columns divide
 
 **THE CALENDAR — `W3-05` to `W3-08`, rebuilt 2026-08-27.** The week grid, the NOW rule, the
 readability pass and the editor card were all photographed. These are the parts a frame cannot
@@ -2480,6 +2494,16 @@ easy — the user asked for each one to be *done* before the next begins.
   and the board crowding the plate edge.
   *DoD:* the outline has real breathing room from the cards inside it · columns do not touch
   the plate edge · measured against `handoff/screenshots/widget-types.png`, not by feel.
+  🟡 **built 2026-08-27, box stays open** — `kanban-col-pad: 8px` is the whole change. The
+  column rect keeps the full `column-w`; everything in it (head text, count, head rule, cards,
+  the drag ghost, the `+`) is inset by that pad, so the drop outline is 8px clear of a card on
+  every side and the first card sits 8px below the outline top. The outline also stopped
+  wrapping the column header — it now starts at the head rule, which is what the reference
+  does. **This is a deliberate 8px divergence from `widget-types.png`**, where the card is
+  flush with the column: the reference only ever draws an outline around an *empty* column, so
+  it never shows the collision the user is complaining about. Photographed empty — heads,
+  rules and `+` all align on one inset — but **the outline only exists mid-drag**, so it needs
+  a hand on the mouse. See the VERIFICATION QUEUE.
 
 - [ ] **W3-10 · The card editor becomes a card overlay** — `M`
   Needs: W3-07, W3-09. **The user:** *"same issues as calendar, very bad card details etc, i

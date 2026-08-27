@@ -1,4 +1,4 @@
-# Canvas — Progress Log
+| 4 | **The VERIFICATION QUEUE**| 3 | **W3-12 → W3-14**| 2 | **W3-11**| 1 | **W3-10**# Canvas — Progress Log
 
 **Last updated:** 2026-08-27
 
@@ -71,22 +71,23 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W3 is half done. The user walked every widget on 2026-08-27 and reported 19 issues
-across five of them; the Note, the Todo and the Calendar are rebuilt and committed. The Kanban
-and the Spreadsheet are what is left.** Stage W2's documents are all correct — **nothing in W3
+**Stage W3 is past half. The user walked every widget on 2026-08-27 and reported 19 issues
+across five of them; the Note, the Todo and the Calendar are rebuilt and committed, and the
+Kanban is in hand — `W3-09` landed 🟡. The rest of the Kanban and the whole Spreadsheet are
+what is left.** Stage W2's documents are all correct — **nothing in W3
 is a CRDT bug.** It is surface work, and it is the whole of the work.
 
 **The build order is the user's, and it is not negotiable:**
 **Note → Todo → Calendar → Kanban → Spreadsheet.** Each widget is *finished* before the next
-one starts. Do not jump ahead because a task looks easy. **Three are done. Start at the Kanban.**
+one starts. Do not jump ahead because a task looks easy. **Three are done and the Kanban is
+open. Start at `W3-10`.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **W3-09** — Kanban spacing | *"see the outline padding margin etc, its bad take the space and make it much better"*. The column outline sits hard against the cards and the board crowds the plate edge |
-| 2 | **W3-10** — Kanban card editor | **Reuse `CardOverlay` from `theme/overlay.slint`. Do not build a second overlay.** If `Sheet` has no caller left but the gallery afterwards, say so and delete it |
-| 3 | **W3-11** — drop `UNASSIGNED`, add priority | An empty assignee and no due date draws **nothing** — `card_meta` in `app.rs` returns that word today and should return empty, with the row collapsing. Priority reuses **`PriorityDots`** from W3-03, unchanged |
-| 4 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found |
-| 5 | **The VERIFICATION QUEUE** | After W3. It has three fresh blocks — Todo, Calendar, Spreadsheet — none clicked |
+| 1 | **W3-10** — Kanban card editor | **Reuse `CardOverlay` from `theme/overlay.slint`. Do not build a second overlay.** If `Sheet` has no caller left but the gallery afterwards, say so and delete it |
+| 2 | **W3-11** — drop `UNASSIGNED`, add priority | An empty assignee and no due date draws **nothing** — `card_meta` in `app.rs` returns that word today and should return empty, with the row collapsing. Priority reuses **`PriorityDots`** from W3-03, unchanged |
+| 3 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found |
+| 4 | **The VERIFICATION QUEUE** | After W3. It has three fresh blocks — Todo, Calendar, Spreadsheet — none clicked |
 
 **Answers already taken. Do not re-ask these:**
 - **The Calendar is day ROWS with time left→right** — built. An event is a bar whose length is
@@ -108,7 +109,8 @@ open question 12.
 **`SW-12` (Whiteboard) stays parked at the user's request** — *"for now ignore whiteboard"*.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
 
-**Closed in W3 so far:** `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
+**Closed in W3 so far:** `W3-09` (Kanban column pad, 🟡 — the drop outline needs a live drag),
+ `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
 (priority dots), `W3-04` (todo drag-reorder on a fractional index, 🟡), `W3-05` (Calendar day
 rows), `W3-05b` (the readability pass the user demanded mid-run), `W3-06` (NOW rule), `W3-07`
 (`CardOverlay`, Calendar to 560×460), `W3-08` (hour/minute grids replace the clock face, 🟡).
@@ -3247,3 +3249,45 @@ without redirecting `APPDATA`, which wrote into the user's live database, and th
 that cleaned it up deleted **every** todo row including an empty one of theirs. It was
 recreated and the count is back to five. `--remove` is type-wide, not scoped to what the example
 inserted. **Always redirect `APPDATA` first** — the recipe is in START HERE.
+
+### 2026-08-27 — W3-09: the Kanban column gets an inside
+
+- 🟡 **`kanban-col-pad: 8px` is the entire change**, and everything else follows from it.
+  The column `Rectangle` keeps the full `column-w`, so the drop outline still covers exactly
+  the region `col-at()` decides on. Everything *inside* it — head text, count, head rule,
+  cards, the drag ghost, the `+` under the column — is inset by that pad via a new
+  `card-x(col)` sitting alongside `column-x(col)`. The outline is therefore 8px clear of a
+  card on the left and right, and `card-y(0)` already put the first card 8px below the head
+  band, so the top reads the same.
+
+- 🟡 **The outline stopped wrapping the column header.** It was `y: 0, height: parent.height`,
+  which drew a box around `TODO 2` as well as the cards, hard against the head rule. It is now
+  its own `if` child at `y: kanban-col-head-h`, so it starts *at* the rule and runs to the
+  board floor. That is what `handoff/screenshots/widget-types.png` does — the mockup's outlined
+  column is framed below its rule, not around it.
+
+- **The 8px is a deliberate divergence from the reference, and it is worth saying why.**
+  Measured off `widget-types.png` at 1:1 (plate 640 wide at x=1051; column rule and card both
+  194 wide; column gap 13≈12; pad 16), the mockup's card is **flush** with its column — outline
+  width and card width are the same number. It gets away with that because the only column it
+  ever outlines is the one the card has been *lifted out of*, so the mockup never draws the
+  collision. In the running app every drop target is a column that still has cards in it, and
+  two 1px borders 0px apart is precisely the *"outline padding margin etc, its bad"* the user
+  reported. Everything else in the reference — pad 16, col gap 12, card 70 tall, card pad 12 —
+  was already matched and is unchanged.
+
+- **What the drop math does and does not do.** `held-x` moved to `card-x` so the ghost picks up
+  exactly where the card was drawn. `col-at()`'s argument stayed on `column-x` on purpose: it
+  wants the dragged card's *centre*, and `column-x(col) + column-w/2` is still that centre once
+  the +8 inset and the −8 half-width cancel. Switching it to `card-x` biased the hand-off point
+  by 8px, which is the one way this task could have regressed `SW-10`'s drag.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo test --workspace` 246 pass,
+  `cargo fmt --all`.
+
+- 📸 **Photographed empty** (`scripts/shot.ps1`, scratch `APPDATA`): the three heads, their
+  rules and the three `+` all land on one inset, and the `+` now sits under the card edge
+  rather than the column edge. **The outline itself cannot be photographed** — it only exists
+  while a card is held — so the box stays open and the VERIFICATION QUEUE has a four-line block
+  saying exactly what to drag. `kanban-col-pad` is the single number to move if 8 still reads
+  tight.
