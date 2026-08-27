@@ -1,3 +1,4 @@
+use crate::fractional::{first_key, key_between};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{
@@ -12,6 +13,7 @@ pub struct TodoItem {
     pub text: String,
     pub done: bool,
     pub priority: i32,
+    pub pos: String,
 }
 
 pub struct TodoListDoc {
@@ -56,8 +58,10 @@ impl TodoListDoc {
                 text: string_field(&txn, &map, "text"),
                 done: matches!(map.get(&txn, "done"), Some(Out::Any(Any::Bool(true)))),
                 priority: int_field(&txn, &map, "priority"),
+                pos: string_field(&txn, &map, "pos"),
             });
         }
+        items.sort_by(|a, b| a.pos.cmp(&b.pos));
         items
     }
 
@@ -79,6 +83,8 @@ impl TodoListDoc {
     }
 
     fn insert_item(&self, id: &str, text: &str) -> Vec<u8> {
+        let tail = self.items().last().map(|i| i.pos.clone());
+        let pos = key_between(tail.as_deref(), None).unwrap_or_else(first_key);
         let mut txn = self.doc.transact_mut();
         let len = self.items_ref.len(&txn);
         self.items_ref.insert(
@@ -89,6 +95,7 @@ impl TodoListDoc {
                 ("text", Any::String(text.into())),
                 ("done", Any::Bool(false)),
                 ("priority", Any::BigInt(0)),
+                ("pos", Any::String(pos.as_str().into())),
             ]),
         );
         txn.encode_update_v1()
@@ -147,6 +154,52 @@ impl TodoListDoc {
             matches!(target.get(&txn, "done"), Some(Out::Any(Any::Bool(true))))
         };
         self.set_done(id, !current)
+    }
+
+    pub fn move_item(&self, id: &str, index: usize) -> Option<Vec<u8>> {
+        let neighbours: Vec<TodoItem> = self.items().into_iter().filter(|i| i.id != id).collect();
+        let index = index.min(neighbours.len());
+        let lower = index
+            .checked_sub(1)
+            .and_then(|i| neighbours.get(i))
+            .map(|i| i.pos.clone());
+        let upper = neighbours.get(index).map(|i| i.pos.clone());
+        let pos = key_between(lower.as_deref(), upper.as_deref())?;
+
+        let mut txn = self.doc.transact_mut();
+        let target = find_map(&txn, &self.items_ref, id)?;
+        target.insert(&mut txn, "pos", Any::String(pos.as_str().into()));
+        Some(txn.encode_update_v1())
+    }
+
+    pub fn backfill_positions(&self) -> Option<Vec<u8>> {
+        let items = self.items();
+        if items.iter().all(|i| !i.pos.is_empty()) {
+            return None;
+        }
+        let mut previous: Option<String> = items
+            .iter()
+            .take_while(|i| !i.pos.is_empty())
+            .last()
+            .map(|i| i.pos.clone());
+
+        let mut txn = self.doc.transact_mut();
+        let mut wrote = false;
+        for item in items.iter().filter(|i| i.pos.is_empty()) {
+            let Some(pos) = key_between(previous.as_deref(), None) else {
+                break;
+            };
+            let Some(target) = find_map(&txn, &self.items_ref, &item.id) else {
+                continue;
+            };
+            target.insert(&mut txn, "pos", Any::String(pos.as_str().into()));
+            previous = Some(pos);
+            wrote = true;
+        }
+        if !wrote {
+            return None;
+        }
+        Some(txn.encode_update_v1())
     }
 
     pub fn delete_item(&self, id: &str) -> Option<Vec<u8>> {
@@ -526,5 +579,173 @@ mod tests {
         doc.add_item("real");
         assert!(doc.set_priority("ghost", 2).is_none());
         assert!(doc.cycle_priority("ghost").is_none());
+    }
+
+    fn texts(doc: &TodoListDoc) -> Vec<String> {
+        doc.items().into_iter().map(|i| i.text).collect()
+    }
+
+    #[test]
+    fn new_items_get_positions_and_keep_insertion_order() {
+        let doc = TodoListDoc::new();
+        doc.add_item("first");
+        doc.add_item("second");
+        doc.add_item("third");
+        assert_eq!(texts(&doc), ["first", "second", "third"]);
+        assert!(doc.items().iter().all(|i| !i.pos.is_empty()));
+    }
+
+    #[test]
+    fn an_item_moves_to_the_front() {
+        let doc = TodoListDoc::new();
+        doc.add_item("a");
+        doc.add_item("b");
+        let (c, _) = doc.add_item("c");
+        doc.move_item(&c, 0).unwrap();
+        assert_eq!(texts(&doc), ["c", "a", "b"]);
+    }
+
+    #[test]
+    fn an_item_moves_into_the_middle_and_to_the_end() {
+        let doc = TodoListDoc::new();
+        let (a, _) = doc.add_item("a");
+        doc.add_item("b");
+        doc.add_item("c");
+        doc.move_item(&a, 1).unwrap();
+        assert_eq!(texts(&doc), ["b", "a", "c"]);
+        doc.move_item(&a, 2).unwrap();
+        assert_eq!(texts(&doc), ["b", "c", "a"]);
+    }
+
+    #[test]
+    fn a_move_past_the_end_lands_at_the_end() {
+        let doc = TodoListDoc::new();
+        let (a, _) = doc.add_item("a");
+        doc.add_item("b");
+        doc.move_item(&a, 99).unwrap();
+        assert_eq!(texts(&doc), ["b", "a"]);
+    }
+
+    #[test]
+    fn a_new_order_survives_a_snapshot() {
+        let doc = TodoListDoc::new();
+        doc.add_item("a");
+        doc.add_item("b");
+        let (c, _) = doc.add_item("c");
+        doc.move_item(&c, 0);
+
+        let restored = TodoListDoc::load(&doc.snapshot());
+        assert_eq!(texts(&restored), ["c", "a", "b"]);
+        assert_eq!(restored.items(), doc.items());
+    }
+
+    #[test]
+    fn many_moves_into_the_same_gap_stay_ordered() {
+        let doc = TodoListDoc::new();
+        doc.add_item("head");
+        doc.add_item("tail");
+        for n in 0..24 {
+            let (id, _) = doc.add_item(&format!("wedge {n}"));
+            doc.move_item(&id, 1).unwrap();
+        }
+        let order = texts(&doc);
+        assert_eq!(order.len(), 26);
+        assert_eq!(order[0], "head");
+        assert_eq!(order[25], "tail");
+        assert_eq!(order[1], "wedge 23");
+    }
+
+    #[test]
+    fn two_docs_moving_different_items_converge() {
+        let a = TodoListDoc::new();
+        let (one, _) = a.add_item("one");
+        a.add_item("two");
+        let (three, _) = a.add_item("three");
+        let b = TodoListDoc::load(&a.snapshot());
+
+        let from_a = a.move_item(&three, 0).unwrap();
+        let from_b = b.move_item(&one, 2).unwrap();
+        a.apply_update(&from_b);
+        b.apply_update(&from_a);
+
+        assert_eq!(a.items(), b.items());
+        assert_eq!(texts(&a).len(), 3);
+    }
+
+    #[test]
+    fn a_list_written_before_positions_existed_keeps_its_order() {
+        let legacy = Doc::new();
+        let items = legacy.get_or_insert_array("items");
+        {
+            let mut txn = legacy.transact_mut();
+            for (i, text) in ["alpha", "beta", "gamma"].iter().enumerate() {
+                items.insert(
+                    &mut txn,
+                    i as u32,
+                    MapPrelim::from([
+                        ("id", Any::String(format!("old-{i}").into())),
+                        ("text", Any::String((*text).into())),
+                        ("done", Any::Bool(false)),
+                    ]),
+                );
+            }
+        }
+        let snapshot = {
+            let txn = legacy.transact();
+            txn.encode_state_as_update_v1(&StateVector::default())
+        };
+
+        let doc = TodoListDoc::load(&snapshot);
+        assert_eq!(texts(&doc), ["alpha", "beta", "gamma"]);
+
+        assert!(doc.backfill_positions().is_some());
+        assert_eq!(texts(&doc), ["alpha", "beta", "gamma"]);
+        assert!(doc.items().iter().all(|i| !i.pos.is_empty()));
+        assert!(doc.backfill_positions().is_none());
+
+        doc.move_item("old-2", 0).unwrap();
+        assert_eq!(texts(&doc), ["gamma", "alpha", "beta"]);
+    }
+
+    #[test]
+    fn backfill_leaves_an_already_positioned_list_alone() {
+        let doc = TodoListDoc::new();
+        doc.add_item("a");
+        doc.add_item("b");
+        assert!(doc.backfill_positions().is_none());
+    }
+
+    #[test]
+    fn a_backfilled_list_appends_after_the_old_items() {
+        let legacy = Doc::new();
+        let items = legacy.get_or_insert_array("items");
+        {
+            let mut txn = legacy.transact_mut();
+            items.insert(
+                &mut txn,
+                0,
+                MapPrelim::from([
+                    ("id", Any::String("old-1".into())),
+                    ("text", Any::String("was here first".into())),
+                    ("done", Any::Bool(false)),
+                ]),
+            );
+        }
+        let snapshot = {
+            let txn = legacy.transact();
+            txn.encode_state_as_update_v1(&StateVector::default())
+        };
+
+        let doc = TodoListDoc::load(&snapshot);
+        doc.backfill_positions();
+        doc.add_item("added after");
+        assert_eq!(texts(&doc), ["was here first", "added after"]);
+    }
+
+    #[test]
+    fn moving_an_unknown_item_is_a_no_op() {
+        let doc = TodoListDoc::new();
+        doc.add_item("real");
+        assert!(doc.move_item("ghost", 0).is_none());
     }
 }

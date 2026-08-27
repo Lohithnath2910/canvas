@@ -24,8 +24,13 @@ component ItemRow inherits Rectangle {
     callback remove();
     callback begin-edit();
     callback priority-cycled();
+    callback drag-moved(length);
+    callback drag-ended();
+
+    in property <bool> held: false;
 
     height: Layout.todo-row-h;
+    opacity: root.held ? Layout.placeholder-opacity : 1.0;
 
     out property <bool> hovered: touch.has-hover || del.hovered || del.focused;
 
@@ -40,7 +45,14 @@ component ItemRow inherits Rectangle {
         width: parent.width - Layout.icon-size - Layout.icon-gap;
         height: parent.height;
         enabled: !root.editing;
+        mouse-cursor: root.held ? grabbing : default;
         double-clicked => { root.begin-edit(); }
+        moved => { root.drag-moved(self.mouse-y - self.pressed-y); }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.up) {
+                root.drag-ended();
+            }
+        }
     }
 
     if !root.editing: Checkbox {
@@ -137,6 +149,7 @@ export component TodoWindow inherits Window {
     callback item-removed(string);
     callback item-added(string);
     callback item-priority-cycled(string);
+    callback item-moved(string, int);
     callback edit-committed();
     callback pin-toggled(bool);
     callback delete-confirmed();
@@ -176,6 +189,19 @@ export component TodoWindow inherits Window {
     property <length> confirm-h: Layout.confirm-band;
     property <length> footer-h: Layout.footer-band;
     property <length> compose-band: 2 * Layout.pad + Layout.checkbox-row-h;
+    property <length> row-step: Layout.todo-row-h + Layout.todo-row-gap;
+
+    property <string> held-id: "";
+    property <length> held-y: 0px;
+    property <length> held-dy: 0px;
+    property <int> drop-index: 0;
+
+    pure function index-at(y: length) -> int {
+        return clamp(
+            round((y - Layout.ring + root.row-step / 2) / root.row-step),
+            0,
+            root.items.length - 1);
+    }
 
     function commit-new() {
         if (new-input.text != "") {
@@ -240,28 +266,60 @@ export component TodoWindow inherits Window {
                 y: 0;
                 width: parent.width - Layout.scroll-gutter;
                 height: 100%;
-                viewport-height: max(rows.preferred-height, self.height);
+                interactive: false;
+                viewport-height: max(
+                    2 * Layout.ring + root.items.length * root.row-step - Layout.todo-row-gap,
+                    self.height);
 
-                rows := VerticalLayout {
-                    width: 100%;
-                    alignment: start;
-                    spacing: Layout.todo-row-gap;
-                    padding-left: Layout.ring;
-                    padding-right: Layout.ring;
-                    padding-top: Layout.ring;
-                    padding-bottom: Layout.ring;
-
-                    for entry in root.items: ItemRow {
-                        item: entry;
-                        editing: root.editing-id == entry.id;
-                        toggled => { root.item-toggled(entry.id); }
-                        text-edited(value) => { root.item-text-edited(entry.id, value); }
-                        commit => { root.edit-committed(); }
-                        remove => { root.item-removed(entry.id); }
-                        begin-edit => { root.editing-id = entry.id; }
-                        priority-cycled => { root.item-priority-cycled(entry.id); }
+                for entry[idx] in root.items: ItemRow {
+                    x: Layout.ring;
+                    y: Layout.ring + idx * root.row-step;
+                    width: parent.width - 2 * Layout.ring;
+                    item: entry;
+                    editing: root.editing-id == entry.id;
+                    held: root.held-id == entry.id;
+                    toggled => { root.item-toggled(entry.id); }
+                    text-edited(value) => { root.item-text-edited(entry.id, value); }
+                    commit => { root.edit-committed(); }
+                    remove => { root.item-removed(entry.id); }
+                    begin-edit => { root.editing-id = entry.id; }
+                    priority-cycled => { root.item-priority-cycled(entry.id); }
+                    drag-moved(dy) => {
+                        root.held-id = entry.id;
+                        root.held-y = Layout.ring + idx * root.row-step;
+                        root.held-dy = dy;
+                        root.drop-index = root.index-at(root.held-y + dy);
+                    }
+                    drag-ended => {
+                        if (root.held-id == entry.id) {
+                            if (root.drop-index != idx) {
+                                root.item-moved(entry.id, root.drop-index);
+                            }
+                            root.held-id = "";
+                            root.held-dy = 0px;
+                        }
                     }
                 }
+
+                if root.held-id != "": Rectangle {
+                    x: Layout.ring;
+                    y: root.held-y + root.held-dy;
+                    width: parent.width - 2 * Layout.ring;
+                    height: Layout.todo-row-h;
+                    background: Palette.elev-raised;
+                    border-radius: Layout.radius-control;
+                    border-width: 1px;
+                    border-color: Palette.edge;
+                }
+            }
+
+            if root.held-id != "": Rectangle {
+                x: Layout.ring;
+                y: Layout.ring + rows-scroll.viewport-y + root.drop-index * root.row-step
+                    - Layout.todo-row-gap / 2;
+                width: parent.width - Layout.scroll-gutter - 2 * Layout.ring;
+                height: 1px;
+                background: Palette.text;
             }
 
             ScrollBar {

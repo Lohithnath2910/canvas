@@ -5,7 +5,7 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-04` — drag to reorder todo items, which needs a fractional index on the item map because §10.3 forbids reordering a nested array. `W3-01` (🟡), `W3-02` and `W3-03` are done. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
+**Current task:** `W3-05` — the Calendar relayout: days become rows, time becomes the x-axis. **The Todo is done** — `W3-02` and `W3-03` ticked, `W3-01` and `W3-04` 🟡 for a pointer. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
 **Done:** 34 ticked. 228 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel), `SW-14` (the Spreadsheet — it renders, photographed; typing, merge and column resize are unwatched) — see the verification queue
@@ -122,6 +122,20 @@ feature. Say so in the end-of-run report every time until it happens.
 correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
 `MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
 cannot reach.
+
+**THE TODO — `W3-01` to `W3-04`, built 2026-08-27.** The list and its priority dots were
+photographed and are correct. What is left is pointer and hover work.
+- [ ] Type into the compose row and click **`+`** with the mouse — the item is added. Click `+`
+      with the field **empty** — nothing happens at all. Enter still works
+- [ ] Click the **dots** on the right of a row: they cycle 1 → 2 → 3 → none. A row with no
+      priority shows **nothing** until you hover it
+- [ ] **Drag a row up and down the list.** The row you grabbed goes faint and stays put; a
+      ghost follows the pointer; a 1px white rule shows where it will land. It moves on release
+- [ ] ⚠ **If the list scrolls instead of dragging**, `Flickable { interactive: false }` in
+      `todo.slint` is the flag that was supposed to prevent it — say so and it is a one-line fix
+- [ ] Reorder, close the window, reopen from home — **the order is kept**
+- [ ] Scroll the list: the scrollbar **fades in while scrolling and fades out ~1s after**. It
+      is a thin square bar now, not a capsule. Hovering the 8px gutter also brings it back
 - [ ] `cargo run -p canvas-app -- --open-kind spreadsheet`
 - [ ] Click a cell. It takes the **1px `text` outline, no fill**, and the footer stamp on the
       left changes to that cell — `C4`, and so on
@@ -2281,6 +2295,32 @@ easy — the user asked for each one to be *done* before the next begins.
   separate floating row at list level, and measure against the stationary area.
   *DoD:* drag a row to a new position and it stays there after a restart · two docs moving
   different rows converge · an existing list opens in its original order.
+  🟡 **Built 2026-08-27. The list was photographed and is unchanged by the restructure; the
+  drag itself needs a pointer this session does not have.**
+  **CRDT, and it is the part that is actually verified** — 11 tests. Items gained a
+  **fractional-index `pos`** and `items()` sorts by it. §10.3 forbids reordering a nested
+  array and `yrs::Array` cannot be reordered safely, so this was never a choice.
+  `key_between` already existed in `fractional.rs` and needed no changes.
+  **The legacy path is the bit that could have silently scrambled someone's list**, so it is
+  handled twice over: `items()` uses a **stable** sort, and `""` sorts before every real key,
+  so a list written before this task keeps its array order even with no positions at all.
+  Then `backfill_positions()` assigns keys in that order, and `App::open_widget` calls it once
+  when a todo opens and pushes the update through `pending_updates` like any edit. A test
+  builds the pre-`pos` shape by hand through raw `yrs`, loads it, backfills, checks the order
+  is unchanged, checks a second backfill is a no-op, and then reorders it.
+  **The drag follows the rule that `S1-51` and `SW-21a` both had to learn:** the row's
+  `TouchArea` **does not move**. The row stays exactly where the model puts it and goes to
+  25% opacity; a separate ghost rectangle is drawn at `held-y + held-dy`, and a 1px `text`
+  rule marks the drop index. Nothing is written until the pointer is released.
+  **The list is now absolutely positioned** (`y: ring + idx * row-step`) instead of a
+  `VerticalLayout`, because a drag needs to know where a row *is*. The photograph confirms the
+  restructure changed nothing on screen.
+  ⚠ **`Flickable { interactive: false }` is load-bearing.** A `Flickable` pans on a vertical
+  pointer drag, which is exactly the gesture the reorder uses — they would have fought. The
+  flag kills drag-to-pan and keeps wheel scrolling, which is all this list ever needed.
+  **If the list still pans instead of dragging when the user tries it, that flag is where to
+  look**, and the fallback is the Spreadsheet's manual `view-y` + `ScrollBar` with no
+  `Flickable` at all.
 
 ### W3c — Calendar
 

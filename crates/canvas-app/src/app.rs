@@ -560,6 +560,7 @@ impl App {
             widget.poll_timer = Some(poll_timer);
         }
         if matches!(window, WidgetWindow::Todo(_)) {
+            backfill_todo_positions(app, id);
             refresh_todo(app, id);
         }
         if matches!(window, WidgetWindow::Calendar(_)) {
@@ -725,6 +726,23 @@ fn end_kanban_card_edit(handle: &slint::Weak<KanbanWindow>) {
     }
 }
 
+fn backfill_todo_positions(app: &SharedApp, id: &str) {
+    let Ok(mut a) = app.try_borrow_mut() else {
+        return;
+    };
+    let Some(widget) = a.widgets.get_mut(id) else {
+        return;
+    };
+    let WidgetDoc::Todo(doc) = &widget.doc else {
+        return;
+    };
+    let Some(update) = doc.backfill_positions() else {
+        return;
+    };
+    widget.pending_updates.push(update);
+    widget.text_dirty = true;
+}
+
 fn refresh_todo(app: &SharedApp, id: &str) {
     let Ok(a) = app.try_borrow() else {
         return;
@@ -783,6 +801,20 @@ fn todo_edit(app: &SharedApp, id: &str, change: impl FnOnce(&TodoListDoc) -> Opt
 fn wire_todo(app: &SharedApp, id: &str, window: &TodoWindow) -> slint::Timer {
     let owned_id = id.to_string();
     let poll_timer = slint::Timer::default();
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        window.on_item_moved(move |item_id, index| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            end_todo_row_edit(&handle);
+            let index = index.max(0) as usize;
+            todo_edit(&app, &id, |doc| doc.move_item(item_id.as_ref(), index));
+        });
+    }
 
     {
         let weak = Rc::downgrade(app);
