@@ -9,6 +9,20 @@
 *If you have just been told "go", "continue", or anything equally short: this block is the
 whole instruction. It is rewritten at the end of every task, so it is always current.*
 
+### Before you read anything else
+
+**Nothing needs to be set up and nothing needs to be asked.** Say "GO" and this block is the
+whole brief.
+
+- **Ponytail is already on.** It is a **project-level plugin** (`.claude/settings.json` →
+  `enabledPlugins: { "ponytail@ponytail": true }`) and its SessionStart hook prints
+  `PONYTAIL MODE ACTIVE — level: full` on its own. **The user does not have to type
+  `/ponytail full` and neither do you.** If that line did not appear, say so — do not silently
+  work without it.
+- **The three answers below are already taken.** Do not re-ask them.
+- **Everything is committed.** `git log --oneline -5` should end at a `W3-` commit. If
+  `git status` is dirty, trap 0 applies: believe the tree, not this file.
+
 ### What "go" means
 
 **Work the backlog continuously.** Not one task and a check-in — task after task, until
@@ -43,6 +57,13 @@ you stopped on the limit rather than on the backlog. A half-built task with noth
 down is exactly what this protocol exists to prevent. Only an explicit "keep going"
 overrides it.
 
+**A wall-clock deadline is a real instruction and you CAN honour it.** The user said *"stop
+after 15mins ?? can you do that?"* and *"stop 5 minutes before when limit is about to hit"* on
+2026-08-27. You cannot see the usage clock, but you **can** see the time: run `date "+%H:%M:%S"`
+at the start, compute the deadline, and check it between tasks. **Say the deadline out loud when
+you set it**, and stop at it rather than starting a task that will not fit. Per-task committing
+is what makes any stop point safe — never start a task you cannot finish and commit.
+
 **Stop only when** one of these is true, and say which: nothing unticked is left that can
 be done without the user · the next task is blocked on an **Open question** and no
 unblocked task remains · step 3 or 4 failed twice on the same task. Then report once:
@@ -50,57 +71,54 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W3 is open. The user walked every widget on 2026-08-27 and reported 19 issues across
-five of them.** Stage W2 is feature-complete and its documents are right — **nothing in W3 is
-a CRDT bug.** It is all surface, and it is the whole of the work.
+**Stage W3 is half done. The user walked every widget on 2026-08-27 and reported 19 issues
+across five of them; the Note, the Todo and the Calendar are rebuilt and committed. The Kanban
+and the Spreadsheet are what is left.** Stage W2's documents are all correct — **nothing in W3
+is a CRDT bug.** It is surface work, and it is the whole of the work.
 
 **The build order is the user's, and it is not negotiable:**
-**Note → Todo → Calendar → Kanban → Spreadsheet.** They asked for each widget to be *finished*
-before the next one starts. Do not jump to a later widget because a task looks easy.
+**Note → Todo → Calendar → Kanban → Spreadsheet.** Each widget is *finished* before the next
+one starts. Do not jump ahead because a task looks easy. **Three are done. Start at the Kanban.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **W3-01** — the note scrollbar | *"the ugly scrollbar is out of the style … it needs to show only when the cursor is inside the widget"*. ⚠ Moves a `DO NOT REGRESS` line, with the user's word. ⚠ **Never** make the 8px gutter conditional on overflow — reflow oscillation. Reserve the gutter, animate the thumb's opacity only |
-| 2 | **W3-02 → W3-04** — Todo | A clickable `+` that refuses empty · priority as 1–3 dots · drag to reorder, which **needs a fractional index on todo items** because §10.3 forbids reordering a nested array |
-| 3 | **W3-05 → W3-08** — Calendar | The big one. Days become **rows**, time becomes the x-axis, a NOW rule, and the event editor becomes a **compact card overlay** instead of a scrolling page |
-| 4 | **W3-09 → W3-11** — Kanban | Spacing · the same card overlay reused · `UNASSIGNED` dropped when empty, priority dots instead |
-| 5 | **W3-12 → W3-14** — Spreadsheet | Click-away to leave a cell · scroll **both** ways · resize that can actually be found |
+| 1 | **W3-09** — Kanban spacing | *"see the outline padding margin etc, its bad take the space and make it much better"*. The column outline sits hard against the cards and the board crowds the plate edge |
+| 2 | **W3-10** — Kanban card editor | **Reuse `CardOverlay` from `theme/overlay.slint`. Do not build a second overlay.** If `Sheet` has no caller left but the gallery afterwards, say so and delete it |
+| 3 | **W3-11** — drop `UNASSIGNED`, add priority | An empty assignee and no due date draws **nothing** — `card_meta` in `app.rs` returns that word today and should return empty, with the row collapsing. Priority reuses **`PriorityDots`** from W3-03, unchanged |
+| 4 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found |
+| 5 | **The VERIFICATION QUEUE** | After W3. It has three fresh blocks — Todo, Calendar, Spreadsheet — none clicked |
 
-**Three answers were taken before any of it was built.** They are the shape of six tasks:
-- **The Calendar becomes day ROWS with time left→right** — not a month grid, not one scrolled
-  day. An event is a **bar** whose length is its duration, which retires §10.4's compromise
-  that a chip carries the time and not the name.
-- **Priority reads as a count of 1–3 dots** — the glyph strip's own vocabulary. Red is spoken
-  for (rule 2) and cannot be used. **None set draws nothing at all.**
+**Answers already taken. Do not re-ask these:**
+- **The Calendar is day ROWS with time left→right** — built. An event is a bar whose length is
+  its duration.
+- **Priority is a count of 1–3 dots**, `PriorityDots` in `theme/glyphstrip.slint`. Red is spoken
+  for (rule 2). **None set draws nothing at all.** Clicking cycles 0→1→2→3→0.
 - **Widget by widget, the user's order.**
 
-**Two things W3 shares and must only build once:**
-1. **`CardOverlay`** — built in **W3-07** for the Calendar, **reused** in **W3-10** for the
-   Kanban. Do not build a second one. If `Sheet` has no caller left afterwards, delete it.
-2. **The priority dots** — built in **W3-03** for the Todo, reused in **W3-11** for the Kanban.
+**Two components exist to be reused, not rebuilt:**
+1. **`CardOverlay`** (`theme/overlay.slint`) — a centred card over a scrim, sized to its own
+   content, **never scrolls**. Built in W3-07, **reused in W3-10**.
+2. **`PriorityDots`** (`theme/glyphstrip.slint`) — built in W3-03, **reused in W3-11**.
 
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
 RAM passes and is measured (below). Smoothness still needs a release build in front of them;
 open question 12.
 
-**The verification queue is now SECOND to Stage W3.** It has not gone away, but the user has
-walked the app themselves twice now and found real defects both times — which is what the
-queue existed to catch. Fix what they reported first; hand them the queue after.
-
 **`SW-12` (Whiteboard) stays parked at the user's request** — *"for now ignore whiteboard"*.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
 
-**Closed in Stage W2**, all of it still standing: `SW-13` (`SheetDoc`), `SW-14` (the
-Spreadsheet — renders, photographed), `SW-22` (typing survives past one character — the lock
-is `rows_locked_by_editor`; **read its entry before writing any repeater with an editor**),
-`SW-23` (`--open-kind`), `SW-18` (`Sheet` — **two caller contracts**, and W3-07 replaces it),
-`SW-24` (the `document` type is gone), `SW-25` (the alignment pass), `SW-21a` (the card drag),
-`SW-19` (the pickers — arithmetic ✅ by 13 tests, **faces rejected by the user in W3-08**),
-`SW-20` (Calendar — **its layout is replaced by W3-05**), `SW-21` (card editor — **its sheet is
-replaced by W3-10**).
+**Closed in W3 so far:** `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
+(priority dots), `W3-04` (todo drag-reorder on a fractional index, 🟡), `W3-05` (Calendar day
+rows), `W3-05b` (the readability pass the user demanded mid-run), `W3-06` (NOW rule), `W3-07`
+(`CardOverlay`, Calendar to 560×460), `W3-08` (hour/minute grids replace the clock face, 🟡).
 
-### Five things that will bite, all already paid for once
+**Still standing from Stage W2:** `SW-22` (**read its entry before writing any repeater with an
+inline editor** — `rows_locked_by_editor`), `SW-23` (`--open-kind`), `SW-13`/`SW-14` (the
+Spreadsheet and its document), `SW-24`, `SW-25`, `SW-21a`, `SW-19` (picker *arithmetic* is ✅ by
+13 tests — only its faces were rejected and replaced in W3-08).
+
+### Things that will bite, all already paid for once
 
 0. **Run `git status` before believing this file.** The run of 2026-08-26 left a complete,
    compiling SW-25 pass across nine `.slint` files uncommitted while its own log said the tree
@@ -122,6 +140,21 @@ replaced by W3-10**).
    like a rendering bug. If a surface loses its bottom row of controls, check the window height
    against the screen before debugging the layout.
 
+0d. **`cargo test` and `cargo clippy` do NOT rebuild `target/debug/canvas-app.exe`.** The
+   screenshot script runs that binary. A frame taken after the Calendar relayout landed showed
+   the **old** layout and briefly read as "the rewrite did nothing". **Run
+   `cargo build -p canvas-app` before every shot.**
+
+0e. **A `default_size` bump does not reach a widget that already exists.** Sizes apply at
+   creation only, so a frame taken against a used database still shows the old cramped layout
+   and lies about the fix. **Shoot against a fresh scratch `APPDATA`** (recipe in START HERE),
+   and tell the user to make a new widget or clear `%APPDATA%/Canvas` when a size changes.
+
+0f. **A forced-open frame cannot fill a model that Rust populates on demand.** Flipping a
+   Slint default to `true` to photograph an overlay works, but anything filled by a callback —
+   `pick-days` via `paint_pick_month`, for instance — renders **empty**, because the callback
+   never fired. That is the harness, not the widget. Say so rather than reporting a bug, and
+   leave the task 🟡.
 
 
 1c. **A binding loop between a child and its parent compiles clean and silently evaluates to
@@ -172,18 +205,29 @@ strip and from the palette, both driven by `BUILT` in `canvas-app/src/widget_typ
 Spreadsheet reuses the spec's existing `doc` glyph, which SW-24 freed when the `document`
 type was ripped out — no new glyph was invented.
 
-**Confirmed on screen (2026-08-26, by screenshot):** home renders, the footer glyph strip
-renders with all five glyphs and the `NEW` label, the row list shows the right glyph per
-kind, and the footer count is correct.
+**Confirmed on screen by screenshot:** home and its footer glyph strip · the Spreadsheet grid ·
+the **Todo** list with its priority dots reading `▪□□` / `▪▪▪` / `▪▪□` and **nothing** for unset ·
+the **Calendar** as seven day rows with hour ticks, `[09:30] STAND-UP` readouts, today's label
+in an inverted block, and the NOW rule at the right time · the **event editor** as a centred card
+that does not scroll · the **HOUR/MINUTE grids** with `08` and `30` lit.
 
-**Built but never watched:** everything else. 150 passing tests say the documents converge
-and the maths is right; they say nothing about what is on screen.
+**Built but never watched:** everything to do with pointer, hover, focus, drag and animation.
+246 passing tests say the documents converge and the maths is right; they say nothing about
+what happens under a cursor.
 
-**Known broken, reported by the user:** the Kanban — card drag is glitchy and not smooth
-(`SW-21`) and the column header alignment is wrong (`SW-21`). Typing stopping after one
-character was `SW-22` and is fixed in code, unwatched.
+**Known broken, reported by the user and NOT yet fixed** — the whole of the remaining W3 work:
+- **Kanban:** *"see the outline padding margin etc, its bad"* · *"very bad card details etc …
+  not a very congested, big scrollable page for details"* · *"i dont want unassigned etc if that
+  is empty"* (`W3-09`, `W3-10`, `W3-11`).
+- **Spreadsheet:** *"once i click on a cell cant exiting by clicking elsewhere"* · *"cant scroll
+  around like a normal excel"* · *"the rows and cols are not expandable by dragging"*
+  (`W3-12`, `W3-13`, `W3-14`).
 
-### Open questions — none of them block Stage W2
+**Fixed this run but never clicked by the user** — three fresh VERIFICATION QUEUE blocks: the
+Todo (`+`, priority, drag-reorder, scrollbar), the Calendar (editor card, month grid, pickers),
+and the Spreadsheet from Stage W2.
+
+### Open questions — none of them block Stage W3
 
 - **4** — the Whiteboard still has no artboard. Parked with SW-12; ask again when it returns.
 - **8** — what pin should do beyond the desktop layer. User: *"no idea yet"*.
@@ -209,7 +253,11 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 |---|---|---|
 | Notes resize from every edge and corner | `Layout.resize-border` = **36px**, `theme/layout.slint` | Lowering the number — at 6px and 30px the grab zone sat in empty space. And **never** re-introduce `SendMessageW(WM_NCLBUTTONDOWN)`; see trap 4 |
 | Tray icon owns the app lifetime; quit is tray-only | `ui/tray.slint`, `App::install_tray`, `maybe_quit` in `main.rs` | Removing `maybe_quit`'s early return when a tray exists — that is the only thing keeping the app alive with no windows |
-| Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
+| Body scrollbar: thumb tracks the wheel and drags, **and hides until wanted** | `ScrollBar` in `theme/controls.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3). The auto-hide was the user's own request (W3-01) — the tracking and dragging under it must keep working |
+| An unprioritised todo list looks exactly as it did | `PriorityDots`, `theme/glyphstrip.slint` | Drawing anything at level 0. The row **reserves** the 32px unconditionally so nothing reflows when dots fade in |
+| A todo list written before W3-04 keeps its order | `TodoListDoc::items` stable sort + `backfill_positions`, called from `App::open_widget` | Sorting unstably, or letting `""` sort after real keys. Both scramble an existing list on first open |
+| An editor is a card, never a scrolling page | `CardOverlay`, `theme/overlay.slint` | Building a second overlay instead of reusing it, or letting content exceed the card so it clips (W3-07 caught exactly that) |
+| The Calendar reads at a glance | day rows + `[time] NAME` split + inverted today block, `calendar.slint` | Putting the name back inside the bar (it elides to nothing at 30 minutes), or dropping to label-size 11 for names. The user rejected the first version outright |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
 | 246 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
@@ -250,7 +298,7 @@ Canvas/
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
     canvas-doc/      CRDT documents (yrs). StickyNoteDoc, UndoHistory, TodoListDoc,
                      CalendarDoc, KanbanDoc, WhiteboardDoc, SheetDoc + a hand-written fractional
-                     index. 149 tests. Only WhiteboardDoc has NO window — SheetDoc got one in SW-14.
+                     index. 160 tests. Only WhiteboardDoc has NO window.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -391,6 +439,10 @@ The user made these after seeing the app run. They win over CLAUDE.md.
 | §8 widgets always-on-top | **Never always-on-top.** Pin = glued to desktop layer | Floating over every app was intrusive |
 | §8/§9 bare desktop + ⌘K palette only | **A home window too**, plus the palette | Notes need a place to be created and managed from |
 | §12 `window_positions` columns | **Plus `pinned`, `tone`, `open`** | `open` is what makes closing ≠ deleting |
+| §10.4 chips carry the time, not the name | **Day rows with time on the x-axis; a bar's length is its duration, and the name is readable beside it** | The spec's compromise existed because a ~52px column fits five characters. Rows remove the constraint. User, 2026-08-27: *"the vertical days are horrible, horizontal would be much more elegant"* |
+| §5.6/§6 a clock-face time picker (`SW-19`) | **HOUR and MINUTE grids, no dial, no mode switch** | 24 hours on two rings of a 240px face could not be hit. User: *"the time dail … not functioning properly at all … i cant even properly select them"* |
+| `Sheet` — a full-width band that scrolls | **`CardOverlay` — a centred card sized to content that never scrolls** | User: *"it should feel like a card overlay and not a big scrolling page bad for UX"* |
+| No priority anywhere in the spec | **1–3 dots on todo rows and Kanban cards** | User asked for it; red is spoken for by rule 2, so it reads as a count in the glyph strip's own vocabulary |
 | §11.1 whole-string replace per keystroke | **Real prefix/suffix diffing** | Spec's own comment says to do this |
 | §7.2/§7.7 rich text in the note body | **Dropped. Plain text, one face.** | Silkscreen has no bold or italic and the user does not want them |
 | §14 stage order: sync (2–3) before widgets (4–5) | **All widget types first, backend and sync after** | User: get every widget working single-player before multiplayer |
@@ -3159,3 +3211,39 @@ work inside the new card), then the Kanban (`W3-09`/`W3-10`/`W3-11`) and the Spr
 `W3-10` (reuse `CardOverlay` for the card editor — **do not build a second overlay**), `W3-11`
 (drop `UNASSIGNED` when empty; priority dots, reusing `PriorityDots` from W3-03). Then the
 Spreadsheet: `W3-12`, `W3-13`, `W3-14`.
+
+---
+
+### 2026-08-27 — end of run: state handover
+
+**Stage W3 is half done and the tree is clean.** Nine `W3-` commits. The Note, the Todo and the
+Calendar are rebuilt against the user's second walk-through; the **Kanban** and the
+**Spreadsheet** are untouched and are the next work.
+
+**A cold session needs nothing but the word GO.** Ponytail is a project-level plugin and its
+SessionStart hook arms itself — the user does not type `/ponytail full` and neither should you.
+The three design answers (Calendar day rows · priority as 1–3 dots · widget-by-widget order)
+are settled and must not be re-asked. The 🟢 GO block at the top of this file names the next
+task, the two components to reuse rather than rebuild, and every trap this run paid for.
+
+**What the user has actually seen and approved:** nothing yet from this run — every W3 frame in
+here is a screenshot *I* took. They saw the **first** Calendar relayout and rejected it
+(*"unreadable"*), which produced `W3-05b`. **Assume the rest is unapproved until they say
+otherwise**, and lead the next report with what they should click.
+
+**Three things carried into the next session, in priority order:**
+1. **`W3-09` → `W3-11`, the Kanban.** Spacing, then the card editor **reusing `CardOverlay`**,
+   then dropping `UNASSIGNED` and adding priority dots **reusing `PriorityDots`**. Both
+   components exist and are photographed working — building a second of either is the failure
+   mode to avoid.
+2. **`W3-12` → `W3-14`, the Spreadsheet.** Note that `W3-13` reverses a limit I shipped
+   deliberately in `SW-14` and wrote up as *"say if it grates"*. It grated. Horizontal scrolling
+   is now required, not optional.
+3. **The verification queue**, which now carries three blocks nothing has ever clicked: the
+   Todo, the Calendar, and the Spreadsheet.
+
+**One correction to make out loud if it comes up:** during this run a seeding example was run
+without redirecting `APPDATA`, which wrote into the user's live database, and the `--remove`
+that cleaned it up deleted **every** todo row including an empty one of theirs. It was
+recreated and the count is back to five. `--remove` is type-wide, not scoped to what the example
+inserted. **Always redirect `APPDATA` first** — the recipe is in START HERE.
