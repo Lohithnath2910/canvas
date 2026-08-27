@@ -3,7 +3,7 @@ import { Typography } from "theme/typography.slint";
 import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { Checkbox, Tag, Divider, TextField, ScrollBar, Button, ButtonVariant } from "theme/controls.slint";
-import { Sheet } from "theme/sheet.slint";
+import { CardOverlay } from "theme/overlay.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { TimePicker, DatePicker, DayCell } from "theme/pickers.slint";
 
@@ -47,8 +47,6 @@ export component GalleryWindow inherits Window {
     in-out property <string> sheet-name: "Ship the strip spec";
     in-out property <string> sheet-who: "Mira";
     in-out property <string> sheet-when: "25 AUG";
-    in-out property <string> sheet-where: "Demo room";
-    in-out property <string> sheet-notes: "";
     in-out property <string> sheet-verdict: "NOTHING SAVED YET";
 
     Panel {
@@ -175,7 +173,7 @@ export component GalleryWindow inherits Window {
             width: parent.width - Layout.title-x - Layout.pad;
             height: Layout.header-h;
             vertical-alignment: center;
-            text: "SHEET DEMO";
+            text: "CARD OVERLAY";
             color: Palette.text;
             font-family: Typography.interface-face;
             font-size: Typography.title-size;
@@ -243,7 +241,7 @@ export component GalleryWindow inherits Window {
                         width: parent.width - 2 * Layout.kanban-card-pad;
                         height: Layout.checkbox-row-h;
                         vertical-alignment: center;
-                        text: "Behind the sheet";
+                        text: "Behind the card";
                         color: Palette.text;
                         font-family: Typography.body-face;
                         font-size: Typography.body-size;
@@ -275,17 +273,17 @@ export component GalleryWindow inherits Window {
                 variant: ButtonVariant.default;
                 enabled: !root.sheet-open;
                 clicked => {
-                    root.sheet-verdict = "SHEET OPEN";
+                    root.sheet-verdict = "CARD OPEN";
                     root.sheet-open = true;
                 }
             }
         }
 
-        sheet := Sheet {
+        sheet := CardOverlay {
             x: 0;
-            base-y: Layout.body-top;
+            y: 0;
             width: parent.width;
-            height: parent.height - Layout.header-band - 1px;
+            height: parent.height;
             open: root.sheet-open;
             existing: true;
             delete-label: "DELETE CARD";
@@ -315,17 +313,6 @@ export component GalleryWindow inherits Window {
             TextField {
                 label: "DUE";
                 text <=> root.sheet-when;
-                accepted(v) => { sheet.saved(); }
-            }
-            TextField {
-                label: "LOCATION";
-                text <=> root.sheet-where;
-                accepted(v) => { sheet.saved(); }
-            }
-            TextField {
-                label: "NOTES";
-                placeholder: "Scroll down to reach this one";
-                text <=> root.sheet-notes;
                 accepted(v) => { sheet.saved(); }
             }
         }

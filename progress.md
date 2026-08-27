@@ -1,4 +1,4 @@
-| 4 | **The VERIFICATION QUEUE**| 3 | **W3-12 → W3-14**| 2 | **W3-11**| 1 | **W3-10**# Canvas — Progress Log
+| 2 | **W3-11**| 4 | **The VERIFICATION QUEUE**| 3 | **W3-12 → W3-14**| 2 | **W3-11**| 1 | **W3-10**# Canvas — Progress Log
 
 **Last updated:** 2026-08-27
 
@@ -80,14 +80,14 @@ is a CRDT bug.** It is surface work, and it is the whole of the work.
 **The build order is the user's, and it is not negotiable:**
 **Note → Todo → Calendar → Kanban → Spreadsheet.** Each widget is *finished* before the next
 one starts. Do not jump ahead because a task looks easy. **Three are done and the Kanban is
-open. Start at `W3-10`.**
+open. Start at `W3-15` — the user rejected the time picker mid-run and it is the newest word.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **W3-10** — Kanban card editor | **Reuse `CardOverlay` from `theme/overlay.slint`. Do not build a second overlay.** If `Sheet` has no caller left but the gallery afterwards, say so and delete it |
+| 1 | **W3-15** — the typed time field | The user rejected the `HOUR`/`MINUTE` grids on sight: *"looking same like date pickiung thing"*. They chose a typed field and asked for **AM/PM in, 24-hour stored**. Newest word, so it goes first |
 | 2 | **W3-11** — drop `UNASSIGNED`, add priority | An empty assignee and no due date draws **nothing** — `card_meta` in `app.rs` returns that word today and should return empty, with the row collapsing. Priority reuses **`PriorityDots`** from W3-03, unchanged |
 | 3 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found |
-| 4 | **The VERIFICATION QUEUE** | After W3. It has three fresh blocks — Todo, Calendar, Spreadsheet — none clicked |
+| 4 | **The VERIFICATION QUEUE** | After W3. It has four fresh blocks — Todo, Calendar, Spreadsheet, Kanban — none clicked |
 
 **Answers already taken. Do not re-ask these:**
 - **The Calendar is day ROWS with time left→right** — built. An event is a bar whose length is
@@ -95,11 +95,24 @@ open. Start at `W3-10`.**
 - **Priority is a count of 1–3 dots**, `PriorityDots` in `theme/glyphstrip.slint`. Red is spoken
   for (rule 2). **None set draws nothing at all.** Clicking cycles 0→1→2→3→0.
 - **Widget by widget, the user's order.**
+- **The time picker is a typed field, not a grid** — `HH:MM AM/PM` in, 24-hour stored. Chosen
+  by the user on 2026-08-27 from four options. `W3-15`.
 
 **Two components exist to be reused, not rebuilt:**
 1. **`CardOverlay`** (`theme/overlay.slint`) — a centred card over a scrim, sized to its own
    content, **never scrolls**. Built in W3-07, **reused in W3-10**.
 2. **`PriorityDots`** (`theme/glyphstrip.slint`) — built in W3-03, **reused in W3-11**.
+
+**A second standing bar, raised mid-run on 2026-08-27:** *"the event creation etc whereevr th
+cothings are used absoluetly needs to be configured and proeprly fit as an in widget overlay
+with neat and clean execution and not just there for the sake of being there"*. Every
+`CardOverlay` call site — Calendar event, Kanban card, and any picker opened from inside one —
+must **fit its plate at that widget's real size**, not merely compile. `CardOverlay` caps at
+`parent.height - 2 * Layout.pad` and **clips silently past it**, so before shipping any editor:
+add up its fields (`Typography.label-line + Layout.field-gap + Layout.field-h` = 64 each, plus
+`Layout.field-gap` between them), add `2 * Layout.pad + Layout.card-footer-h`, and check it
+against the plate. If it does not fit, the widget grows — that is what took the Calendar to
+560×460 in `W3-07` and the Kanban to 640×460 in `W3-10`.
 
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
@@ -110,6 +123,7 @@ open question 12.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
 
 **Closed in W3 so far:** `W3-09` (Kanban column pad, 🟡 — the drop outline needs a live drag),
+`W3-10` (`CardOverlay` on the Kanban, `Sheet` deleted, board to 640×460, 🟡),
  `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
 (priority dots), `W3-04` (todo drag-reorder on a fractional index, 🟡), `W3-05` (Calendar day
 rows), `W3-05b` (the readability pass the user demanded mid-run), `W3-06` (NOW rule), `W3-07`
@@ -3291,3 +3305,50 @@ inserted. **Always redirect `APPDATA` first** — the recipe is in START HERE.
   while a card is held — so the box stays open and the VERIFICATION QUEUE has a four-line block
   saying exactly what to drag. `kanban-col-pad` is the single number to move if 8 still reads
   tight.
+
+### 2026-08-27 — W3-10: the Kanban card editor is the same card the Calendar uses
+
+- 🟡 **A straight swap, which is the whole point of the task.** `Sheet` out, `CardOverlay` in,
+  at the Calendar's exact geometry: `x: 0, y: 0`, the full plate, no `base-y`. Declaration
+  order is unchanged, so `pin-btn` / `trash-btn` / `close-btn` / `drag-area` still come after
+  the overlay and render above its scrim, and the two `enabled: !root.sheet-open` gates on
+  `card-touch` and the `+` buttons stay — SW-18's contract 2 does not lean on the scrim.
+
+- ✅ **`theme/sheet.slint` is deleted.** After the Kanban moved, its only caller left was the
+  gallery's demo column, which the task said was reason enough to delete. The gallery moved to
+  `CardOverlay` too and the column is now titled `CARD OVERLAY`. `Layout.sheet-footer-h` went
+  with it — nothing else read it. **The demo lost its `LOCATION` and `NOTES` fields**: five
+  fields do not fit a gallery column, and `NOTES`' placeholder literally read *"Scroll down to
+  reach this one"*, which was a `Sheet` affordance `CardOverlay` deliberately does not have.
+
+- 🟡 **The date picker is wrapped in a centring `HorizontalLayout` at an explicit
+  `Layout.picker-face`.** `DatePicker` computes its day columns as `Layout.picker-face / 7`
+  regardless of its own resolved width, so a `VerticalLayout` stretching it to the card width
+  leaves the day cells misaligned under their weekday heads. This is trap 0b again and the
+  Calendar already solved it the same way.
+
+- ✅ **The board grew to `640×460`, and this was forced, not preferred.** The four fields are
+  `4 × 64 + 3 × 8 = 280`; plus `2 × 16` padding and the 66px footer that is `378`. A 400-tall
+  plate offers `400 - 32 = 368`. The date-grid mode wants `403`. Both clipped. 460 is the same
+  height `W3-07` took the Calendar to for the same reason, and it clears both. `default_size`
+  in `canvas-storage` moved with it and the two size assertions there follow.
+  ⚠ **`default_size` only applies at creation** — an existing board keeps its 400 and still
+  clips. The verification queue says to delete `%APPDATA%/Canvas` first.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo test --workspace` 246 pass,
+  `cargo fmt --all`.
+
+- 📸 **Photographed through `--gallery`**: a card floating centre-plate over the scrim, three
+  fields, `SAVE` / `CANCEL` / `DELETE CARD` in the footer, the panel behind it dimmed and
+  legible through the scrim, nothing clipped. **The Kanban's own editor needs a double-click on
+  a card**, which no frame reaches, so the box stays open.
+
+- ⚠ **`scripts/shot.ps1` does not build.** It runs the prebuilt `target/debug/canvas-app.exe`
+  and throws if it is missing — it does **not** run `cargo run`. `cargo clippy` does not produce
+  that binary, so a shot taken straight after a clippy pass silently photographs the *previous*
+  build. It happened once in this task and the frame looked like a failed edit.
+  **Run `cargo build -p canvas-app` before every shot.**
+
+- ⚠ **`--gallery` does not answer to `-Title "Canvas"`.** Its window is titled
+  `Canvas — component gallery`, and `shot.ps1` matches the title exactly, so it throws
+  *"no visible window titled Canvas"*. Pass `-Title "Canvas — component gallery"`.

@@ -6,7 +6,7 @@ import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPin, IconTrash, IconX, IconPlus } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant, TextField } from "theme/controls.slint";
-import { Sheet } from "theme/sheet.slint";
+import { CardOverlay } from "theme/overlay.slint";
 import { DatePicker, DayCell, PickerField } from "theme/pickers.slint";
 
 export struct KanbanColumnData {
@@ -369,12 +369,11 @@ export component KanbanWindow inherits Window {
             }
         }
 
-        sheet := Sheet {
+        sheet := CardOverlay {
             x: 0;
             y: 0;
             width: parent.width;
-            height: parent.height - Layout.header-band;
-            base-y: Layout.header-band;
+            height: parent.height;
             open: root.sheet-open;
             existing: root.pick-mode != 0 && root.card-due-label != "";
             save-label: root.pick-mode == 0 ? "SAVE" : "OK";
@@ -426,14 +425,19 @@ export component KanbanWindow inherits Window {
                 accepted(v) => { root.card-committed(); }
             }
 
-            if root.pick-mode != 0: DatePicker {
-                stamp: root.pick-stamp;
-                month-label: root.pick-month;
-                weekday-heads: root.pick-heads;
-                days: root.pick-days;
-                selected-day <=> root.pick-day;
-                chrome: false;
-                month-stepped(delta) => { root.pick-month-stepped(delta); }
+            if root.pick-mode != 0: HorizontalLayout {
+                alignment: center;
+
+                DatePicker {
+                    width: Layout.picker-face;
+                    stamp: root.pick-stamp;
+                    month-label: root.pick-month;
+                    weekday-heads: root.pick-heads;
+                    days: root.pick-days;
+                    selected-day <=> root.pick-day;
+                    chrome: false;
+                    month-stepped(delta) => { root.pick-month-stepped(delta); }
+                }
             }
         }
 

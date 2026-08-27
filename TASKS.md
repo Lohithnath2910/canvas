@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-10` — the Kanban card editor becomes a `CardOverlay`. `W3-09` landed 🟡 on 2026-08-27: the column gained an 8px inner pad, the drop outline moved below the head rule, and the head text, count, rule, cards and `+` all share one inset. The outline itself needs a live drag to see, so its box stays open. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet — the Kanban is in hand.
+**Current task:** `W3-15` — the time picker becomes a typed `HH:MM AM/PM` field. The user rejected `W3-08`'s `HOUR`/`MINUTE` grids on sight mid-run on 2026-08-27 (*"looking same like date pickiung thing"*) and chose a typed field with **AM/PM in, 24-hour stored** — newest word, so it jumps the queue ahead of `W3-11`. `W3-09` and `W3-10` landed 🟡 the same day: the Kanban column gained an 8px inner pad, and its editor is now the Calendar's `CardOverlay` with `Sheet` deleted and the board grown to 640×460 so the card stops clipping. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
 **Done:** 40 ticked. 246 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is in hand: `W3-09` landed 🟡. Spreadsheet is what is left after it. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag) — see the verification queue, which now has three fresh blocks
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click) — see the verification queue, which now has three fresh blocks
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -122,6 +122,21 @@ feature. Say so in the end-of-run report every time until it happens.
 correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
 `MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
 cannot reach.
+
+**THE KANBAN CARD EDITOR — `W3-10`, 2026-08-27.** `CardOverlay` itself was photographed through
+`--gallery` (centred card, scrim, three fields, nothing clipped). The Kanban call site is
+identical to the Calendar's, but reaching it needs a double-click.
+- [ ] ⚠ **Delete `%APPDATA%/Canvas` first, or make a new board.** The widget grew to **640×460**
+      and `default_size` only applies at creation, so an existing board keeps its old 400 and
+      the editor will clip in it — exactly the trap the Calendar hit in `W3-07`
+- [ ] `cargo run -p canvas-app -- --open-kind kanban`, `+` under **TODO**, then **double-click
+      the card**. It must be a **card floating in the middle over a dimmed board**, not a panel
+      sliding up from the header. It must **not** scroll — all four of `TITLE`, `ASSIGNEE`,
+      `DUE DATE`, `DESCRIPTION` visible at once with the footer below them
+- [ ] Click the dimmed board outside the card, or press Esc — it cancels and writes nothing
+- [ ] While it is open, click a card and the three `+` — **nothing must happen**
+- [ ] Tap `DUE DATE` — the date grid appears **centred in the card**, not stretched across it.
+      The seven day columns must line up with their `M T W T F S S` heads
 
 **THE KANBAN BOARD SPACING — `W3-09`, 2026-08-27.** The empty board was photographed and the
 heads, rules and `+` buttons all sit on one 24px inset. The **drop outline only exists while a
@@ -2513,6 +2528,22 @@ easy — the user asked for each one to be *done* before the next begins.
   remaining caller after this, delete it and say so.
   *DoD:* the card editor is the same component as the event editor · it does not scroll · the
   board underneath is inert while it is open.
+  🟡 **built 2026-08-27, box stays open** — a straight swap. `Sheet` out, `CardOverlay` in,
+  same geometry the Calendar uses (`x: 0, y: 0`, full plate, no `base-y`), same declaration
+  order so the header controls still render above the scrim. `Sheet` had no caller left but the
+  gallery, so **`theme/sheet.slint` is deleted** and the gallery demo moved to `CardOverlay`
+  too; `Layout.sheet-footer-h` went with it. The date picker is wrapped in a centring
+  `HorizontalLayout` at an explicit `Layout.picker-face` — `DatePicker` computes its day
+  columns as `picker-face / 7` regardless of its own resolved width, so a stretched one
+  misaligns (trap 0b).
+  **The board had to grow to `640×460`.** `CardOverlay` caps at `parent.height - 2 * pad` and
+  clips past it; four fields need 378px and the 400-tall plate only offered 368, the date grid
+  needs 403. 460 is the height `W3-07` already took the Calendar to, for this same reason.
+  `default_size` in `canvas-storage` moved with it — **an existing board keeps its old 400 and
+  will still clip**, same trap the Calendar hit.
+  Photographed via `--gallery`: a centred card over the scrim, three fields, nothing clipped,
+  the panel behind it dimmed. **The Kanban's own editor needs a double-click on a card**, so
+  the box stays open. See the VERIFICATION QUEUE.
 
 - [ ] **W3-11 · Drop `UNASSIGNED`; priority dots on cards** — `S`
   Needs: W3-10, W3-03. **The user:** *"i dont want unassigned etc if that is empty for now,
@@ -2523,6 +2554,29 @@ easy — the user asked for each one to be *done* before the next begins.
   Priority dots as W3-03, same component, same 1–3 vocabulary.
   *DoD:* a fresh card shows a title and nothing else · the card gets shorter when there is no
   meta, rather than leaving a gap · priority survives a restart.
+
+### W3f — the time picker, rejected on sight 2026-08-27
+
+- [ ] **W3-15 · The time picker becomes a typed `HH:MM AM/PM` field** — `M`
+  Needs: nothing. **The user, mid-run on 2026-08-27, looking at a `--gallery` frame:** *"uh the
+  time is thats not how its meant to be right?? its wrong maybe have a simpler and better
+  variant than looking same like date pickiung thing"*, then, choosing between four options:
+  *"option 1 but add am or pm please and then later translate it to 24 hrs"*.
+  `W3-08` replaced the clock face with an `HOUR` grid of 00–23 and a `MINUTE` grid of 00–55.
+  Sitting directly above the date grid in the same card, it reads as a **second calendar**.
+  That is the whole complaint — it is not an arithmetic bug.
+  **Build:** one `TextField` the user types into, `09:30 AM`. Parsed to a minute-of-day and
+  written to `pick-minute`, which is what `TimePicker` already exposes, so **nothing downstream
+  changes** — `SW-19`'s 13 round-trip tests keep asserting the same thing. Display reads back
+  in 12-hour with the meridiem; the document keeps storing 24-hour.
+  Parse leniently — `9:30 pm`, `0930PM`, `21:30` — and on anything unparseable use `TextField`'s
+  existing `error` border, which is border-only with no red text (§6.6). **Do not invent a
+  message row.**
+  **`TimePicker` in `theme/pickers.slint` loses its grids.** If nothing else calls it after
+  this, delete it and say so, the way `Sheet` went in `W3-10`.
+  *DoD:* typing `9:30 pm` and pressing OK lands 21:30 in the event · the field reads back
+  `09:30 PM` · garbage turns the border `signal` and refuses to commit · the card no longer
+  shows two grids stacked on each other.
 
 ### W3e — Spreadsheet
 
