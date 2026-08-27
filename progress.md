@@ -64,9 +64,13 @@ the backlog that can be done without the user** — the next unit of work is the
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
 **The RAM half is measured and it passes** — 22.0 MB idle, 31.9 MB with all four types open,
-against §2's 20–40 idle and < 50 total; per-widget marginal cost is ~2.5 MB. **That number is
-now stale by one widget type** — the Spreadsheet has never been measured and should be added
-to the next RSS reading. **The smoothness half still needs a release build in front of the
+against §2's 20–40 idle and < 50 total; per-widget marginal cost is ~2.5 MB. **The Spreadsheet
+was measured on 2026-08-27 and changes nothing:** on a release build against a fresh database,
+home alone is **21.9 MB**, home + Spreadsheet **25.1 MB**, home + Kanban **25.2 MB** — so the
+Spreadsheet costs **~3.2 MB**, the same as the Kanban and well inside §2's 5–15 MB per widget.
+⚠ **Give the window ~7s to settle before reading `WorkingSet64`** — a reading at 6s on a
+first-ever launch came back 33.2 MB and is an artefact of the database being created, not a
+regression. **The smoothness half still needs a release build in front of the
 user**; open question 12.
 
 Closed in Stage W2: `SW-13` (`SheetDoc` — ticked on 20 tests, no surface to watch; note the
@@ -2979,5 +2983,9 @@ Its first line is the one to check first: **type more than one character into a 
 is `SW-22`'s bug, this is a brand-new repeater with a live editor over it, and a photograph
 cannot see it.
 
-**One number is now stale:** the RSS reading of 22.0 MB idle / 31.9 MB with all four types was
-taken before the Spreadsheet existed. Add it to the next measurement.
+- ✅ **The Spreadsheet's RSS was measured in the same run, so no number is left stale.** Release
+  build, fresh database, 7s settle: home alone **21.9 MB** (the recorded idle figure of 22.0,
+  reproduced), home + Spreadsheet **25.1 MB**, home + Kanban **25.2 MB**. **The Spreadsheet costs
+  ~3.2 MB** — the same as the Kanban, inside §2's 5–15 MB per widget, and it moves neither the
+  idle nor the total budget. A first reading of 33.2 MB was taken at 6s on a brand-new database
+  and is a settling artefact; give it 7s.
