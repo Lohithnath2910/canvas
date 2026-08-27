@@ -6,12 +6,13 @@ import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPin, IconTrash, IconX } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant, TextField } from "theme/controls.slint";
-import { Sheet } from "theme/sheet.slint";
+import { CardOverlay } from "theme/overlay.slint";
 import { TimePicker, DatePicker, DayCell, PickerField } from "theme/pickers.slint";
 
 export struct CalendarChip {
     id: string,
-    label: string,
+    time: string,
+    name: string,
     day: int,
     start: float,
     span: float,
@@ -180,15 +181,24 @@ export component CalendarWindow inherits Window {
                     background: day == root.today ? Palette.text : Palette.edge;
                 }
 
+                if day == root.today: Rectangle {
+                    x: 0;
+                    y: (parent.height - Layout.tag-h) / 2;
+                    width: Layout.cal-gutter-w - Layout.icon-gap;
+                    height: Layout.tag-h;
+                    background: Palette.text;
+                    border-radius: Layout.radius-checkbox;
+                }
+
                 Text {
                     x: 0;
                     y: 0;
                     width: Layout.cal-gutter-w - Layout.icon-gap;
                     height: parent.height;
                     vertical-alignment: center;
-                    horizontal-alignment: right;
+                    horizontal-alignment: center;
                     text: root.day-labels[day];
-                    color: day == root.today ? Palette.text : Palette.dim;
+                    color: day == root.today ? Palette.base : Palette.dim;
                     font-family: Typography.interface-face;
                     font-size: Typography.label-size;
                     letter-spacing: Typography.label-tracking;
@@ -216,28 +226,42 @@ export component CalendarWindow inherits Window {
                 height: root.row-h - 2 * Layout.gap-xs - 1px;
                 background: transparent;
 
-                Rectangle {
+                bar := Rectangle {
                     x: 0;
                     y: 0;
                     width: max(Layout.cal-bar-min, chip.span * root.lane-w);
                     height: parent.height;
                     border-radius: Layout.radius-control;
-                    background: Palette.elev-raised;
+                    background: chip.live ? Palette.text : Palette.elev-raised;
                     border-width: 1px;
                     border-color: chip.live ? Palette.text : Palette.edge;
+
+                    Text {
+                        x: Layout.icon-gap;
+                        y: 0;
+                        width: parent.width - 2 * Layout.icon-gap;
+                        height: parent.height;
+                        vertical-alignment: center;
+                        text: chip.time;
+                        color: chip.live ? Palette.base : Palette.text;
+                        font-family: Typography.interface-face;
+                        font-size: Typography.label-size;
+                        letter-spacing: Typography.label-tracking;
+                        overflow: elide;
+                        wrap: no-wrap;
+                    }
                 }
 
                 Text {
-                    x: Layout.icon-gap;
+                    x: bar.width + Layout.icon-gap;
                     y: 0;
-                    width: parent.width - 2 * Layout.icon-gap;
+                    width: parent.width - self.x - Layout.icon-gap;
                     height: parent.height;
                     vertical-alignment: center;
-                    text: chip.label;
+                    text: chip.name;
                     color: Palette.text;
-                    font-family: Typography.interface-face;
-                    font-size: Typography.label-size;
-                    letter-spacing: Typography.label-tracking;
+                    font-family: Typography.body-face;
+                    font-size: Typography.body-size;
                     overflow: elide;
                     wrap: no-wrap;
                 }
@@ -338,12 +362,12 @@ export component CalendarWindow inherits Window {
             }
         }
 
-        sheet := Sheet {
+        sheet := CardOverlay {
             x: 0;
             y: 0;
             width: parent.width;
-            height: parent.height - Layout.header-band;
-            base-y: Layout.header-band;
+            height: parent.height;
+            card-w: root.pick-mode == 0 ? Layout.card-w : Layout.picker-face + 4 * Layout.pad;
             open: root.sheet-open;
             existing: root.sheet-existing && root.pick-mode == 0;
             save-label: root.pick-mode == 0 ? "SAVE" : "OK";
@@ -371,21 +395,25 @@ export component CalendarWindow inherits Window {
                 accepted(v) => { root.event-saved(); }
             }
 
-            if root.pick-mode == 0: PickerField {
-                label: "START";
-                value: root.ev-start-label;
-                picked => {
-                    root.pick-opened(1);
-                    root.pick-mode = 1;
-                }
-            }
+            if root.pick-mode == 0: HorizontalLayout {
+                spacing: Layout.icon-gap;
 
-            if root.pick-mode == 0: PickerField {
-                label: "END";
-                value: root.ev-end-label;
-                picked => {
-                    root.pick-opened(2);
-                    root.pick-mode = 2;
+                PickerField {
+                    label: "START";
+                    value: root.ev-start-label;
+                    picked => {
+                        root.pick-opened(1);
+                        root.pick-mode = 1;
+                    }
+                }
+
+                PickerField {
+                    label: "END";
+                    value: root.ev-end-label;
+                    picked => {
+                        root.pick-opened(2);
+                        root.pick-mode = 2;
+                    }
                 }
             }
 

@@ -1823,7 +1823,8 @@ fn refresh_calendar(app: &SharedApp, id: &str) {
             let shown_from = event.start.max(week_start);
             CalendarChip {
                 id: event.id.clone().into(),
-                label: format!("{} {}", ct::hhmm(event.start, offset), event.title).into(),
+                time: ct::hhmm(event.start, offset).into(),
+                name: event.title.clone().into(),
                 day: ct::day_index(shown_from, week_start, offset),
                 start,
                 span: width,

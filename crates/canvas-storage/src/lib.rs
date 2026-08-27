@@ -54,7 +54,7 @@ pub fn default_size(widget_type: &str) -> (i32, i32) {
     match widget_type {
         KIND_TODO => (340, 360),
         KIND_KANBAN => (640, 400),
-        KIND_CALENDAR => (480, 360),
+        KIND_CALENDAR => (560, 460),
         KIND_SPREADSHEET => (640, 360),
         _ => (320, 280),
     }

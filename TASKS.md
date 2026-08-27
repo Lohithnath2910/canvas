@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-07` — the event editor becomes a compact `CardOverlay`, and the Calendar gets slightly bigger. `W3-05` and `W3-06` are ticked and photographed: the Calendar is now day rows with time on the x-axis, event names are back, and the NOW rule is live. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
+**Current task:** `W3-08` — the date picker and time dial, rebuilt to fit inside the new `CardOverlay`. The Calendar is now day rows at 560×460 with readable names, a lit today marker, a NOW rule, and a card editor that does not scroll. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**; they added the Calendar readability complaint mid-run. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
-**Done:** 37 ticked. 246 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 40 ticked. 246 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel), `SW-14` (the Spreadsheet — it renders, photographed; typing, merge and column resize are unwatched) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -2383,7 +2383,29 @@ easy — the user asked for each one to be *done* before the next begins.
   than adding one, and `now-at` is `-1` when the week on screen is not this week, which the
   `if` in the Slint reads as "do not draw".
 
-- [ ] **W3-07 · The event editor becomes a compact card overlay** — `L`
+- [x] **W3-05b · The Calendar readability pass** — `M`
+  Needs: W3-05. **Added mid-run 2026-08-27, when the user looked at the first relayout frame:**
+  > *"uh side note the calendar is worse , unreadable ec etc i think right?? you too check it
+  > out and make it best after you are donw ith your work please"*
+
+  **They were right, and the first relayout frame is the evidence.** Rows were 34px in a
+  360-tall widget, every string was 11px Silkscreen, and a 30-minute event's bar elided its own
+  label to `09:…`. Four changes, each photographed:
+  1. **The widget is 560×460** (W3-07's bump), so seven rows get 44px each instead of 34.
+  2. **Event names are body-size 14, not label-size 11.** The time stays 11 because it sits
+     inside a bar and is a readout, not prose.
+  3. **The chip is a readout, not a box with loose text beside it.** `label` split into `time`
+     and `name`: the time sits **inside** the bar, the name sits **after** it. The earlier
+     single-string version drew a box around `09:30` and left `STAND-UP` floating on bare
+     plate, which read as broken rather than deliberate. A live event **inverts** — `text`
+     fill, `base` numerals.
+  4. **`cal-bar-min` is 68px**, found by photographing: at 56px `09:30` still elided to `09:…`.
+  **Today is now unmistakable.** The day label sits in a filled `text` block with `base`
+  lettering — the same inversion as an active `Tag` (§6.5) — instead of only a slightly
+  brighter rule that was invisible at a glance.
+  *DoD:* every event's time reads in full · names are legible without leaning in · today is
+  identifiable in under a second · the NOW rule is findable.
+- [x] **W3-07 · The event editor becomes a compact card overlay** — `L`
   Needs: W3-05. **The user:** *"the event creation etc is messed up as in the screenshots, its
   bad, not fitting … too smallly fitted inside the widget, make the widget slightly bigger and
   the event pages etc smaller and it should feel like a card overlay and not a big scrolling
@@ -2398,6 +2420,24 @@ easy — the user asked for each one to be *done* before the next begins.
   surface underneath taking clicks. Every control it covers needs `enabled: !overlay-open`.
   *DoD:* the editor is a card, not a page · it never scrolls · it is legible without resizing
   the widget · nothing under it is clickable while it is open.
+  ✅ **Done and photographed 2026-08-27**, both states: the card open over the calendar, and
+  the calendar behind it.
+  **`CardOverlay` is a new component in `theme/overlay.slint`** and it is the one the Kanban
+  reuses in **W3-10** — do not build a second. A centred card over a `scrim`, sized to its own
+  content (`min(fields.preferred-height + 2·pad + footer, parent.height - 2·pad)`), **never
+  scrolling**, with the footer pinned inside it. Clicking the scrim cancels, Escape cancels.
+  **The Calendar is now 560×460** (was 480×360), in `Layout` *and* `default_size` — they must
+  agree or a new widget and its window disagree about their own size.
+  ⚠ **The first photograph caught the card clipped**, with `LOCATION` half-drawn and `NOTES`
+  gone entirely: five stacked fields are 450px and the card had 428. **`START` and `END` are
+  now side by side on one row**, which drops it to 378 and fits with room to spare — and reads
+  better than a column of five. Nothing was cut from the editor to make it fit.
+  ⚠ **The size bump does not reach a widget that already exists.** `default_size` only applies
+  at creation, so an existing calendar keeps its old placement and the card clips again inside
+  it. That is correct behaviour — the user's own window size wins — but it means **the shot
+  has to be taken against a fresh scratch database** or it lies about the fix.
+  **`Sheet` still has two callers** — the Kanban (until W3-10) and the gallery — so it stays
+  for now. W3-10 decides whether it is deleted.
 
 - [ ] **W3-08 · The date picker and the time dial actually work** — `L`
   Needs: W3-07. **The user:** *"not the time dail, date choosing etc are not functioning

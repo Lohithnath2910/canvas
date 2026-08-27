@@ -1,0 +1,143 @@
+import { Palette } from "palette.slint";
+import { Motion, Ease } from "motion.slint";
+import { Layout } from "layout.slint";
+import { Button, ButtonVariant } from "controls.slint";
+
+export component CardOverlay inherits Rectangle {
+    in property <bool> open: false;
+    in property <bool> existing: false;
+    in property <string> save-label: "SAVE";
+    in property <string> delete-label: "DELETE";
+    in property <length> card-w: Layout.card-w;
+
+    callback saved();
+    callback cancelled();
+    callback delete-requested();
+
+    property <bool> hold: false;
+    property <length> footer-h: Layout.card-footer-h;
+
+    public function focus-body() { keys.focus(); }
+
+    Timer {
+        interval: 1ms;
+        running: root.open && !root.hold;
+        triggered => {
+            root.hold = true;
+            keys.focus();
+        }
+    }
+
+    Timer {
+        interval: Motion.close;
+        running: !root.open && root.hold;
+        triggered => { root.hold = false; }
+    }
+
+    visible: root.open || root.hold;
+    opacity: root.open ? 1.0 : 0.0;
+    animate opacity {
+        duration: root.open ? Motion.open : Motion.close;
+        easing: Ease.standard;
+    }
+
+    scrim := TouchArea {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        enabled: root.open;
+        clicked => { root.cancelled(); }
+
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            background: Palette.scrim;
+        }
+    }
+
+    card := Rectangle {
+        width: min(root.card-w, parent.width - 2 * Layout.pad);
+        height: min(
+            fields.preferred-height + 2 * Layout.pad + root.footer-h,
+            parent.height - 2 * Layout.pad);
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2
+            + (root.open ? 0px : Motion.open-rise);
+        animate y { duration: Motion.open; easing: Ease.standard; }
+
+        background: Palette.plate;
+        border-radius: Layout.radius-plate;
+        border-width: 1px;
+        border-color: Palette.edge;
+        drop-shadow-offset-y: Palette.shadow-offset-y-drag;
+        drop-shadow-blur: Palette.shadow-blur-drag;
+        drop-shadow-color: Palette.shadow-color-drag;
+        clip: true;
+
+        keys := FocusScope {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: parent.height - root.footer-h;
+            enabled: root.open;
+            key-pressed(event) => {
+                if (event.text == Key.Escape) {
+                    root.cancelled();
+                    return accept;
+                }
+                return reject;
+            }
+
+            fields := VerticalLayout {
+                x: Layout.pad;
+                y: Layout.pad;
+                width: parent.width - 2 * Layout.pad;
+                alignment: start;
+                spacing: Layout.field-gap;
+
+                @children
+            }
+        }
+
+        Rectangle {
+            x: 0;
+            y: parent.height - root.footer-h;
+            width: parent.width;
+            height: root.footer-h;
+            background: Palette.plate;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.edge;
+            }
+
+            save-btn := Button {
+                x: Layout.pad;
+                y: (parent.height - Layout.button-h) / 2;
+                label: root.save-label;
+                variant: ButtonVariant.primary;
+                clicked => { root.saved(); }
+            }
+
+            Button {
+                x: save-btn.x + save-btn.width + Layout.icon-gap;
+                y: save-btn.y;
+                label: "CANCEL";
+                variant: ButtonVariant.default;
+                clicked => { root.cancelled(); }
+            }
+
+            if root.existing: Button {
+                x: parent.width - Layout.pad - self.width;
+                y: save-btn.y;
+                label: root.delete-label;
+                variant: ButtonVariant.destructive;
+                clicked => { root.delete-requested(); }
+            }
+        }
+    }
+}
