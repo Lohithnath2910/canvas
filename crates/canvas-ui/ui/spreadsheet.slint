@@ -5,7 +5,7 @@ import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPin, IconTrash, IconX } from "theme/icons.slint";
-import { IconButton, Button, ButtonVariant, ScrollBar } from "theme/controls.slint";
+import { IconButton, Button, ButtonVariant, ScrollBar, ScrollBarH } from "theme/controls.slint";
 
 export struct SheetColData {
     label: string,
@@ -98,6 +98,7 @@ export component SpreadsheetWindow inherits Window {
     property <bool> editing-title: false;
 
     property <length> view-y: 0px;
+    property <length> view-x: 0px;
 
     property <bool> controls-visible:
         drag-area.has-hover
@@ -146,22 +147,30 @@ export component SpreadsheetWindow inherits Window {
 
             property <length> cols-w: parent.width - 2 * Layout.pad
                 - root.gutter-w - Layout.scroll-gutter;
-            property <length> grid-view-h: self.height - Layout.sheet-head-h;
+            property <length> grid-view-h: self.height - Layout.sheet-head-h - Layout.scroll-gutter;
 
-            for column in root.cols: Text {
-                x: root.gutter-w + column.x * 1px + Layout.edit-inset;
+            Rectangle {
+                x: root.gutter-w;
                 y: 0;
-                width: column.w * 1px - 2 * Layout.edit-inset;
-                height: Layout.sheet-head-h;
-                vertical-alignment: center;
-                horizontal-alignment: center;
-                text: column.label;
-                color: Palette.dim;
-                font-family: Typography.interface-face;
-                font-size: Typography.label-size;
-                letter-spacing: Typography.label-tracking;
-                overflow: elide;
-                wrap: no-wrap;
+                width: board.cols-w;
+                height: Layout.sheet-head-h - 1px;
+                clip: true;
+
+                for column in root.cols: Text {
+                    x: root.view-x + column.x * 1px + Layout.edit-inset;
+                    y: 0;
+                    width: column.w * 1px - 2 * Layout.edit-inset;
+                    height: parent.height;
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                    text: column.label;
+                    color: Palette.dim;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.label-size;
+                    letter-spacing: Typography.label-tracking;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
             }
 
             Rectangle {
@@ -184,13 +193,13 @@ export component SpreadsheetWindow inherits Window {
                         if (root.editing-id != "") {
                             root.edit-committed();
                         }
-                        root.head-pressed((self.mouse-x - root.gutter-w) / 1px);
+                        root.head-pressed((self.mouse-x - root.gutter-w - root.view-x) / 1px);
                     }
                     if (event.kind == PointerEventKind.up) {
                         root.resize-ended();
                     }
                 }
-                moved => { root.head-dragged((self.mouse-x - root.gutter-w) / 1px); }
+                moved => { root.head-dragged((self.mouse-x - root.gutter-w - root.view-x) / 1px); }
             }
 
             grid := Rectangle {
@@ -224,123 +233,139 @@ export component SpreadsheetWindow inherits Window {
                     background: Palette.edge;
                 }
 
-                for cell in root.cells: Rectangle {
-                    x: root.gutter-w + cell.x * 1px;
-                    y: root.view-y + cell.y * 1px;
-                    width: cell.w * 1px;
-                    height: cell.h * 1px;
-                    background: transparent;
+                scroller := Rectangle {
+                    x: root.gutter-w;
+                    y: 0;
+                    width: parent.width - root.gutter-w;
+                    height: parent.height;
+                    clip: true;
 
-                    Text {
-                        x: Layout.edit-inset;
-                        y: 0;
-                        width: parent.width - 2 * Layout.edit-inset;
-                        height: parent.height;
-                        vertical-alignment: center;
-                        text: cell.text;
-                        color: Palette.text;
-                        font-family: Typography.body-face;
-                        font-size: Typography.body-size;
-                        overflow: elide;
-                        wrap: no-wrap;
+                    for cell in root.cells: Rectangle {
+                        x: root.view-x + cell.x * 1px;
+                        y: root.view-y + cell.y * 1px;
+                        width: cell.w * 1px;
+                        height: cell.h * 1px;
+                        background: transparent;
+
+                        Text {
+                            x: Layout.edit-inset;
+                            y: 0;
+                            width: parent.width - 2 * Layout.edit-inset;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            text: cell.text;
+                            color: Palette.text;
+                            font-family: Typography.body-face;
+                            font-size: Typography.body-size;
+                            overflow: elide;
+                            wrap: no-wrap;
+                        }
+
+                        Rectangle {
+                            x: parent.width - 1px;
+                            y: 0;
+                            width: 1px;
+                            height: parent.height;
+                            background: Palette.edge;
+                        }
+
+                        Rectangle {
+                            x: 0;
+                            y: parent.height - 1px;
+                            width: parent.width;
+                            height: 1px;
+                            background: Palette.edge;
+                        }
                     }
 
-                    Rectangle {
-                        x: parent.width - 1px;
+                    if root.sel-w > 0 && root.editing-id == "": Rectangle {
+                        x: root.view-x + root.sel-x * 1px;
+                        y: root.view-y + root.sel-y * 1px;
+                        width: root.sel-w * 1px;
+                        height: root.sel-h * 1px;
+                        background: transparent;
+                        border-width: 1px;
+                        border-color: Palette.text;
+                    }
+
+                    if root.editing-id != "": Rectangle {
+                        x: root.view-x + root.sel-x * 1px - Layout.ring;
+                        y: root.view-y + root.sel-y * 1px - Layout.ring;
+                        width: root.sel-w * 1px + 2 * Layout.ring;
+                        height: root.sel-h * 1px + 2 * Layout.ring;
+                        background: transparent;
+                        border-width: Layout.focus-width;
+                        border-color: Palette.text;
+                        border-radius: Layout.radius-control + Layout.ring;
+                    }
+
+                    if root.editing-id != "": Rectangle {
+                        x: root.view-x + root.sel-x * 1px;
+                        y: root.view-y + root.sel-y * 1px;
+                        width: root.sel-w * 1px;
+                        height: root.sel-h * 1px;
+                        background: Palette.elev-recessed;
+                        border-radius: Layout.radius-control;
+                        border-width: 1px;
+                        border-color: Palette.edge;
+
+                        cell-input := TextInput {
+                            x: Layout.edit-inset;
+                            y: 0;
+                            width: parent.width - 2 * Layout.edit-inset;
+                            height: parent.height;
+                            text: root.edit-text;
+                            single-line: true;
+                            vertical-alignment: center;
+                            color: Palette.text;
+                            selection-background-color: Palette.edge;
+                            selection-foreground-color: Palette.text;
+                            text-cursor-width: Layout.caret-w;
+                            font-family: Typography.body-face;
+                            font-size: Typography.body-size;
+                            init => { self.focus(); self.select-all(); }
+                            changed has-focus => {
+                                if (!self.has-focus && root.editing-id != "") {
+                                    root.edit-committed();
+                                }
+                            }
+                            edited => { root.cell-edited(self.text); }
+                            accepted => {
+                                root.edit-committed();
+                                root.nav(1, 0);
+                                keys.focus();
+                            }
+                            key-pressed(event) => {
+                                if (event.text == Key.Escape) {
+                                    root.edit-committed();
+                                    keys.focus();
+                                    return accept;
+                                }
+                                if (event.text == Key.Tab) {
+                                    root.edit-committed();
+                                    root.nav(0, 1);
+                                    keys.focus();
+                                    return accept;
+                                }
+                                return reject;
+                            }
+                        }
+                    }
+
+                    if root.guide-x >= 0: Rectangle {
+                        x: root.view-x + root.guide-x * 1px;
                         y: 0;
                         width: 1px;
                         height: parent.height;
-                        background: Palette.edge;
-                    }
-
-                    Rectangle {
-                        x: 0;
-                        y: parent.height - 1px;
-                        width: parent.width;
-                        height: 1px;
-                        background: Palette.edge;
-                    }
-                }
-
-                if root.sel-w > 0 && root.editing-id == "": Rectangle {
-                    x: root.gutter-w + root.sel-x * 1px;
-                    y: root.view-y + root.sel-y * 1px;
-                    width: root.sel-w * 1px;
-                    height: root.sel-h * 1px;
-                    background: transparent;
-                    border-width: 1px;
-                    border-color: Palette.text;
-                }
-
-                if root.editing-id != "": Rectangle {
-                    x: root.gutter-w + root.sel-x * 1px - Layout.ring;
-                    y: root.view-y + root.sel-y * 1px - Layout.ring;
-                    width: root.sel-w * 1px + 2 * Layout.ring;
-                    height: root.sel-h * 1px + 2 * Layout.ring;
-                    background: transparent;
-                    border-width: Layout.focus-width;
-                    border-color: Palette.text;
-                    border-radius: Layout.radius-control + Layout.ring;
-                }
-
-                if root.editing-id != "": Rectangle {
-                    x: root.gutter-w + root.sel-x * 1px;
-                    y: root.view-y + root.sel-y * 1px;
-                    width: root.sel-w * 1px;
-                    height: root.sel-h * 1px;
-                    background: Palette.elev-recessed;
-                    border-radius: Layout.radius-control;
-                    border-width: 1px;
-                    border-color: Palette.edge;
-
-                    cell-input := TextInput {
-                        x: Layout.edit-inset;
-                        y: 0;
-                        width: parent.width - 2 * Layout.edit-inset;
-                        height: parent.height;
-                        text: root.edit-text;
-                        single-line: true;
-                        vertical-alignment: center;
-                        color: Palette.text;
-                        selection-background-color: Palette.edge;
-                        selection-foreground-color: Palette.text;
-                        text-cursor-width: Layout.caret-w;
-                        font-family: Typography.body-face;
-                        font-size: Typography.body-size;
-                        init => { self.focus(); self.select-all(); }
-                        changed has-focus => {
-                            if (!self.has-focus && root.editing-id != "") {
-                                root.edit-committed();
-                            }
-                        }
-                        edited => { root.cell-edited(self.text); }
-                        accepted => {
-                            root.edit-committed();
-                            root.nav(1, 0);
-                            keys.focus();
-                        }
-                        key-pressed(event) => {
-                            if (event.text == Key.Escape) {
-                                root.edit-committed();
-                                keys.focus();
-                                return accept;
-                            }
-                            if (event.text == Key.Tab) {
-                                root.edit-committed();
-                                root.nav(0, 1);
-                                keys.focus();
-                                return accept;
-                            }
-                            return reject;
-                        }
+                        background: Palette.text;
                     }
                 }
 
                 grid-area := TouchArea {
                     property <bool> on-editor:
                         root.editing-id != ""
-                        && self.mouse-x >= root.gutter-w + root.sel-x * 1px
-                        && self.mouse-x < root.gutter-w + (root.sel-x + root.sel-w) * 1px
+                        && self.mouse-x >= root.gutter-w + root.view-x + root.sel-x * 1px
+                        && self.mouse-x < root.gutter-w + root.view-x + (root.sel-x + root.sel-w) * 1px
                         && self.mouse-y >= root.view-y + root.sel-y * 1px
                         && self.mouse-y < root.view-y + (root.sel-y + root.sel-h) * 1px;
 
@@ -356,14 +381,14 @@ export component SpreadsheetWindow inherits Window {
                             }
                             keys.focus();
                             root.cell-pressed(
-                                (self.mouse-x - root.gutter-w) / 1px,
+                                (self.mouse-x - root.gutter-w - root.view-x) / 1px,
                                 (self.mouse-y - root.view-y) / 1px);
                         }
                     }
                     moved => {
                         if (root.editing-id == "") {
                             root.cell-dragged(
-                                (self.mouse-x - root.gutter-w) / 1px,
+                                (self.mouse-x - root.gutter-w - root.view-x) / 1px,
                                 (self.mouse-y - root.view-y) / 1px);
                         }
                     }
@@ -373,9 +398,18 @@ export component SpreadsheetWindow inherits Window {
                         }
                     }
                     scroll-event(event) => {
+                        if (event.modifiers.shift) {
+                            root.view-x = max(
+                                min(0px, board.cols-w - root.grid-w * 1px),
+                                min(0px, root.view-x + event.delta-y));
+                            return accept;
+                        }
                         root.view-y = max(
                             min(0px, board.grid-view-h - root.grid-h * 1px),
                             min(0px, root.view-y + event.delta-y));
+                        root.view-x = max(
+                            min(0px, board.cols-w - root.grid-w * 1px),
+                            min(0px, root.view-x + event.delta-x));
                         return accept;
                     }
                 }
@@ -401,14 +435,6 @@ export component SpreadsheetWindow inherits Window {
                     moved => { root.gutter-dragged((self.mouse-y - root.view-y) / 1px); }
                 }
 
-                if root.guide-x >= 0: Rectangle {
-                    x: root.gutter-w + root.guide-x * 1px;
-                    y: 0;
-                    width: 1px;
-                    height: parent.height;
-                    background: Palette.text;
-                }
-
                 if root.guide-y >= 0: Rectangle {
                     x: 0;
                     y: root.view-y + root.guide-y * 1px;
@@ -425,6 +451,15 @@ export component SpreadsheetWindow inherits Window {
                 view-height: board.grid-view-h;
                 viewport-height: max(root.grid-h * 1px, board.grid-view-h);
                 viewport-y <=> root.view-y;
+            }
+
+            ScrollBarH {
+                x: root.gutter-w;
+                y: Layout.sheet-head-h + board.grid-view-h;
+                width: board.cols-w;
+                view-width: board.cols-w;
+                viewport-width: max(root.grid-w * 1px, board.cols-w);
+                viewport-x <=> root.view-x;
             }
         }
 

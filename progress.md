@@ -79,14 +79,13 @@ is a CRDT bug.** It is surface work, and it is the whole of the work.
 
 **The build order is the user's, and it is not negotiable:**
 **Note → Todo → Calendar → Kanban → Spreadsheet.** Each widget is *finished* before the next
-one starts. Do not jump ahead because a task looks easy. **Four are done. The Kanban is finished and the Spreadsheet is half done — start at
-`W3-13`, sideways scrolling.**
+one starts. Do not jump ahead because a task looks easy. **Four are done. `W3-14` is the last unticked task in the whole of Stage W3 —
+after it, the verification queue is the work.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **W3-13** — the sheet scrolls sideways | `SW-14` shipped vertical-only and wrote it up as *"say if that grates"*. It grates. A second `ScrollBar` along the bottom, shift-wheel and trackpad x-delta, and **the column head band must scroll with the columns while the row gutter stays put** |
-| 2 | **W3-14** — resize that can be found | It *is* built. Find out **which** of the three failure modes it is before changing anything — **the 1px guide is the tell**: if it appears, the hit test works and this is discoverability; if it does not, the press is not landing |
-| 3 | **The VERIFICATION QUEUE** | After W3. Eight fresh blocks — Todo, Calendar, Spreadsheet, the three Kanban ones, the typed time field, and leaving a spreadsheet cell — none clicked |
+| 1 | **W3-14** — resize that can be found | It *is* built. Find out **which** of the three failure modes it is before changing anything — **the 1px guide is the tell**: if it appears, the hit test works and this is discoverability; if it does not, the press is not landing |
+| 2 | **The VERIFICATION QUEUE** | **The last thing in Stage W3.** Nine fresh blocks — Todo, Calendar, Spreadsheet, the three Kanban ones, the typed time field, and leaving a spreadsheet cell — none clicked |
 
 **Answers already taken. Do not re-ask these:**
 - **The Calendar is day ROWS with time left→right** — built. An event is a bar whose length is
@@ -126,6 +125,7 @@ open question 12.
 `W3-15` (the typed `HH:MM AM/PM` field, `TimePicker` deleted, 6 new tests, 🟡),
 `W3-11` (no more `UNASSIGNED`, priority dots, two card heights, `insert_kanban`, 🟡),
 `W3-12` (a press anywhere else leaves a spreadsheet cell, 🟡),
+`W3-13` (the sheet scrolls sideways, `ScrollBarH`, 🟡),
  `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
 (priority dots), `W3-04` (todo drag-reorder on a fractional index, 🟡), `W3-05` (Calendar day
 rows), `W3-05b` (the readability pass the user demanded mid-run), `W3-06` (NOW rule), `W3-07`
@@ -3495,3 +3495,44 @@ only"*.
 
 - 📸 **Nothing to photograph.** Every line of this is a press. The verification queue block has
   six of them.
+
+### 2026-08-27 — W3-13: the sheet scrolls both ways
+
+`SW-14` shipped vertical-only and wrote it up as a deliberate limit with *"say if that grates"*.
+The user: *"very bad overall, cant scroll around like a normal excel"*. It grated.
+
+- 🟡 **`ScrollBarH` is a sibling of `ScrollBar`, not a flag on it.** `ScrollBar` has five
+  callers — the note body, the todo, home, the gallery and this sheet — and its thumb tracking,
+  dragging and auto-hide are all on the DO NOT REGRESS list. A `horizontal` flag would have
+  rewritten every geometry line in the one component all five depend on. `ScrollBarH` is the
+  same ~60 lines with x for y, and it carries the same `changed viewport-x` → `woken` →
+  `Motion.scroll-linger` fade, so **both bars auto-hide identically** (`W3-01`).
+
+- 🟡 **`view-x` runs alongside `view-y`** through the column heads, the cells, the selection
+  outline, the edit ring, the edit box, and the vertical resize guide. Every hit test that
+  already subtracted `gutter-w` now subtracts `view-x` too.
+
+- ⚠ **The head band scrolls, the row gutter does not — and the first attempt at that was
+  wrong.** I painted opaque `Palette.plate` covers over the gutter so scrolled content would
+  slide under them. A screenshot showed the covers as **visibly lighter blocks**: `Panel` fills
+  with `.with-alpha(0.96)`, so an opaque plate laid on top of it is a different colour. The
+  right answer was structural — the head texts sit in their own clipping `Rectangle` starting
+  at `gutter-w`, and the cells sit in a `scroller` clipping `Rectangle` that starts there too.
+  Nothing can reach the gutter, so nothing needs covering. **The compiler was happy with the
+  wrong version; the screenshot was not.**
+
+- ✅ **Wheel, trackpad and shift-wheel.** A wheel event moves y and, on a trackpad, applies its
+  `delta-x` to x in the same event. Shift-wheel sends `delta-y` to x and returns early.
+
+- ✅ `grid-view-h` lost `Layout.scroll-gutter` so the bottom bar has its own lane, **reserved
+  unconditionally** — making a gutter conditional on overflow is the reflow oscillation the
+  regression list already warns about.
+
+- ⚠ **A default sheet does not overflow sideways**: 7 columns at 80 is 560 against a 564 view.
+  `+COL` a few times before expecting to see anything. The verification queue says so.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo test --workspace` 267 pass,
+  `cargo fmt --all`.
+
+- 📸 Photographed: the empty grid is unchanged, and **both scrollbars are correctly invisible**
+  because nothing overflows. Scrolling itself is a gesture and needs a hand.

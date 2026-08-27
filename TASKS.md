@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-13` — the Spreadsheet scrolls **both** ways. `W3-12` landed 🟡 on 2026-08-27: a press on the grid, the gutter, the column head band or the widget header now commits the edit first, and `changed has-focus` on the cell input covers the window losing focus. **The Kanban is finished** — `W3-09`, `W3-10`, `W3-11` and the out-of-band `W3-15` all landed 🟡 the same day. 267 tests pass. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet — **only the Spreadsheet is left, and only `W3-13` and `W3-14` of it.**
+**Current task:** `W3-14` — spreadsheet row and column resize that can actually be found. It **is** built; find out *which* of the three failure modes it is before changing anything, and the 1px guide is the tell. `W3-13` landed 🟡 on 2026-08-27: a `ScrollBarH` sibling, `view-x` through every drawn thing and every hit test, the head band clipped and scrolling while the row gutter holds still. **The Kanban is finished.** 267 tests pass. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. `W3-14` is the last one.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
 **Done:** 40 ticked. 267 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is **done**: `W3-09`, `W3-10`, `W3-11` and the out-of-band `W3-15` all landed 🟡. **The Spreadsheet is all that is left.** The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not), `W3-11` (the Kanban card face — clicking the dots, and dragging a mixed-height column), `W3-12` (leaving a spreadsheet cell, which is six presses and no pixels) — see the verification queue, which now has three fresh blocks
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not), `W3-11` (the Kanban card face — clicking the dots, and dragging a mixed-height column), `W3-12` (leaving a spreadsheet cell, which is six presses and no pixels), `W3-13` (scrolling the sheet sideways) — see the verification queue, which now has three fresh blocks
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -122,6 +122,24 @@ feature. Say so in the end-of-run report every time until it happens.
 correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
 `MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
 cannot reach.
+
+**SCROLLING THE SHEET SIDEWAYS — `W3-13`, 2026-08-27.** The empty grid was photographed and is
+unchanged (A–G, 1–7, `A1` outlined, both bars correctly invisible because nothing overflows).
+Everything below is a scroll.
+- [ ] `cargo run -p canvas-app -- --open-kind sheet`, then **press `+COL` three times** — a
+      default sheet is 560px of columns in a 564px view and does **not** overflow, so nothing
+      will happen until you widen it
+- [ ] Wheel down and up — vertical still works exactly as it did. **This is the regression to
+      watch**: `grid` was restructured for this task
+- [ ] **Shift-wheel**, and on a trackpad a plain sideways swipe — the columns move
+- [ ] While scrolled sideways: **the `A B C …` band must move with its columns**, and the
+      `1 2 3 …` row gutter must **not** move at all. No column may appear on top of the gutter
+- [ ] The bottom scrollbar appears while you scroll and **fades out** after, like the right-hand
+      one. Drag its thumb — the columns track it
+- [ ] Click a cell after scrolling sideways — **the cell you clicked is the one that selects.**
+      The hit test is offset by `view-x` and this is where an off-by-one would show
+- [ ] Double-click a scrolled cell and type — the editor must sit **on** that cell, not where it
+      would have been unscrolled
 
 **LEAVING A SPREADSHEET CELL — `W3-12`, 2026-08-27.** Every line here is a press, so none of it
 could be photographed. `cargo run -p canvas-app -- --open-kind sheet`.
@@ -2708,6 +2726,25 @@ easy — the user asked for each one to be *done* before the next begins.
   must scroll **with** the columns while the row gutter stays put.
   *DoD:* a sheet wider than its window scrolls sideways · the head band stays aligned to its
   columns while it does · the gutter does not drift · both scrollbars auto-hide like W3-01.
+  🟡 **built 2026-08-27, box stays open** — `ScrollBarH` in `theme/controls.slint`, a sibling of
+  `ScrollBar` rather than a flag on it. `ScrollBar` has **five callers** and its tracking,
+  dragging and auto-hide are on the DO NOT REGRESS list, so it was not touched; `ScrollBarH` is
+  the same ~60 lines with x for y, including `changed viewport-x` waking the same
+  `Motion.scroll-linger` fade, so **both bars auto-hide identically**.
+  A `view-x` runs alongside `view-y` through the column heads, the cells, the selection outline,
+  the edit ring, the edit box and the vertical resize guide.
+  **The head band scrolls and the row gutter does not**, which took a restructure rather than a
+  coat of paint: the head texts live in their own clipping `Rectangle` starting at `gutter-w`,
+  and the cells live in a `scroller` clipping `Rectangle` that also starts there. The first
+  attempt painted opaque covers over the gutter instead, and a screenshot showed them plainly —
+  `Panel` fills with `.with-alpha(0.96)`, so an opaque `Palette.plate` on top of it reads as a
+  **lighter block**. Clipping is both correct and invisible.
+  Wheel scrolls y and, on a trackpad, `delta-x` scrolls x in the same event; **shift-wheel**
+  sends `delta-y` to x. `grid-view-h` lost `Layout.scroll-gutter` so the bottom bar has a lane,
+  reserved unconditionally — making it conditional on overflow is the reflow oscillation the
+  regression list already names.
+  ⚠ **A default sheet does not overflow sideways** — 7 columns at 80 is 560 against a 564 view.
+  Press `+COL` two or three times before expecting to see anything.
 
 - [ ] **W3-14 · Row and column resize that works and can be found** — `M`
   Needs: W3-13. **The user:** *"the rows and cols are not expandable by dragging their
