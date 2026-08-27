@@ -157,9 +157,27 @@ export component ScrollBar inherits Rectangle {
     in property <length> viewport-height: 0px;
     in property <length> view-height: 0px;
     in-out property <length> viewport-y: 0px;
+    in property <bool> revealed: false;
 
     property <length> overflow: max(0px, root.viewport-height - root.view-height);
     property <bool> scrollable: root.overflow > 0px;
+    property <bool> woken: false;
+    property <bool> showing: root.scrollable
+        && (root.revealed || root.woken || touch.has-hover || touch.pressed);
+
+    changed viewport-y => {
+        root.woken = true;
+        fade.restart();
+    }
+
+    fade := Timer {
+        interval: Motion.scroll-linger;
+        running: root.woken;
+        triggered => {
+            root.woken = false;
+            self.stop();
+        }
+    }
     property <length> thumb-h: root.scrollable
         ? max(Layout.scroll-thumb-min, root.height * (root.view-height / root.viewport-height))
         : 0px;
@@ -170,7 +188,7 @@ export component ScrollBar inherits Rectangle {
     property <length> press-origin: 0px;
 
     width: Layout.scroll-gutter;
-    opacity: root.scrollable ? 1.0 : 0.0;
+    opacity: root.showing ? 1.0 : 0.0;
     animate opacity { duration: Motion.hover; easing: Ease.standard; }
 
     touch := TouchArea {
@@ -196,7 +214,6 @@ export component ScrollBar inherits Rectangle {
         y: root.thumb-y;
         width: Layout.scroll-thumb-w;
         height: root.thumb-h;
-        border-radius: Layout.radius-checkbox;
         background: (touch.pressed || touch.has-hover) ? Palette.text : Palette.dim;
         animate background { duration: Motion.hover; easing: Ease.standard; }
     }

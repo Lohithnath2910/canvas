@@ -187,6 +187,7 @@ export component StickyNoteWindow inherits Window {
                 x: parent.width - Layout.scroll-gutter;
                 y: 0;
                 height: 100%;
+                revealed: root.controls-visible || body-input.has-focus;
                 view-height: body-scroll.height;
                 viewport-height: body-scroll.viewport-height;
                 viewport-y <=> body-scroll.viewport-y;

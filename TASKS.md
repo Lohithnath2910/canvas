@@ -5,7 +5,7 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-01` — the note body scrollbar: restyle it and auto-hide it. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet, each widget finished before the next starts. The verification queue is now second to this — the user has walked the app themselves and found real defects, which is what the queue existed to catch.
+**Current task:** `W3-02` — the Todo compose row: a clickable `+` that refuses an empty item. `W3-01` is built (🟡, hover-and-timing, not photographable). **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet, each widget finished before the next starts.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
 **Done:** 32 ticked. 220 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel), `SW-14` (the Spreadsheet — it renders, photographed; typing, merge and column resize are unwatched) — see the verification queue
@@ -2188,6 +2188,34 @@ easy — the user asked for each one to be *done* before the next begins.
   *DoD:* the thumb is invisible at rest · it fades in when the pointer is anywhere over the
   note, and while scrolling · it still tracks the wheel and still drags · no reflow when it
   appears.
+  🟡 **Built 2026-08-27. Not photographable** — the whole task is hover and timing, which a
+  still frame cannot show, and seeding a note long enough to overflow needs typing.
+  **What changed, in `ScrollBar` (`theme/controls.slint`), so every scrollbar in the app gets
+  it at once — which is the consistency the user asked for:**
+  - **It is invisible at rest.** `showing` is `scrollable && (revealed || woken || gutter
+    hover || dragging)`. `revealed` is a new `in property` the caller drives; the note passes
+    `controls-visible || body-input.has-focus`.
+  - **`woken` is the scroll wake.** `changed viewport-y` sets it and restarts a
+    `Motion.scroll-linger` (900ms) timer, so the bar appears the instant the wheel moves and
+    fades ~1s after it stops. **`changed <property>` and `Timer.restart()` both exist in Slint
+    1.17** — confirmed by compiling, not assumed.
+  - **The gutter is still reserved unconditionally.** Only the opacity animates. This is the
+    trap the task entry named and it is the reason the fade is on the *thumb* and not on the
+    gutter's width.
+  - **Restyled to match the app:** the thumb loses its `radius-checkbox` corners and is now a
+    **hard-edged 2px bar** (`scroll-thumb-w` 4px → 2px). A 4px-wide bar at radius 2 is a
+    capsule, which was the single most generic-web element in the product; 2px square is the
+    same hairline vocabulary as the 1px rules and the 2px caret. The **hit target stays 8px**
+    — the gutter `TouchArea` is unchanged, so it is no harder to grab than before.
+  ⚠ **One honest limit the user should judge.** "Show when the cursor is inside the widget"
+  is served by: hovering the header, hovering the gutter, typing in the body, and scrolling.
+  It is **not** served by merely moving the pointer over the body text — Slint gives the
+  `TextInput` the hover, and the two ways to intercept it both break something already on the
+  `DO NOT REGRESS` list (§13.3's overlapping-`TouchArea` rule, and *"putting a `TouchArea`
+  over the `TextInput`"* explicitly). What is built is the standard overlay-scrollbar
+  behaviour — macOS does exactly this. **If they want literal whole-plate hover, say so and it
+  becomes its own task**, because it needs a safe way to read body hover that does not exist
+  in the codebase yet.
 
 ### W3b — Todo
 
