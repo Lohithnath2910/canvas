@@ -3125,3 +3125,37 @@ canvas-doc is 149).
 *"not functioning properly at all"* — the arithmetic is already ✅ by 13 tests, this is surface
 work inside the new card), then the Kanban (`W3-09`/`W3-10`/`W3-11`) and the Spreadsheet
 (`W3-12`/`W3-13`/`W3-14`).
+
+---
+
+### 2026-08-27 — W3-08: the clock face is gone, and the Calendar is finished
+
+- 🟡 **The time picker is rebuilt as two grids and photographed working.** `HOUR` 00–23 in a
+  6×4 grid, `MINUTE` 00–55 by fives in a 6×2 grid, a `08:30` readout above both. The frame
+  shows `08` and `30` lit as inverted cells.
+- ✅ **The clock face was the actual defect.** It put 24 hours on two concentric rings of a
+  240px dial with 24px cells; the inner ring crowded the outer and hitting a number was luck.
+  It also needed a **mode switch** between hours and minutes before a minute was reachable.
+  A dial is the wrong shape for this product anyway — skeuomorphic in a system whose whole
+  language is lit cells in a grid. **Now everything is visible at once and every value is one
+  click.**
+- ⚠ **The first attempt overflowed and had to be re-photographed.** Date picker stacked above
+  time picker in a card is ~500px against 428 available, so the time grids fell off the bottom
+  and the frame showed a readout floating over an empty gap. **The picker card is now two
+  columns** — month left, time right, `picker-card-w` 528px. Fits in ~340px and is better: day
+  and time are both visible while you pick either.
+- ⚠ **A forced-open frame cannot fill the month grid.** `pick-days` comes from Rust's
+  `paint_pick_month`, which only runs when `pick-opened` fires; bypassing the click to
+  photograph means the month renders empty. **That is the harness, not the widget** — and it is
+  the single reason W3-08 is 🟡 rather than ticked. It is the first line of the Calendar block
+  in the verification queue.
+- **`FaceCell`, `Readout`, `picker-ring-gap`, `picker-hand-dot`, `picker-readout-w` deleted** —
+  the dial was their only caller. `calendar_time.rs` untouched: its 13 tests already prove the
+  arithmetic, and this was only ever a surface defect.
+
+`cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **246 tests pass**.
+
+**The Calendar is done.** Next, in the user's order, is the **Kanban**: `W3-09` (spacing),
+`W3-10` (reuse `CardOverlay` for the card editor — **do not build a second overlay**), `W3-11`
+(drop `UNASSIGNED` when empty; priority dots, reusing `PriorityDots` from W3-03). Then the
+Spreadsheet: `W3-12`, `W3-13`, `W3-14`.

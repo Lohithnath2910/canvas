@@ -367,7 +367,7 @@ export component CalendarWindow inherits Window {
             y: 0;
             width: parent.width;
             height: parent.height;
-            card-w: root.pick-mode == 0 ? Layout.card-w : Layout.picker-face + 4 * Layout.pad;
+            card-w: root.pick-mode == 0 ? Layout.card-w : Layout.picker-card-w;
             open: root.sheet-open;
             existing: root.sheet-existing && root.pick-mode == 0;
             save-label: root.pick-mode == 0 ? "SAVE" : "OK";
@@ -429,19 +429,26 @@ export component CalendarWindow inherits Window {
                 accepted(v) => { root.event-saved(); }
             }
 
-            if root.pick-mode != 0: DatePicker {
-                stamp: root.pick-stamp;
-                month-label: root.pick-month;
-                weekday-heads: root.pick-heads;
-                days: root.pick-days;
-                selected-day <=> root.pick-day;
-                chrome: false;
-                month-stepped(delta) => { root.pick-month-stepped(delta); }
-            }
+            if root.pick-mode != 0: HorizontalLayout {
+                spacing: Layout.pad;
+                alignment: start;
 
-            if root.pick-mode != 0: TimePicker {
-                minute-of-day <=> root.pick-minute;
-                chrome: false;
+                DatePicker {
+                    width: Layout.picker-face;
+                    stamp: root.pick-stamp;
+                    month-label: root.pick-month;
+                    weekday-heads: root.pick-heads;
+                    days: root.pick-days;
+                    selected-day <=> root.pick-day;
+                    chrome: false;
+                    month-stepped(delta) => { root.pick-month-stepped(delta); }
+                }
+
+                TimePicker {
+                    width: Layout.picker-time-w;
+                    minute-of-day <=> root.pick-minute;
+                    chrome: false;
+                }
             }
         }
 

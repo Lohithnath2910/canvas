@@ -12,46 +12,15 @@ export struct DayCell {
     today: bool,
 }
 
-component Readout inherits Rectangle {
-    in property <string> value;
-    in property <bool> selected;
-    callback picked();
-
-    width: Layout.picker-readout-w;
-    height: Layout.header-band;
-    border-radius: Layout.radius-control;
-    border-width: 1px;
-    border-color: root.selected ? Palette.text : Palette.edge;
-    background: root.selected ? Palette.text : Palette.elev-recessed;
-    animate background, border-color { duration: Motion.hover; easing: Ease.standard; }
-
-    Text {
-        width: 100%;
-        height: 100%;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-        text: root.value;
-        color: root.selected ? Palette.base : Palette.text;
-        font-family: Typography.interface-face;
-        font-size: Typography.title-size;
-        letter-spacing: Typography.title-tracking;
-    }
-
-    TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.picked(); }
-    }
-}
-
-component FaceCell inherits Rectangle {
+component GridCell inherits Rectangle {
     in property <string> label;
     in property <bool> selected;
     callback picked();
 
-    width: Layout.picker-cell;
-    height: Layout.picker-cell;
-    border-radius: Layout.radius-pill;
-    background: root.selected ? Palette.text : Colors.transparent;
+    border-radius: Layout.radius-control;
+    background: root.selected
+        ? Palette.text
+        : (touch.has-hover ? Palette.elev-raised : Colors.transparent);
 
     Text {
         width: 100%;
@@ -59,7 +28,7 @@ component FaceCell inherits Rectangle {
         horizontal-alignment: center;
         vertical-alignment: center;
         text: root.label;
-        color: root.selected ? Palette.base : (touch.has-hover ? Palette.text : Palette.dim);
+        color: root.selected ? Palette.base : Palette.text;
         font-family: Typography.interface-face;
         font-size: Typography.label-size;
         letter-spacing: Typography.label-tracking;
@@ -78,131 +47,88 @@ export component TimePicker inherits Rectangle {
     callback accepted();
     callback cancelled();
 
-    property <bool> on-minutes: false;
     property <int> hour: root.minute-of-day / 60;
     property <int> minute: mod(root.minute-of-day, 60);
 
-    property <length> cx: Layout.picker-face / 2;
-    property <length> cy: root.readout-h + Layout.pad + Layout.picker-face / 2;
-    property <length> outer-r: (Layout.picker-face - Layout.picker-cell) / 2;
-    property <length> inner-r: root.outer-r - Layout.picker-ring-gap;
     property <length> readout-h: Layout.header-band;
-
-    property <angle> hand-angle:
-        (root.on-minutes ? root.minute * 6 : mod(root.hour, 12) * 30) * 1deg;
-    property <length> hand-r: (!root.on-minutes && root.hour >= 12) ? root.inner-r : root.outer-r;
+    property <length> label-h: Typography.label-line;
+    property <length> cell-h: Layout.picker-row-h;
+    property <length> cell-w: (root.width - 5 * Layout.gap-xs) / 6;
 
     width: Layout.picker-face;
-    height: root.readout-h + Layout.pad + Layout.picker-face
+    height: root.readout-h
+        + Layout.pad + root.label-h + 4 * root.cell-h
+        + Layout.pad + root.label-h + 2 * root.cell-h
         + (root.chrome ? Layout.pad + Layout.button-h : 0px);
     background: Colors.transparent;
 
-    public function show-hours() { root.on-minutes = false; }
+    public function show-hours() { }
 
-    HorizontalLayout {
+    Text {
         x: 0;
         y: 0;
         width: parent.width;
         height: root.readout-h;
-        spacing: Layout.icon-gap;
-        alignment: center;
-
-        Readout {
-            value: root.hour < 10 ? "0" + root.hour : root.hour;
-            selected: !root.on-minutes;
-            picked => { root.on-minutes = false; }
-        }
-
-        Text {
-            width: Layout.gap-m;
-            height: root.readout-h;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            text: ":";
-            color: Palette.dim;
-            font-family: Typography.interface-face;
-            font-size: Typography.title-size;
-        }
-
-        Readout {
-            value: root.minute < 10 ? "0" + root.minute : root.minute;
-            selected: root.on-minutes;
-            picked => { root.on-minutes = true; }
-        }
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        text: (root.hour < 10 ? "0" + root.hour : root.hour)
+            + ":" + (root.minute < 10 ? "0" + root.minute : root.minute);
+        color: Palette.text;
+        font-family: Typography.interface-face;
+        font-size: Typography.title-size;
+        letter-spacing: Typography.title-tracking;
+        wrap: no-wrap;
     }
 
-    Path {
+    Text {
         x: 0;
-        y: 0;
+        y: root.readout-h + Layout.pad;
         width: parent.width;
-        height: parent.height;
-        viewbox-x: 0;
-        viewbox-y: 0;
-        viewbox-width: parent.width / 1px;
-        viewbox-height: parent.height / 1px;
-        stroke: Palette.text;
-        stroke-width: 1px;
-        fill: transparent;
-
-        MoveTo {
-            x: root.cx / 1px;
-            y: root.cy / 1px;
-        }
-
-        LineTo {
-            x: (root.cx + root.hand-r * Math.sin(root.hand-angle)) / 1px;
-            y: (root.cy - root.hand-r * Math.cos(root.hand-angle)) / 1px;
-        }
+        height: root.label-h;
+        vertical-alignment: center;
+        text: "HOUR";
+        color: Palette.dim;
+        font-family: Typography.interface-face;
+        font-size: Typography.label-size;
+        letter-spacing: Typography.label-tracking;
+        wrap: no-wrap;
     }
 
-    Rectangle {
-        x: root.cx - Layout.picker-hand-dot / 2;
-        y: root.cy - Layout.picker-hand-dot / 2;
-        width: Layout.picker-hand-dot;
-        height: Layout.picker-hand-dot;
-        background: Palette.text;
+    for h in 24: GridCell {
+        x: mod(h, 6) * (root.cell-w + Layout.gap-xs);
+        y: root.readout-h + Layout.pad + root.label-h + floor(h / 6) * root.cell-h;
+        width: root.cell-w;
+        height: root.cell-h;
+        label: h < 10 ? "0" + h : h;
+        selected: root.hour == h;
+        picked => { root.minute-of-day = h * 60 + root.minute; }
     }
 
-    if !root.on-minutes: Rectangle {
+    Text {
         x: 0;
-        y: 0;
+        y: root.readout-h + 2 * Layout.pad + root.label-h + 4 * root.cell-h;
         width: parent.width;
-        height: parent.height;
-        background: Colors.transparent;
-
-        for h in 24: FaceCell {
-            property <int> spoke: mod(h, 12);
-            property <length> ring-r: h < 12 ? root.outer-r : root.inner-r;
-            property <angle> spoke-angle: self.spoke * 30deg;
-
-            x: root.cx + self.ring-r * Math.sin(self.spoke-angle) - Layout.picker-cell / 2;
-            y: root.cy - self.ring-r * Math.cos(self.spoke-angle) - Layout.picker-cell / 2;
-            label: h < 10 ? "0" + h : h;
-            selected: root.hour == h;
-            picked => {
-                root.minute-of-day = h * 60 + root.minute;
-                root.on-minutes = true;
-            }
-        }
+        height: root.label-h;
+        vertical-alignment: center;
+        text: "MINUTE";
+        color: Palette.dim;
+        font-family: Typography.interface-face;
+        font-size: Typography.label-size;
+        letter-spacing: Typography.label-tracking;
+        wrap: no-wrap;
     }
 
-    if root.on-minutes: Rectangle {
-        x: 0;
-        y: 0;
-        width: parent.width;
-        height: parent.height;
-        background: Colors.transparent;
+    for slot in 12: GridCell {
+        property <int> value: slot * 5;
 
-        for slot in 12: FaceCell {
-            property <int> value: slot * 5;
-            property <angle> spoke-angle: slot * 30deg;
-
-            x: root.cx + root.outer-r * Math.sin(self.spoke-angle) - Layout.picker-cell / 2;
-            y: root.cy - root.outer-r * Math.cos(self.spoke-angle) - Layout.picker-cell / 2;
-            label: self.value < 10 ? "0" + self.value : self.value;
-            selected: root.minute == self.value;
-            picked => { root.minute-of-day = root.hour * 60 + self.value; }
-        }
+        x: mod(slot, 6) * (root.cell-w + Layout.gap-xs);
+        y: root.readout-h + 2 * Layout.pad + 2 * root.label-h + 4 * root.cell-h
+            + floor(slot / 6) * root.cell-h;
+        width: root.cell-w;
+        height: root.cell-h;
+        label: self.value < 10 ? "0" + self.value : self.value;
+        selected: root.minute == self.value;
+        picked => { root.minute-of-day = root.hour * 60 + self.value; }
     }
 
     if root.chrome: HorizontalLayout {
@@ -225,7 +151,6 @@ export component TimePicker inherits Rectangle {
             clicked => { root.accepted(); }
         }
     }
-
 }
 
 export component DatePicker inherits Rectangle {

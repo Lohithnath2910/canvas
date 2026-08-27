@@ -5,7 +5,7 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-08` — the date picker and time dial, rebuilt to fit inside the new `CardOverlay`. The Calendar is now day rows at 560×460 with readable names, a lit today marker, a NOW rule, and a card editor that does not scroll. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**; they added the Calendar readability complaint mid-run. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
+**Current task:** `W3-09` — Kanban board spacing (padding, margins, the column outline). **The Calendar is done**: `W3-05`, `W3-05b`, `W3-06`, `W3-07` ticked and photographed; `W3-08` is 🟡 because the month grid cannot be filled in a forced-open frame. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet — the Kanban is next.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
 **Done:** 40 ticked. 246 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel), `SW-14` (the Spreadsheet — it renders, photographed; typing, merge and column resize are unwatched) — see the verification queue
@@ -122,6 +122,25 @@ feature. Say so in the end-of-run report every time until it happens.
 correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
 `MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
 cannot reach.
+
+**THE CALENDAR — `W3-05` to `W3-08`, rebuilt 2026-08-27.** The week grid, the NOW rule, the
+readability pass and the editor card were all photographed. These are the parts a frame cannot
+reach.
+- [ ] `cargo run -p canvas-app -- --open-kind calendar`. ⚠ **Delete `%APPDATA%/Canvas` first or
+      make a new calendar** — the widget got bigger (560×460) and `default_size` only applies at
+      creation, so an existing one keeps its old cramped size and the editor card will clip in it
+- [ ] **Click empty space in a day row** — an event starts at roughly the time you clicked
+- [ ] **Double-click an event** — the editor is a **card in the middle**, not a page. It does
+      **not** scroll. `NAME`, then `START` and `END` side by side, then `LOCATION`, then `NOTES`
+- [ ] **Click the scrim** outside the card, or press Esc — it cancels
+- [ ] **Click `START`.** The picker card is **two columns: the month on the left, HOUR and
+      MINUTE grids on the right.** ⚠ **The month grid is the one thing never photographed** —
+      check it draws days at all, that the arrows step the month, and that clicking a day lights it
+- [ ] **Pick an hour and a minute** — every cell is one click, no mode switch. The old dial is gone
+- [ ] `OK` writes the value into the field; `CANCEL` leaves it alone
+- [ ] **Is the week readable now?** The user called the first version *"worse, unreadable"*. It
+      should read `[09:30] STAND-UP` with the time boxed and the name beside it, today's row
+      labelled in an inverted block, and a white NOW rule at the current time
 
 **THE TODO — `W3-01` to `W3-04`, built 2026-08-27.** The list and its priority dots were
 photographed and are correct. What is left is pointer and hover work.
