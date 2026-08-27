@@ -212,7 +212,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 228 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 246 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -269,7 +269,7 @@ cargo run -p canvas-app -- --open-kind kanban    # put one widget of that kind o
                                                  # Takes either word: kanban or board
 cargo run -p canvas-app -- --open <widget-id>    # the same for one specific widget
 cargo run -p canvas-app -- --open-kind spreadsheet   # the Spreadsheet; "sheet" works too
-cargo test --workspace               # 228 tests
+cargo test --workspace               # 246 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
 ```
@@ -3083,3 +3083,45 @@ example or a screenshot** — the recipe for that is now in START HERE.
 
 `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **228 tests pass** (was 220;
 canvas-doc is 149).
+
+---
+
+### 2026-08-27 — Stage W3, second half of the run: the Calendar
+
+- ✅ **W3-04 — todo rows reorder by drag, on a fractional index** (drag itself 🟡). Items gained
+  a `pos`; §10.3 forbids reordering a nested array so this was never a choice. The legacy path
+  is handled twice — `items()` sorts stably and `""` sorts before every real key, then
+  `backfill_positions()` assigns keys on open. **`Flickable { interactive: false }` is
+  load-bearing**: a Flickable pans on a vertical drag, the same gesture the reorder uses.
+- ✅ **W3-05 — the Calendar is day rows with time on the x-axis.** Seven rows, hour ticks,
+  events as bars whose length is their duration. Retires §10.4's "the chip carries the time and
+  not the name". The visible hour window is **fitted to the data**, not a fixed 24h.
+- ✅ **W3-06 — the NOW rule**, on the existing poll timer, absent when the week is not this week.
+- ✅ **W3-05b — the readability pass the user asked for mid-run.** They looked at the first
+  relayout frame and said *"the calendar is worse, unreadable"*. **They were right.** Rows were
+  34px, everything was 11px Silkscreen, and a 30-minute bar elided its own label to `09:…`.
+  Fixed by: the widget at 560×460, names at body-size 14, `cal-bar-min` at 68px, **and the chip
+  split into a time *inside* the bar and a name *after* it** — the single-string version drew a
+  box around `09:30` and left `STAND-UP` floating on bare plate, which read as broken rather
+  than deliberate. Today's label now sits in a filled `text` block with `base` lettering.
+- ✅ **W3-07 — `CardOverlay`**, and the editor stops being a scrolling page. Centred card over a
+  scrim, sized to content, never scrolls. **The Kanban reuses it in W3-10 — do not build a
+  second one.**
+
+**Three things this half taught, all paid for once:**
+1. **A size bump in `default_size` does not reach a widget that already exists**, so a frame
+   taken against a used database still shows the old cramped layout and lies about the fix.
+   Shoot against a fresh scratch database.
+2. **`cargo test` and `cargo clippy` do not rebuild `target/debug/canvas-app.exe`.** A frame was
+   taken of the *old* calendar after the relayout landed and briefly read as "the rewrite did
+   nothing". `cargo build -p canvas-app` before every shot.
+3. **Photograph before believing an arithmetic argument.** The card was calculated to fit and
+   did not; `cal-bar-min` was calculated at 56px and still elided. Both were found in one frame
+   each.
+
+`cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **246 tests pass**.
+
+**Left for the next session, in the user's order:** `W3-08` (the pickers, which they called
+*"not functioning properly at all"* — the arithmetic is already ✅ by 13 tests, this is surface
+work inside the new card), then the Kanban (`W3-09`/`W3-10`/`W3-11`) and the Spreadsheet
+(`W3-12`/`W3-13`/`W3-14`).
