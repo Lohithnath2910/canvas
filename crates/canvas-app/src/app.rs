@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use slint::ComponentHandle;
 
-use canvas_doc::{CalendarDoc, KanbanDoc, StickyNoteDoc, TodoListDoc, UndoHistory};
+use canvas_doc::sheet::{cell_key, column_label};
+use canvas_doc::{CalendarDoc, KanbanDoc, SheetDoc, StickyNoteDoc, TodoListDoc, UndoHistory};
 
 use crate::widget::{LiveWidget, WidgetDoc, WidgetWindow};
 use crate::widget_types;
@@ -13,7 +14,8 @@ use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
     platform_system_sans, CalendarChip, CalendarWindow, CanvasTray, DayCell, HomeWindow,
     KanbanCardData, KanbanColumnData, KanbanWindow, Motion, NoteRow, PaletteRow, PaletteWindow,
-    StickyNoteWindow, TodoItemData, TodoWindow, Typography, WidgetTypeData,
+    SheetCellData, SheetColData, SheetRowData, SpreadsheetWindow, StickyNoteWindow, TodoItemData,
+    TodoWindow, Typography, WidgetTypeData,
 };
 
 pub const ACTION_SETTINGS: &str = "settings";
@@ -552,6 +554,7 @@ impl App {
             WidgetWindow::Todo(todo) => wire_todo(app, id, todo),
             WidgetWindow::Calendar(calendar) => wire_calendar(app, id, calendar),
             WidgetWindow::Kanban(kanban) => wire_kanban(app, id, kanban),
+            WidgetWindow::Spreadsheet(sheet) => wire_sheet(app, id, sheet),
         };
         if let Some(widget) = app.borrow_mut().widgets.get_mut(id) {
             widget.poll_timer = Some(poll_timer);
@@ -2876,6 +2879,861 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
 
     poll_timer
 }
+const SHEET_COL_W: i32 = 80;
+const SHEET_ROW_H: i32 = 28;
+const SHEET_GRIP: i32 = 4;
+const SHEET_MIN_COL_W: i32 = 48;
+const SHEET_MAX_COL_W: i32 = 400;
+const SHEET_MIN_ROW_H: i32 = 20;
+const SHEET_MAX_ROW_H: i32 = 200;
+
+struct SheetResize {
+    is_row: bool,
+    index: usize,
+    start: i32,
+    press: i32,
+    size: i32,
+}
+
+#[derive(Default)]
+struct SheetUi {
+    rows: Vec<String>,
+    cols: Vec<String>,
+    row_y: Vec<i32>,
+    row_h: Vec<i32>,
+    col_x: Vec<i32>,
+    col_w: Vec<i32>,
+    spans: HashMap<(usize, usize), (usize, usize)>,
+    anchor_of: HashMap<(usize, usize), (usize, usize)>,
+    anchor: (usize, usize),
+    sel: (usize, usize, usize, usize),
+    resizing: Option<SheetResize>,
+}
+
+impl SheetUi {
+    fn empty(&self) -> bool {
+        self.rows.is_empty() || self.cols.is_empty()
+    }
+
+    fn clamp(&mut self) {
+        if self.empty() {
+            self.sel = (0, 0, 0, 0);
+            return;
+        }
+        let (r, c, nr, nc) = self.sel;
+        let r = r.min(self.rows.len() - 1);
+        let c = c.min(self.cols.len() - 1);
+        let nr = nr.max(1).min(self.rows.len() - r);
+        let nc = nc.max(1).min(self.cols.len() - c);
+        self.sel = (r, c, nr, nc);
+        self.anchor = (
+            self.anchor.0.min(self.rows.len() - 1),
+            self.anchor.1.min(self.cols.len() - 1),
+        );
+    }
+
+    fn uncover(&mut self) {
+        let (r, c, nr, nc) = self.sel;
+        if nr == 1 && nc == 1 {
+            if let Some(&(ar, ac)) = self.anchor_of.get(&(r, c)) {
+                self.sel = (ar, ac, 1, 1);
+                self.anchor = (ar, ac);
+            }
+        }
+    }
+
+    fn span_of(&self, r: usize, c: usize) -> (usize, usize) {
+        *self.spans.get(&(r, c)).unwrap_or(&(1, 1))
+    }
+
+    fn select_to(&mut self, row: usize, col: usize) {
+        let (ar, ac) = self.anchor;
+        let r = ar.min(row);
+        let c = ac.min(col);
+        self.sel = (r, c, ar.max(row) - r + 1, ac.max(col) - c + 1);
+    }
+}
+
+fn sheet_axis_at(starts: &[i32], sizes: &[i32], value: i32) -> Option<usize> {
+    if starts.is_empty() {
+        return None;
+    }
+    if value < 0 {
+        return Some(0);
+    }
+    for i in 0..starts.len() {
+        if value < starts[i] + sizes[i] {
+            return Some(i);
+        }
+    }
+    Some(starts.len() - 1)
+}
+
+fn sheet_axis_boundary(starts: &[i32], sizes: &[i32], value: i32) -> Option<usize> {
+    (0..starts.len()).find(|&i| (value - (starts[i] + sizes[i])).abs() <= SHEET_GRIP)
+}
+
+fn sheet_span_size(sizes: &[i32], start: usize, span: usize) -> i32 {
+    sizes[start..(start + span).min(sizes.len())].iter().sum()
+}
+
+fn sheet_stamp(r: usize, c: usize, nr: usize, nc: usize) -> String {
+    let head = format!("{}{}", column_label(c), r + 1);
+    if nr <= 1 && nc <= 1 {
+        return head;
+    }
+    format!("{head}:{}{}", column_label(c + nc - 1), r + nr)
+}
+
+fn refresh_sheet(app: &SharedApp, id: &str, ui: &Rc<RefCell<SheetUi>>) {
+    let Ok(a) = app.try_borrow() else {
+        return;
+    };
+    let Some(widget) = a.widgets.get(id) else {
+        return;
+    };
+    let (WidgetDoc::Sheet(doc), WidgetWindow::Spreadsheet(window)) = (&widget.doc, &widget.window)
+    else {
+        return;
+    };
+    if rows_locked_by_editor(window.get_editing_id().as_ref()) {
+        return;
+    }
+
+    let rows = doc.rows();
+    let cols = doc.cols();
+
+    let mut row_y = Vec::with_capacity(rows.len());
+    let mut row_h = Vec::with_capacity(rows.len());
+    let mut total_h = 0;
+    for row in &rows {
+        let h = doc.row_height(row).map(|v| v as i32).unwrap_or(SHEET_ROW_H);
+        row_y.push(total_h);
+        row_h.push(h);
+        total_h += h;
+    }
+    let mut col_x = Vec::with_capacity(cols.len());
+    let mut col_w = Vec::with_capacity(cols.len());
+    let mut total_w = 0;
+    for col in &cols {
+        let w = doc.col_width(col).map(|v| v as i32).unwrap_or(SHEET_COL_W);
+        col_x.push(total_w);
+        col_w.push(w);
+        total_w += w;
+    }
+
+    let row_index: HashMap<&str, usize> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (r.as_str(), i))
+        .collect();
+    let col_index: HashMap<&str, usize> = cols
+        .iter()
+        .enumerate()
+        .map(|(i, c)| (c.as_str(), i))
+        .collect();
+
+    let mut spans: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
+    let mut anchor_of: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
+    for merge in doc.merges() {
+        let (Some(&r), Some(&c)) = (
+            row_index.get(merge.row.as_str()),
+            col_index.get(merge.col.as_str()),
+        ) else {
+            continue;
+        };
+        let nr = merge.rows.min(rows.len() - r);
+        let nc = merge.cols.min(cols.len() - c);
+        spans.insert((r, c), (nr, nc));
+        for rr in r..r + nr {
+            for cc in c..c + nc {
+                if (rr, cc) != (r, c) {
+                    anchor_of.insert((rr, cc), (r, c));
+                }
+            }
+        }
+    }
+
+    let col_data: Vec<SheetColData> = (0..cols.len())
+        .map(|i| SheetColData {
+            label: column_label(i).into(),
+            x: col_x[i],
+            w: col_w[i],
+        })
+        .collect();
+    let row_data: Vec<SheetRowData> = (0..rows.len())
+        .map(|i| SheetRowData {
+            label: (i + 1).to_string().into(),
+            y: row_y[i],
+            h: row_h[i],
+        })
+        .collect();
+
+    let mut cells = Vec::with_capacity(rows.len() * cols.len());
+    for (r, row) in rows.iter().enumerate() {
+        for (c, col) in cols.iter().enumerate() {
+            if anchor_of.contains_key(&(r, c)) {
+                continue;
+            }
+            let (nr, nc) = *spans.get(&(r, c)).unwrap_or(&(1, 1));
+            cells.push(SheetCellData {
+                key: cell_key(row, col).into(),
+                x: col_x[c],
+                y: row_y[r],
+                w: sheet_span_size(&col_w, c, nc),
+                h: sheet_span_size(&row_h, r, nr),
+                text: doc.value(row, col).into(),
+            });
+        }
+    }
+
+    let window = window.clone_strong();
+    drop(a);
+
+    {
+        let mut u = ui.borrow_mut();
+        u.rows = rows;
+        u.cols = cols;
+        u.row_y = row_y;
+        u.row_h = row_h;
+        u.col_x = col_x;
+        u.col_w = col_w;
+        u.spans = spans;
+        u.anchor_of = anchor_of;
+        u.clamp();
+        u.uncover();
+    }
+
+    window.set_grid_w(total_w);
+    window.set_grid_h(total_h);
+    window.set_cols(slint::ModelRc::new(slint::VecModel::from(col_data)));
+    window.set_rows(slint::ModelRc::new(slint::VecModel::from(row_data)));
+    window.set_cells(slint::ModelRc::new(slint::VecModel::from(cells)));
+
+    paint_sheet_selection(app, id, ui);
+}
+
+fn paint_sheet_selection(app: &SharedApp, id: &str, ui: &Rc<RefCell<SheetUi>>) {
+    let Ok(a) = app.try_borrow() else {
+        return;
+    };
+    let Some(widget) = a.widgets.get(id) else {
+        return;
+    };
+    let (WidgetDoc::Sheet(doc), WidgetWindow::Spreadsheet(window)) = (&widget.doc, &widget.window)
+    else {
+        return;
+    };
+    let window = window.clone_strong();
+
+    let u = ui.borrow();
+    if u.empty() {
+        drop(u);
+        drop(a);
+        window.set_sel_w(0);
+        window.set_sel_h(0);
+        window.set_sel_key(slint::SharedString::new());
+        window.set_sel_stamp(slint::SharedString::new());
+        window.set_merge_enabled(false);
+        return;
+    }
+
+    let (r, c, nr, nc) = u.sel;
+    let merged = u.spans.contains_key(&(r, c));
+    let ranged = nr > 1 || nc > 1;
+    let (draw_r, draw_c) = if ranged { (nr, nc) } else { u.span_of(r, c) };
+
+    let sel_x = u.col_x[c];
+    let sel_y = u.row_y[r];
+    let sel_w = sheet_span_size(&u.col_w, c, draw_c);
+    let sel_h = sheet_span_size(&u.row_h, r, draw_r);
+    let key = cell_key(&u.rows[r], &u.cols[c]);
+    let text = doc.value(&u.rows[r], &u.cols[c]);
+    let stamp = sheet_stamp(r, c, draw_r, draw_c);
+    drop(u);
+    drop(a);
+
+    window.set_sel_x(sel_x);
+    window.set_sel_y(sel_y);
+    window.set_sel_w(sel_w);
+    window.set_sel_h(sel_h);
+    window.set_sel_key(key.into());
+    window.set_sel_stamp(stamp.into());
+    window.set_edit_text(text.into());
+    window.set_merge_label(
+        if merged && !ranged {
+            "UNMERGE"
+        } else {
+            "MERGE"
+        }
+        .into(),
+    );
+    window.set_merge_enabled(ranged || merged);
+}
+
+fn sheet_edit(
+    app: &SharedApp,
+    id: &str,
+    ui: &Rc<RefCell<SheetUi>>,
+    change: impl FnOnce(&SheetDoc) -> Option<Vec<u8>>,
+) {
+    {
+        let Ok(mut a) = app.try_borrow_mut() else {
+            return;
+        };
+        let Some(widget) = a.widgets.get_mut(id) else {
+            return;
+        };
+        let WidgetDoc::Sheet(doc) = &widget.doc else {
+            return;
+        };
+        let Some(update) = change(doc) else {
+            return;
+        };
+        widget.pending_updates.push(update);
+        widget.text_dirty = true;
+    }
+    refresh_sheet(app, id, ui);
+    App::refresh_home(app);
+}
+
+fn end_sheet_cell_edit(handle: &slint::Weak<SpreadsheetWindow>) {
+    if let Some(window) = handle.upgrade() {
+        window.set_editing_id(slint::SharedString::new());
+    }
+}
+
+fn sheet_selected_ids(ui: &Rc<RefCell<SheetUi>>) -> Option<(String, String)> {
+    let u = ui.borrow();
+    if u.empty() {
+        return None;
+    }
+    let (r, c, _, _) = u.sel;
+    Some((u.rows[r].clone(), u.cols[c].clone()))
+}
+
+fn wire_sheet(app: &SharedApp, id: &str, window: &SpreadsheetWindow) -> slint::Timer {
+    let owned_id = id.to_string();
+    let poll_timer = slint::Timer::default();
+    let ui: Rc<RefCell<SheetUi>> = Rc::new(RefCell::new(SheetUi::default()));
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        window.on_cell_pressed(move |x, y| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            {
+                let mut u = ui.borrow_mut();
+                let (Some(row), Some(col)) = (
+                    sheet_axis_at(&u.row_y, &u.row_h, y),
+                    sheet_axis_at(&u.col_x, &u.col_w, x),
+                ) else {
+                    return;
+                };
+                u.anchor = (row, col);
+                u.sel = (row, col, 1, 1);
+                u.uncover();
+            }
+            paint_sheet_selection(&app, &id, &ui);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        window.on_cell_dragged(move |x, y| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            {
+                let mut u = ui.borrow_mut();
+                let (Some(row), Some(col)) = (
+                    sheet_axis_at(&u.row_y, &u.row_h, y),
+                    sheet_axis_at(&u.col_x, &u.col_w, x),
+                ) else {
+                    return;
+                };
+                if u.sel == (row.min(u.anchor.0), col.min(u.anchor.1), 1, 1)
+                    && u.anchor == (row, col)
+                {
+                    return;
+                }
+                u.select_to(row, col);
+            }
+            paint_sheet_selection(&app, &id, &ui);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        window.on_nav(move |dr, dc| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            {
+                let mut u = ui.borrow_mut();
+                if u.empty() {
+                    return;
+                }
+                let (r, c, _, _) = u.sel;
+                let (nr, nc) = u.span_of(r, c);
+                let step_r = if dr > 0 { nr as i32 } else { 1 };
+                let step_c = if dc > 0 { nc as i32 } else { 1 };
+                let row = (r as i32 + dr * step_r).clamp(0, u.rows.len() as i32 - 1) as usize;
+                let col = (c as i32 + dc * step_c).clamp(0, u.cols.len() as i32 - 1) as usize;
+                u.sel = (row, col, 1, 1);
+                u.anchor = (row, col);
+                u.uncover();
+            }
+            paint_sheet_selection(&app, &id, &ui);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        window.on_cell_edited(move |value| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Some((row, col)) = sheet_selected_ids(&ui) else {
+                return;
+            };
+            sheet_edit(&app, &id, &ui, |doc| {
+                doc.set_value(&row, &col, value.as_ref())
+            });
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_cell_cleared(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            end_sheet_cell_edit(&handle);
+            let Some((row, col)) = sheet_selected_ids(&ui) else {
+                return;
+            };
+            sheet_edit(&app, &id, &ui, |doc| doc.set_value(&row, &col, ""));
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_edit_committed(move || {
+            end_sheet_cell_edit(&handle);
+            if let Some(app) = weak.upgrade() {
+                refresh_sheet(&app, &id, &ui);
+            }
+        });
+    }
+
+    {
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_head_pressed(move |x| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let mut u = ui.borrow_mut();
+            let found = sheet_axis_boundary(&u.col_x, &u.col_w, x);
+            match found {
+                Some(index) => {
+                    let size = u.col_w[index];
+                    let guide = u.col_x[index] + size;
+                    u.resizing = Some(SheetResize {
+                        is_row: false,
+                        index,
+                        start: size,
+                        press: x,
+                        size,
+                    });
+                    window.set_guide_x(guide);
+                }
+                None => {
+                    u.resizing = None;
+                    window.set_guide_x(-1);
+                }
+            }
+        });
+    }
+
+    {
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_head_dragged(move |x| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let mut u = ui.borrow_mut();
+            let Some(resize) = u.resizing.as_mut() else {
+                return;
+            };
+            if resize.is_row {
+                return;
+            }
+            resize.size = (resize.start + x - resize.press).clamp(SHEET_MIN_COL_W, SHEET_MAX_COL_W);
+            let (index, size) = (resize.index, resize.size);
+            window.set_guide_x(u.col_x[index] + size);
+        });
+    }
+
+    {
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_gutter_pressed(move |y| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let mut u = ui.borrow_mut();
+            let found = sheet_axis_boundary(&u.row_y, &u.row_h, y);
+            match found {
+                Some(index) => {
+                    let size = u.row_h[index];
+                    let guide = u.row_y[index] + size;
+                    u.resizing = Some(SheetResize {
+                        is_row: true,
+                        index,
+                        start: size,
+                        press: y,
+                        size,
+                    });
+                    window.set_guide_y(guide);
+                }
+                None => {
+                    u.resizing = None;
+                    window.set_guide_y(-1);
+                }
+            }
+        });
+    }
+
+    {
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_gutter_dragged(move |y| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let mut u = ui.borrow_mut();
+            let Some(resize) = u.resizing.as_mut() else {
+                return;
+            };
+            if !resize.is_row {
+                return;
+            }
+            resize.size = (resize.start + y - resize.press).clamp(SHEET_MIN_ROW_H, SHEET_MAX_ROW_H);
+            let (index, size) = (resize.index, resize.size);
+            window.set_guide_y(u.row_y[index] + size);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_resize_ended(move || {
+            if let Some(window) = handle.upgrade() {
+                window.set_guide_x(-1);
+                window.set_guide_y(-1);
+            }
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let done = ui.borrow_mut().resizing.take();
+            let Some(resize) = done else {
+                return;
+            };
+            if resize.size == resize.start {
+                return;
+            }
+            let target = {
+                let u = ui.borrow();
+                if resize.is_row {
+                    u.rows.get(resize.index).cloned()
+                } else {
+                    u.cols.get(resize.index).cloned()
+                }
+            };
+            let Some(target) = target else {
+                return;
+            };
+            sheet_edit(&app, &id, &ui, |doc| {
+                if resize.is_row {
+                    doc.set_row_height(&target, resize.size as u32)
+                } else {
+                    doc.set_col_width(&target, resize.size as u32)
+                }
+            });
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_merge_requested(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            end_sheet_cell_edit(&handle);
+            let plan = {
+                let u = ui.borrow();
+                if u.empty() {
+                    return;
+                }
+                let (r, c, nr, nc) = u.sel;
+                let ranged = nr > 1 || nc > 1;
+                let merged = u.spans.contains_key(&(r, c));
+                Some((u.rows[r].clone(), u.cols[c].clone(), nr, nc, ranged, merged))
+            };
+            let Some((row, col, nr, nc, ranged, merged)) = plan else {
+                return;
+            };
+            {
+                let mut u = ui.borrow_mut();
+                u.sel = (u.sel.0, u.sel.1, 1, 1);
+            }
+            sheet_edit(&app, &id, &ui, |doc| {
+                if ranged {
+                    doc.merge(&row, &col, nr, nc)
+                } else if merged {
+                    doc.unmerge(&row, &col)
+                } else {
+                    None
+                }
+            });
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_row_added(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            end_sheet_cell_edit(&handle);
+            sheet_edit(&app, &id, &ui, |doc| Some(doc.insert_row(usize::MAX).1));
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let ui = ui.clone();
+        let handle = window.as_weak();
+        window.on_col_added(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            end_sheet_cell_edit(&handle);
+            sheet_edit(&app, &id, &ui, |doc| Some(doc.insert_col(usize::MAX).1));
+        });
+    }
+
+    let anchor: DragAnchor = Rc::new(std::cell::Cell::new(None));
+
+    {
+        let anchor = anchor.clone();
+        let handle = window.as_weak();
+        window.on_drag_started(move || {
+            if let Some(window) = handle.upgrade() {
+                begin_drag(window.window(), &anchor);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let anchor = anchor.clone();
+        window.on_drag_ended(move || {
+            anchor.set(None);
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement_dirty = true;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let anchor = anchor.clone();
+        let handle = window.as_weak();
+        window.on_window_moved(move |dx, dy| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            let win = window.window();
+            let scale = win.scale_factor();
+            let next = drag_move(win, &anchor, dx, dy);
+
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                let logical = next.to_logical(scale);
+                widget.placement.x = (logical.x + PLATE_MARGIN).round() as i32;
+                widget.placement.y = (logical.y + PLATE_MARGIN).round() as i32;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        window.on_pin_toggled(move |pinned| {
+            if let Some(window) = handle.upgrade() {
+                crate::desktop_layer::apply_pin(window.window(), pinned);
+            }
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let mut a = app.borrow_mut();
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                widget.placement.pinned = pinned;
+                widget.placement_dirty = true;
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_title_edited(move |title| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let trimmed = title.trim();
+            let title = if trimmed.is_empty() {
+                canvas_storage::DEFAULT_TITLE
+            } else {
+                trimmed
+            };
+            let Ok(a) = app.try_borrow() else {
+                return;
+            };
+            let _ = a.store.set_title(&id, title);
+            drop(a);
+            App::refresh_home(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_close_requested(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            App::close_widget(&app, &id);
+            App::refresh_home(&app);
+            crate::maybe_quit(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        window.on_palette_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::show_palette(&app);
+            }
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.on_delete_confirmed(move || {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            App::delete_widget(&app, &id);
+            App::refresh_home(&app);
+            crate::maybe_quit(&app);
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        window.window().on_close_requested(move || {
+            if let Some(app) = weak.upgrade() {
+                App::close_widget(&app, &id);
+                App::refresh_home(&app);
+                crate::maybe_quit(&app);
+            }
+            slint::CloseRequestResponse::KeepWindowShown
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        poll_timer.start(slint::TimerMode::Repeated, PIN_POLL_INTERVAL, move || {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            if window.get_pinned() {
+                crate::desktop_layer::hold_at_desktop_layer(window.window());
+            }
+
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            let Ok(mut a) = app.try_borrow_mut() else {
+                return;
+            };
+            if let Some(widget) = a.widgets.get_mut(&id) {
+                let size = window
+                    .window()
+                    .size()
+                    .to_logical(window.window().scale_factor());
+                let w = (size.width - 2.0 * PLATE_MARGIN).round() as i32;
+                let h = (size.height - 2.0 * PLATE_MARGIN).round() as i32;
+                if w != widget.placement.width || h != widget.placement.height {
+                    widget.placement.width = w;
+                    widget.placement.height = h;
+                    widget.placement_dirty = true;
+                }
+            }
+        });
+    }
+
+    refresh_sheet(app, id, &ui);
+    poll_timer
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -2986,5 +3844,130 @@ mod tests {
             .collect();
         assert_eq!(home, palette);
         assert_eq!(home.len(), widget_types::BUILT.len());
+    }
+
+    fn seven_by_seven() -> super::SheetUi {
+        let mut u = super::SheetUi::default();
+        for i in 0..7 {
+            u.rows.push(format!("r{i}"));
+            u.cols.push(format!("c{i}"));
+            u.row_y.push(i * 28);
+            u.row_h.push(28);
+            u.col_x.push(i * 80);
+            u.col_w.push(80);
+        }
+        u.sel = (0, 0, 1, 1);
+        u
+    }
+
+    #[test]
+    fn a_pixel_lands_in_the_column_it_is_inside() {
+        let u = seven_by_seven();
+        assert_eq!(super::sheet_axis_at(&u.col_x, &u.col_w, 0), Some(0));
+        assert_eq!(super::sheet_axis_at(&u.col_x, &u.col_w, 79), Some(0));
+        assert_eq!(super::sheet_axis_at(&u.col_x, &u.col_w, 80), Some(1));
+        assert_eq!(super::sheet_axis_at(&u.col_x, &u.col_w, 559), Some(6));
+        assert_eq!(super::sheet_axis_at(&u.row_y, &u.row_h, 55), Some(1));
+    }
+
+    #[test]
+    fn a_pixel_outside_the_grid_clamps_rather_than_missing() {
+        let u = seven_by_seven();
+        assert_eq!(super::sheet_axis_at(&u.col_x, &u.col_w, -20), Some(0));
+        assert_eq!(super::sheet_axis_at(&u.col_x, &u.col_w, 9_000), Some(6));
+        assert_eq!(super::sheet_axis_at(&[], &[], 10), None);
+    }
+
+    #[test]
+    fn a_column_boundary_is_grabbed_only_within_the_grip() {
+        let u = seven_by_seven();
+        assert_eq!(super::sheet_axis_boundary(&u.col_x, &u.col_w, 80), Some(0));
+        assert_eq!(super::sheet_axis_boundary(&u.col_x, &u.col_w, 84), Some(0));
+        assert_eq!(super::sheet_axis_boundary(&u.col_x, &u.col_w, 76), Some(0));
+        assert_eq!(super::sheet_axis_boundary(&u.col_x, &u.col_w, 70), None);
+        assert_eq!(super::sheet_axis_boundary(&u.col_x, &u.col_w, 160), Some(1));
+    }
+
+    #[test]
+    fn a_span_measures_the_columns_it_covers_and_never_runs_off_the_end() {
+        let u = seven_by_seven();
+        assert_eq!(super::sheet_span_size(&u.col_w, 0, 1), 80);
+        assert_eq!(super::sheet_span_size(&u.col_w, 1, 3), 240);
+        assert_eq!(super::sheet_span_size(&u.col_w, 5, 9), 160);
+        assert_eq!(super::sheet_span_size(&u.row_h, 6, 4), 28);
+    }
+
+    #[test]
+    fn a_stamp_names_one_cell_or_a_range() {
+        assert_eq!(super::sheet_stamp(0, 0, 1, 1), "A1");
+        assert_eq!(super::sheet_stamp(1, 1, 1, 1), "B2");
+        assert_eq!(super::sheet_stamp(1, 1, 2, 3), "B2:D3");
+        assert_eq!(super::sheet_stamp(0, 25, 1, 2), "Z1:AA1");
+    }
+
+    #[test]
+    fn dragging_backwards_still_selects_a_forward_rectangle() {
+        let mut u = seven_by_seven();
+        u.anchor = (4, 4);
+        u.select_to(1, 2);
+        assert_eq!(u.sel, (1, 2, 4, 3));
+        u.select_to(6, 6);
+        assert_eq!(u.sel, (4, 4, 3, 3));
+    }
+
+    #[test]
+    fn a_selection_survives_the_sheet_shrinking_under_it() {
+        let mut u = seven_by_seven();
+        u.sel = (6, 6, 1, 1);
+        u.anchor = (6, 6);
+        u.rows.truncate(3);
+        u.row_y.truncate(3);
+        u.row_h.truncate(3);
+        u.clamp();
+        assert_eq!(u.sel, (2, 6, 1, 1));
+        assert_eq!(u.anchor, (2, 6));
+    }
+
+    #[test]
+    fn a_range_is_trimmed_to_what_is_left_of_the_sheet() {
+        let mut u = seven_by_seven();
+        u.sel = (5, 5, 4, 4);
+        u.clamp();
+        assert_eq!(u.sel, (5, 5, 2, 2));
+    }
+
+    #[test]
+    fn an_empty_sheet_has_no_selection_rather_than_a_panic() {
+        let mut u = super::SheetUi {
+            sel: (3, 3, 2, 2),
+            ..Default::default()
+        };
+        u.clamp();
+        assert_eq!(u.sel, (0, 0, 0, 0));
+        assert!(u.empty());
+    }
+
+    #[test]
+    fn landing_on_a_covered_cell_moves_to_the_merge_anchor() {
+        let mut u = seven_by_seven();
+        u.spans.insert((1, 1), (2, 2));
+        for cell in [(1, 2), (2, 1), (2, 2)] {
+            u.anchor_of.insert(cell, (1, 1));
+        }
+        u.sel = (2, 2, 1, 1);
+        u.uncover();
+        assert_eq!(u.sel, (1, 1, 1, 1));
+        assert_eq!(u.anchor, (1, 1));
+        assert_eq!(u.span_of(1, 1), (2, 2));
+        assert_eq!(u.span_of(3, 3), (1, 1));
+    }
+
+    #[test]
+    fn a_range_selection_is_left_alone_by_uncover() {
+        let mut u = seven_by_seven();
+        u.anchor_of.insert((2, 2), (1, 1));
+        u.sel = (2, 2, 2, 2);
+        u.uncover();
+        assert_eq!(u.sel, (2, 2, 2, 2));
     }
 }

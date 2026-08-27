@@ -198,6 +198,20 @@ impl SheetDoc {
         Some(txn.encode_update_v1())
     }
 
+    pub fn filled_values(&self) -> Vec<String> {
+        let txn = self.doc.transact();
+        let mut values = Vec::new();
+        for (_, value) in self.cells_ref.iter(&txn) {
+            let Out::YMap(cell) = value else {
+                continue;
+            };
+            if let Some(Out::Any(Any::String(s))) = cell.get(&txn, "value") {
+                values.push(s.to_string());
+            }
+        }
+        values
+    }
+
     pub fn merges(&self) -> Vec<SheetMerge> {
         let txn = self.doc.transact();
         let mut merges = Vec::new();

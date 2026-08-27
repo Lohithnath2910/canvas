@@ -1,4 +1,4 @@
-use canvas_storage::{KIND_CALENDAR, KIND_KANBAN, KIND_STICKY_NOTE, KIND_TODO};
+use canvas_storage::{KIND_CALENDAR, KIND_KANBAN, KIND_SPREADSHEET, KIND_STICKY_NOTE, KIND_TODO};
 
 pub struct WidgetType {
     pub kind: &'static str,
@@ -30,6 +30,12 @@ pub const BUILT: &[WidgetType] = &[
         kind: KIND_KANBAN,
         name: "board",
         label: "NEW BOARD",
+        shortcut: "",
+    },
+    WidgetType {
+        kind: KIND_SPREADSHEET,
+        name: "sheet",
+        label: "NEW SHEET",
         shortcut: "",
     },
 ];
@@ -74,7 +80,13 @@ mod tests {
     use super::*;
     use crate::widget::WidgetDoc;
 
-    const ALL_KINDS: &[&str] = &[KIND_STICKY_NOTE, KIND_TODO, KIND_CALENDAR, KIND_KANBAN];
+    const ALL_KINDS: &[&str] = &[
+        KIND_STICKY_NOTE,
+        KIND_TODO,
+        KIND_CALENDAR,
+        KIND_KANBAN,
+        KIND_SPREADSHEET,
+    ];
 
     #[test]
     fn every_offered_type_has_a_document_behind_it() {
@@ -156,7 +168,7 @@ mod tests {
             None
         );
         assert_eq!(kind_for_action("settings"), None);
-        assert_eq!(kind_for_action("new:spreadsheet"), None);
+        assert_eq!(kind_for_action("new:whiteboard"), None);
     }
 
     #[test]
@@ -164,7 +176,13 @@ mod tests {
         let labels: Vec<String> = BUILT.iter().map(palette_label).collect();
         assert_eq!(
             labels,
-            ["New note", "New todo", "New calendar", "New board"]
+            [
+                "New note",
+                "New todo",
+                "New calendar",
+                "New board",
+                "New sheet"
+            ]
         );
     }
 

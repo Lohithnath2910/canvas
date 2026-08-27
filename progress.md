@@ -50,28 +50,37 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W2 is built except the Spreadsheet. The user stopped development on 2026-08-27 after
-`SW-21`, so this block is where a cold session picks up.**
+**Stage W2 is feature-complete. `SW-13` and `SW-14` closed on 2026-08-27, so every widget
+type except the parked Whiteboard is built and reachable. There is nothing unticked left in
+the backlog that can be done without the user** — the next unit of work is the queue.
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **SW-14** — the Spreadsheet widget | **`SW-13` is done, so the document under it exists**: `SheetDoc` in `canvas-doc/src/sheet.rs`, 20 tests, `rows()`/`cols()`/`value()`/`set_value()`/`merge()`/`is_covered()`/`col_width()`. **Read the ⚠ in its entry twice before writing the grid:** one `TouchArea` over the whole grid, never one per cell, and the inline cell editor must use `rows_locked_by_editor` the way `SW-22` did or typing will die after one character |
-| 2 | **The VERIFICATION QUEUE walk-through** | **This is now the critical path, not the backlog.** The user asked for the queue to be cleared and it has instead grown by four blocks in one run. Everything in it compiles, passes clippy and passes 209 tests, and none of it has been clicked |
-| 3 | **SW-15** — Stage W sign-off audit | After the queue |
+| 1 | **The VERIFICATION QUEUE walk-through** | **This is the whole remaining critical path.** The user asked for the queue to be cleared once Stage W2 was done. Stage W2 is now done. Everything in it compiles, passes clippy and passes 220 tests, and none of the *interaction* has been clicked. The Spreadsheet block is at the top and its first line — typing more than one character into a cell — is `SW-22`'s bug and the one most likely to have come back |
+| 2 | **SW-15** — Stage W sign-off audit | After the queue. Walk all six types against `handoff/screenshots/widget-types.png` |
+| 3 | **Open question 12** — is the release build smooth? | One measurement only the user can take. Ask for it; never change the renderer without their word |
+| 4 | **SW-12** — the Whiteboard | Parked at the user's request. Open question 4 (it has no artboard) is the first thing to settle when it comes back |
 
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
 **The RAM half is measured and it passes** — 22.0 MB idle, 31.9 MB with all four types open,
-against §2's 20–40 idle and < 50 total; per-widget marginal cost is ~2.5 MB. **The smoothness
-half still needs a release build in front of the user**; open question 12.
+against §2's 20–40 idle and < 50 total; per-widget marginal cost is ~2.5 MB. **That number is
+now stale by one widget type** — the Spreadsheet has never been measured and should be added
+to the next RSS reading. **The smoothness half still needs a release build in front of the
+user**; open question 12.
 
-Closed in Stage W2: `SW-13` (`SheetDoc` — ticked on 20 tests, no surface to watch; note the two rules in its entry: an empty cell is deleted rather than stored, and deleting a row drops every merge it intersects), `SW-22` (typing survives past one character — the lock is
-`rows_locked_by_editor`; read its entry before writing any other repeater), `SW-23`
-(`--open-kind`), `SW-18` (the `Sheet` — read its **two caller contracts** before building any
-editor on it), `SW-24` (the `document` type is gone), `SW-25` (the alignment pass, every surface
-photographed), `SW-21a` (the card drag no longer fights the pointer), `SW-19` (pickers —
-arithmetic ✅ by 13 tests, faces 🟡), `SW-20` (Calendar — live chip and info bar ✅ photographed,
-editor sheet 🟡), `SW-21` (card editor 🟡, and the inline card title editor is deliberately gone).
+Closed in Stage W2: `SW-13` (`SheetDoc` — ticked on 20 tests, no surface to watch; note the
+two rules in its entry: an empty cell is deleted rather than stored, and deleting a row drops
+every merge it intersects), `SW-14` (the Spreadsheet — **photographed rendering correctly**,
+interaction 🟡; **Rust owns the grid layout and Slint only paints it**, which is what lets one
+`TouchArea` resolve a cell after a column has been dragged wider), `SW-22` (typing survives
+past one character — the lock is `rows_locked_by_editor`; read its entry before writing any
+other repeater), `SW-23` (`--open-kind`), `SW-18` (the `Sheet` — read its **two caller
+contracts** before building any editor on it), `SW-24` (the `document` type is gone), `SW-25`
+(the alignment pass, every surface photographed), `SW-21a` (the card drag no longer fights the
+pointer), `SW-19` (pickers — arithmetic ✅ by 13 tests, faces 🟡), `SW-20` (Calendar — live chip
+and info bar ✅ photographed, editor sheet 🟡), `SW-21` (card editor 🟡, and the inline card
+title editor is deliberately gone).
 
 **`SW-12` (Whiteboard) is parked at the user's request** — *"for now ignore whiteboard"*.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
@@ -133,9 +142,11 @@ rectangle on the desktop. That is the script, not the app.
 
 ### What is real and what is not
 
-**Reachable by a user:** sticky note, Todo, Shared Document, Calendar, Kanban — all five
-creatable from home's footer glyph strip and from the palette, both driven by `BUILT` in
-`canvas-app/src/widget_types.rs`.
+**Reachable by a user:** sticky note, Todo, Shared Document, Calendar, Kanban and — since
+SW-14 on 2026-08-27 — the **Spreadsheet**. All six are creatable from home's footer glyph
+strip and from the palette, both driven by `BUILT` in `canvas-app/src/widget_types.rs`. The
+Spreadsheet reuses the spec's existing `doc` glyph, which SW-24 freed when the `document`
+type was ripped out — no new glyph was invented.
 
 **Confirmed on screen (2026-08-26, by screenshot):** home renders, the footer glyph strip
 renders with all five glyphs and the `NEW` label, the row list shows the right glyph per
@@ -177,7 +188,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 209 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 220 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -215,7 +226,7 @@ Canvas/
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
     canvas-doc/      CRDT documents (yrs). StickyNoteDoc, UndoHistory, TodoListDoc,
                      CalendarDoc, KanbanDoc, WhiteboardDoc, SheetDoc + a hand-written fractional
-                     index. 141 tests. WhiteboardDoc and SheetDoc have NO window yet.
+                     index. 141 tests. Only WhiteboardDoc has NO window — SheetDoc got one in SW-14.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -233,7 +244,8 @@ cargo run -p canvas-app -- --open-kind kanban    # put one widget of that kind o
                                                  # creating one if there is none (SW-23).
                                                  # Takes either word: kanban or board
 cargo run -p canvas-app -- --open <widget-id>    # the same for one specific widget
-cargo test --workspace               # 209 tests
+cargo run -p canvas-app -- --open-kind spreadsheet   # the Spreadsheet; "sheet" works too
+cargo test --workspace               # 220 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
 ```
@@ -2911,3 +2923,61 @@ which is where all the risk in this feature actually lives: one `TouchArea` over
 resolving the cell from `mouse-x`/`mouse-y`, never one per cell (§13.3 at scale), and an inline
 cell editor that must take the `rows_locked_by_editor` lock SW-22 established or typing will die
 after one character.
+
+---
+
+### 2026-08-27 — SW-14: the Spreadsheet, and Stage W2 runs out of features
+
+- 🟡 **The Spreadsheet widget is built and it was photographed rendering correctly.** The box
+  stays open because every line of its DoD is an *interaction*. `crates/canvas-ui/ui/
+  spreadsheet.slint` is the surface, `wire_sheet`/`refresh_sheet` in `app.rs` the runtime.
+- ✅ **Photographed, on a clean database** (`APPDATA` pointed at a scratch folder so the
+  user's own widgets stayed out of the frame — worth remembering, it is much easier than
+  fighting `-Arrange` with six windows open): the 7×7 grid draws, `A`…`G` centred in the head
+  band, `1`…`7` right-aligned in the gutter, hairlines a **single** 1px `edge` with no
+  doubling, `A1` wearing the **1px `text` outline with no fill**, and the footer reading `A1`
+  on the left with `MERGE` correctly **disabled** beside `+ROW` and `+COL`. Home lists it with
+  the `doc` glyph and counts it.
+- ✅ **The one decision that shapes the whole widget: Rust owns the grid layout and Slint only
+  paints it.** `SheetCellData` carries its own `x/y/w/h` in pixels. This is what makes the
+  ⚠ in the task entry — *one* `TouchArea` over the grid, never one per cell — actually
+  workable: with variable column widths `floor(x / col-w)` cannot resolve a cell, so the area
+  reports raw pixels and `sheet_axis_at` resolves them in Rust. The constraint is satisfied by
+  construction rather than by remembering to.
+- ✅ **The head band and the row gutter are their own disjoint `TouchArea`s** — §13.3 for the
+  sixth time on this project, and exactly the shape the task entry warned about.
+- ✅ **A resize drag writes nothing to the document.** It draws a 1px `text` guide line and
+  commits the width once, on release. The obvious alternative — rebuild 49 cells on every
+  mouse move — is more code *and* more jank.
+- ✅ **`editing-id` is the cell key and it takes `SW-22`'s lock**, with one addition worth
+  writing down: `refresh_sheet` returns before touching **any** property while the lock is
+  set, not just the models. `edit-text` feeds the live `TextInput`, and re-setting it
+  mid-keystroke would truncate what is being typed. That is the same bug as SW-22 wearing a
+  different hat.
+- ✅ **`SheetDoc::is_covered` is never called per cell.** `refresh_sheet` builds one
+  covered→anchor map from `doc.merges()`; the naive 7×7 loop would have re-read the row list,
+  the column list and the merge list 49 times per repaint.
+- **One deliberate limit, and the user should be told rather than discover it:** the grid
+  scrolls **vertically only**. Widen a column past the plate and the overflow clips instead of
+  scrolling sideways; the answer is to resize the window, which the user asked for anyway
+  (*"correspondingly the size of widget as well"*). A horizontal `ScrollBar` is a small
+  addition if it grates.
+- ✅ **11 tests** over the parts with no surface: pixel→cell resolution and its clamping, the
+  4px boundary grip, span measurement, the `A1` / `B2:D3` stamp, a backwards drag still giving
+  a forward rectangle, a selection surviving the sheet shrinking under it, and landing on a
+  covered cell moving to the merge anchor.
+- `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **220 tests pass**.
+
+**Stage W2 has run out of features.** Every widget type in the spec except the deliberately
+parked Whiteboard is now built and reachable from home and the palette. **Nothing unticked in
+the backlog can be done without the user**, which is one of the stop conditions in the GO
+block — so this run stops here rather than on the usage limit.
+
+**The queue is now the only work left, and it grew by one more block.** The Spreadsheet joins
+the Kanban card drag, the two pickers, the Calendar editor sheet and the Kanban card sheet.
+Its first line is the one to check first: **type more than one character into a cell.** That
+is `SW-22`'s bug, this is a brand-new repeater with a live editor over it, and a photograph
+cannot see it.
+
+**One number is now stale:** the RSS reading of 22.0 MB idle / 31.9 MB with all four types was
+taken before the Spreadsheet existed. Add it to the next measurement.

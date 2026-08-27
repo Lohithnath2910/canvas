@@ -5,10 +5,10 @@
 first unticked box.
 **Last updated:** 2026-08-27
 **Last updated:** 2026-08-27
-**Current task:** `SW-14` — the Spreadsheet **widget window**. `SW-13` closed on 2026-08-27: `SheetDoc` is built, ticked and covered by 20 tests, so the CRDT half of the Spreadsheet is done and only the surface is left. It is the last feature in Stage W2; four blocks of Stage W2 are 🟡 and waiting on the user in the VERIFICATION QUEUE.
+**Current task:** **The VERIFICATION QUEUE walk-through — and it is the only thing left.** `SW-14` closed on 2026-08-27, which means **Stage W2 is feature-complete**: all six widget types except the deliberately-parked Whiteboard are built and reachable. Nothing unticked in the backlog can be done without the user. Five blocks of Stage W2 are 🟡 in the queue, the Spreadsheet among them.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 32 ticked. 209 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
+**Done:** 32 ticked. 220 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel), `SW-14` (the Spreadsheet — it renders, photographed; typing, merge and column resize are unwatched) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -117,6 +117,39 @@ walked the app themselves and found that the Kanban is not working (SW-22, SW-21
 clearing is now gated on **Stage W2** rather than Stage W. It is still not an indefinite
 parking lot: when Stage W2 is done, the walk-through is the next unit of work, not another
 feature. Say so in the end-of-run report every time until it happens.
+
+**THE SPREADSHEET — `SW-14`, built 2026-08-27.** It **was** photographed and it renders
+correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
+`MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
+cannot reach.
+- [ ] `cargo run -p canvas-app -- --open-kind spreadsheet`
+- [ ] Click a cell. It takes the **1px `text` outline, no fill**, and the footer stamp on the
+      left changes to that cell — `C4`, and so on
+- [ ] **Type into it.** Double-click a cell, or press `Enter` on a selected one, and type more
+      than one character. **This is `SW-22`'s bug and the one most likely to have come back** —
+      if the text dies after the first keystroke, the lock in `refresh_sheet` is wrong
+- [ ] `Enter` commits and moves **down** one; `Tab` commits and moves **right**; `Esc` commits
+      and stops editing. Arrow keys move the selection with nothing in edit
+- [ ] `Delete` or `Backspace` on a selected cell empties it
+- [ ] **Drag across a range** — press in one cell, drag to another. The outline grows to the
+      rectangle and the footer reads `B2:D4`. Dragging **backwards and up** must give the same
+      rectangle, not an inverted one
+- [ ] With a range selected, `MERGE` lights up. Press it: the cells become **one cell**, the
+      selection collapses to the anchor, and the button now reads `UNMERGE`. Press that and
+      the range comes back with **every covered cell still holding its old value**
+- [ ] Arrow *into* a merged cell from outside it — the selection must land on the merge and
+      outline the whole span, never a covered cell that is not drawn
+- [ ] **Drag a column boundary** in the `A B C…` band at the top. The cursor is a resize
+      cursor across the whole band; a **1px `text` guide line** follows the pointer and the
+      column only changes width **on release**
+- [ ] Same in the `1 2 3…` gutter on the left for row height
+- [ ] `+ROW` and `+COL` append. Add rows past the bottom of the window and the grid **scrolls
+      vertically** — wheel over the grid, and the scrollbar thumb on the right
+- [ ] **Known limit, confirm it is acceptable rather than filing it as a bug:** widen a column
+      far enough and the right-hand columns **clip** rather than scrolling sideways. There is
+      no horizontal scrollbar. Resize the window instead. Say if that grates
+- [ ] **Resize the window**, then **quit and relaunch** — cell contents, merges, column widths
+      and row heights all come back
 
 **⚠ THE ONE TO CHECK FIRST — the Kanban card drag** → **`SW-21a`, built 2026-08-26, never
 watched.** The user reported it twice: *"its too glitchy to move the cards around"* and
@@ -1953,6 +1986,44 @@ folded into the two tasks below; the questions are closed.
   SW-10's `+` row had to move out of the columns.
   *DoD:* type into cells, navigate with arrows/Tab/Enter, merge a range, drag a column
   wider, resize the window, restart — contents, merges and geometry all intact.
+  🟡 **Built 2026-08-27 and photographed rendering correctly — the box stays open because
+  every interaction in the DoD needs a pointer this session does not have.**
+  **What the photograph settles** (clean-database launch, `--open-kind spreadsheet`, the
+  recipe in `progress.md`): the 7×7 grid draws, column heads read `A`…`G` centred in
+  interface-face-11 `dim`, the row gutter reads `1`…`7` right-aligned, the hairlines are a
+  single 1px `edge` with **no doubling**, `A1` carries the **1px `text` outline with no
+  fill**, the footer reads `A1` on the left with `MERGE` correctly **disabled** (nothing to
+  merge yet) beside `+ROW` and `+COL`, and home lists the sheet with the `doc` glyph.
+  **What it does not settle and what the queue has to:** typing into a cell, arrow/Tab/Enter
+  navigation, dragging a range, `MERGE`, dragging a column boundary, and the restart.
+  **Five decisions worth knowing before touching this file again:**
+  1. **Rust owns the grid layout, Slint only paints it.** `SheetCellData` carries its own
+     `x/y/w/h` in pixels and `refresh_sheet` computes them from the column widths. This is
+     what makes **one** `TouchArea` over the whole grid work with *variable* column widths —
+     `floor(x / col-w)` cannot resolve a cell once a column is dragged wider, so the area
+     reports raw pixels and `sheet_axis_at` resolves them in Rust. The ⚠ above is satisfied
+     by construction, not by discipline.
+  2. **The head band and the row gutter are their own `TouchArea`s**, disjoint from the grid
+     area — §13.3 again, and the shape the ⚠ called out.
+  3. **A resize drag draws a 1px `text` guide line and writes nothing.** The width lands in
+     the document once, on release. Rebuilding 49 cells on every mouse move was the obvious
+     alternative and it is both more code and more jank; this is how a spreadsheet has always
+     done it.
+  4. **`editing-id` is the cell key and it takes `SW-22`'s lock.** `refresh_sheet` returns
+     before touching *any* property while it is set — not just the models, because `edit-text`
+     feeds the live `TextInput` and re-setting it mid-keystroke would truncate what is typed.
+  5. **`is_covered` is not called per cell.** `refresh_sheet` builds a covered→anchor map once
+     from `doc.merges()`; a 7×7 loop calling `SheetDoc::is_covered` would have re-read the row
+     list, the column list and the merge list 49 times per repaint.
+  **One deliberate limit, and the user should know it:** the grid scrolls **vertically only**
+  (the wheel and the existing `ScrollBar`). Widen columns past the plate and the overflow
+  clips rather than scrolling sideways — the answer is to resize the window, which the user
+  asked for anyway (*"correspondingly the size of widget as well"*). Add a horizontal
+  `ScrollBar` if that turns out to grate.
+  **11 tests** cover the parts that have no surface: pixel→cell resolution and its clamping,
+  the 4px boundary grip, span measurement, the `A1`/`B2:D3` stamp, backwards drag selection,
+  selection surviving the sheet shrinking under it, and landing on a covered cell moving to
+  the merge anchor.
 
 ### W2f — deferred by the user
 

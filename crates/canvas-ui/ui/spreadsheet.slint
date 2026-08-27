@@ -1,0 +1,680 @@
+import { Palette } from "theme/palette.slint";
+import { Typography } from "theme/typography.slint";
+import { Motion, Ease } from "theme/motion.slint";
+import { Layout } from "theme/layout.slint";
+import { Panel } from "theme/surface.slint";
+import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
+import { IconPin, IconTrash, IconX } from "theme/icons.slint";
+import { IconButton, Button, ButtonVariant, ScrollBar } from "theme/controls.slint";
+
+export struct SheetColData {
+    label: string,
+    x: int,
+    w: int,
+}
+
+export struct SheetRowData {
+    label: string,
+    y: int,
+    h: int,
+}
+
+export struct SheetCellData {
+    key: string,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    text: string,
+}
+
+export component SpreadsheetWindow inherits Window {
+    in-out property <string> note-title: "UNTITLED";
+    in property <[SheetColData]> cols: [];
+    in property <[SheetRowData]> rows: [];
+    in property <[SheetCellData]> cells: [];
+    in property <int> grid-w: 0;
+    in property <int> grid-h: 0;
+
+    in property <int> sel-x: 0;
+    in property <int> sel-y: 0;
+    in property <int> sel-w: 0;
+    in property <int> sel-h: 0;
+    in property <string> sel-key: "";
+    in property <string> sel-stamp: "";
+    in-out property <string> edit-text: "";
+    in property <string> merge-label: "MERGE";
+    in property <bool> merge-enabled: false;
+
+    in property <int> guide-x: -1;
+    in property <int> guide-y: -1;
+
+    in property <WidgetState> strip-state: WidgetState.idle;
+    in property <int> peer-count: 0;
+    in-out property <bool> pinned: false;
+    in property <bool> keyboard-focused: false;
+
+    in-out property <string> editing-id: "";
+
+    callback cell-pressed(int, int);
+    callback cell-dragged(int, int);
+    callback cell-edited(string);
+    callback cell-cleared();
+    callback edit-committed();
+    callback nav(int, int);
+    callback head-pressed(int);
+    callback head-dragged(int);
+    callback gutter-pressed(int);
+    callback gutter-dragged(int);
+    callback resize-ended();
+    callback merge-requested();
+    callback row-added();
+    callback col-added();
+
+    callback window-moved(length, length);
+    callback drag-started();
+    callback drag-ended();
+    callback pin-toggled(bool);
+    callback delete-confirmed();
+    callback title-edited(string);
+    callback close-requested();
+    callback palette-requested();
+
+    preferred-width: Layout.sheet-w + 2 * Layout.plate-margin;
+    preferred-height: Layout.sheet-h + 2 * Layout.plate-margin;
+    min-width: 420px + 2 * Layout.plate-margin;
+    min-height: 260px + 2 * Layout.plate-margin;
+    no-frame: true;
+    in-out property <length> resize-border: Layout.resize-border;
+    resize-border-width: root.resize-border;
+    background: transparent;
+    title: "Canvas";
+
+    in-out property <bool> opened: false;
+    in-out property <bool> closing: false;
+
+    property <bool> dragging: false;
+    property <bool> confirming-delete: false;
+    property <bool> editing-title: false;
+
+    property <length> view-y: 0px;
+
+    property <bool> controls-visible:
+        drag-area.has-hover
+        || pin-btn.hovered || pin-btn.focused
+        || trash-btn.hovered || trash-btn.focused
+        || close-btn.hovered || close-btn.focused
+        || root.editing-title;
+
+    property <length> confirm-h: Layout.confirm-band;
+    property <length> footer-h: Layout.footer-band;
+    property <length> gutter-w: Layout.sheet-gutter-w;
+
+    plate := Panel {
+        x: Layout.plate-margin;
+        y: Layout.plate-margin + (root.opened ? 0px : Motion.open-rise);
+        width: parent.width - 2 * Layout.plate-margin;
+        height: parent.height - 2 * Layout.plate-margin;
+        corner-radius: Layout.radius-plate;
+        dragging: root.dragging;
+
+        opacity: root.closing ? 0.0 : (root.opened ? 1.0 : 0.0);
+        animate y { duration: Motion.open; easing: Ease.standard; }
+        animate opacity {
+            duration: root.closing ? Motion.close : Motion.open;
+            easing: Ease.standard;
+        }
+
+        if root.keyboard-focused: Rectangle {
+            x: -(Layout.focus-offset + Layout.focus-width);
+            y: -(Layout.focus-offset + Layout.focus-width);
+            width: parent.width + 2 * (Layout.focus-offset + Layout.focus-width);
+            height: parent.height + 2 * (Layout.focus-offset + Layout.focus-width);
+            background: transparent;
+            border-width: Layout.focus-width;
+            border-color: Palette.text;
+            border-radius: Layout.radius-plate + Layout.focus-offset + Layout.focus-width;
+        }
+
+        board := Rectangle {
+            x: Layout.pad;
+            y: Layout.body-top + Layout.pad;
+            width: parent.width - 2 * Layout.pad;
+            height: parent.height - self.y - root.footer-h
+                - (root.confirming-delete ? root.confirm-h : 0px);
+            clip: true;
+
+            property <length> cols-w: parent.width - 2 * Layout.pad
+                - root.gutter-w - Layout.scroll-gutter;
+            property <length> grid-view-h: self.height - Layout.sheet-head-h;
+
+            for column in root.cols: Text {
+                x: root.gutter-w + column.x * 1px + Layout.edit-inset;
+                y: 0;
+                width: column.w * 1px - 2 * Layout.edit-inset;
+                height: Layout.sheet-head-h;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                text: column.label;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+
+            Rectangle {
+                x: 0;
+                y: Layout.sheet-head-h - 1px;
+                width: parent.width;
+                height: 1px;
+                background: Palette.edge;
+            }
+
+            head-area := TouchArea {
+                x: root.gutter-w;
+                y: 0;
+                width: board.cols-w;
+                height: Layout.sheet-head-h - 1px;
+                enabled: !root.confirming-delete;
+                mouse-cursor: col-resize;
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) {
+                        root.head-pressed((self.mouse-x - root.gutter-w) / 1px);
+                    }
+                    if (event.kind == PointerEventKind.up) {
+                        root.resize-ended();
+                    }
+                }
+                moved => { root.head-dragged((self.mouse-x - root.gutter-w) / 1px); }
+            }
+
+            grid := Rectangle {
+                x: 0;
+                y: Layout.sheet-head-h;
+                width: parent.width - Layout.scroll-gutter;
+                height: board.grid-view-h;
+                clip: true;
+
+                for line in root.rows: Text {
+                    x: 0;
+                    y: root.view-y + line.y * 1px;
+                    width: root.gutter-w - Layout.edit-inset;
+                    height: line.h * 1px;
+                    vertical-alignment: center;
+                    horizontal-alignment: right;
+                    text: line.label;
+                    color: Palette.dim;
+                    font-family: Typography.interface-face;
+                    font-size: Typography.label-size;
+                    letter-spacing: Typography.label-tracking;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+
+                Rectangle {
+                    x: root.gutter-w - 1px;
+                    y: 0;
+                    width: 1px;
+                    height: parent.height;
+                    background: Palette.edge;
+                }
+
+                for cell in root.cells: Rectangle {
+                    x: root.gutter-w + cell.x * 1px;
+                    y: root.view-y + cell.y * 1px;
+                    width: cell.w * 1px;
+                    height: cell.h * 1px;
+                    background: transparent;
+
+                    Text {
+                        x: Layout.edit-inset;
+                        y: 0;
+                        width: parent.width - 2 * Layout.edit-inset;
+                        height: parent.height;
+                        vertical-alignment: center;
+                        text: cell.text;
+                        color: Palette.text;
+                        font-family: Typography.body-face;
+                        font-size: Typography.body-size;
+                        overflow: elide;
+                        wrap: no-wrap;
+                    }
+
+                    Rectangle {
+                        x: parent.width - 1px;
+                        y: 0;
+                        width: 1px;
+                        height: parent.height;
+                        background: Palette.edge;
+                    }
+
+                    Rectangle {
+                        x: 0;
+                        y: parent.height - 1px;
+                        width: parent.width;
+                        height: 1px;
+                        background: Palette.edge;
+                    }
+                }
+
+                if root.sel-w > 0 && root.editing-id == "": Rectangle {
+                    x: root.gutter-w + root.sel-x * 1px;
+                    y: root.view-y + root.sel-y * 1px;
+                    width: root.sel-w * 1px;
+                    height: root.sel-h * 1px;
+                    background: transparent;
+                    border-width: 1px;
+                    border-color: Palette.text;
+                }
+
+                if root.editing-id != "": Rectangle {
+                    x: root.gutter-w + root.sel-x * 1px - Layout.ring;
+                    y: root.view-y + root.sel-y * 1px - Layout.ring;
+                    width: root.sel-w * 1px + 2 * Layout.ring;
+                    height: root.sel-h * 1px + 2 * Layout.ring;
+                    background: transparent;
+                    border-width: Layout.focus-width;
+                    border-color: Palette.text;
+                    border-radius: Layout.radius-control + Layout.ring;
+                }
+
+                if root.editing-id != "": Rectangle {
+                    x: root.gutter-w + root.sel-x * 1px;
+                    y: root.view-y + root.sel-y * 1px;
+                    width: root.sel-w * 1px;
+                    height: root.sel-h * 1px;
+                    background: Palette.elev-recessed;
+                    border-radius: Layout.radius-control;
+                    border-width: 1px;
+                    border-color: Palette.edge;
+
+                    cell-input := TextInput {
+                        x: Layout.edit-inset;
+                        y: 0;
+                        width: parent.width - 2 * Layout.edit-inset;
+                        height: parent.height;
+                        text: root.edit-text;
+                        single-line: true;
+                        vertical-alignment: center;
+                        color: Palette.text;
+                        selection-background-color: Palette.edge;
+                        selection-foreground-color: Palette.text;
+                        text-cursor-width: Layout.caret-w;
+                        font-family: Typography.body-face;
+                        font-size: Typography.body-size;
+                        init => { self.focus(); self.select-all(); }
+                        edited => { root.cell-edited(self.text); }
+                        accepted => {
+                            root.edit-committed();
+                            root.nav(1, 0);
+                            keys.focus();
+                        }
+                        key-pressed(event) => {
+                            if (event.text == Key.Escape) {
+                                root.edit-committed();
+                                keys.focus();
+                                return accept;
+                            }
+                            if (event.text == Key.Tab) {
+                                root.edit-committed();
+                                root.nav(0, 1);
+                                keys.focus();
+                                return accept;
+                            }
+                            return reject;
+                        }
+                    }
+                }
+
+                grid-area := TouchArea {
+                    x: root.gutter-w;
+                    y: 0;
+                    width: board.cols-w;
+                    height: parent.height;
+                    enabled: !root.confirming-delete && root.editing-id == "";
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.down) {
+                            keys.focus();
+                            root.cell-pressed(
+                                (self.mouse-x - root.gutter-w) / 1px,
+                                (self.mouse-y - root.view-y) / 1px);
+                        }
+                    }
+                    moved => {
+                        root.cell-dragged(
+                            (self.mouse-x - root.gutter-w) / 1px,
+                            (self.mouse-y - root.view-y) / 1px);
+                    }
+                    double-clicked => { root.editing-id = root.sel-key; }
+                    scroll-event(event) => {
+                        root.view-y = max(
+                            min(0px, board.grid-view-h - root.grid-h * 1px),
+                            min(0px, root.view-y + event.delta-y));
+                        return accept;
+                    }
+                }
+
+                gutter-area := TouchArea {
+                    x: 0;
+                    y: 0;
+                    width: root.gutter-w - 1px;
+                    height: parent.height;
+                    enabled: !root.confirming-delete && root.editing-id == "";
+                    mouse-cursor: row-resize;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.down) {
+                            root.gutter-pressed((self.mouse-y - root.view-y) / 1px);
+                        }
+                        if (event.kind == PointerEventKind.up) {
+                            root.resize-ended();
+                        }
+                    }
+                    moved => { root.gutter-dragged((self.mouse-y - root.view-y) / 1px); }
+                }
+
+                if root.guide-x >= 0: Rectangle {
+                    x: root.gutter-w + root.guide-x * 1px;
+                    y: 0;
+                    width: 1px;
+                    height: parent.height;
+                    background: Palette.text;
+                }
+
+                if root.guide-y >= 0: Rectangle {
+                    x: 0;
+                    y: root.view-y + root.guide-y * 1px;
+                    width: parent.width;
+                    height: 1px;
+                    background: Palette.text;
+                }
+            }
+
+            ScrollBar {
+                x: parent.width - Layout.scroll-gutter;
+                y: Layout.sheet-head-h;
+                height: board.grid-view-h;
+                view-height: board.grid-view-h;
+                viewport-height: max(root.grid-h * 1px, board.grid-view-h);
+                viewport-y <=> root.view-y;
+            }
+        }
+
+        keys := FocusScope {
+            x: 0;
+            y: 0;
+            width: 0px;
+            height: 0px;
+            enabled: root.editing-id == "" && !root.confirming-delete;
+            key-pressed(event) => {
+                if (event.text == Key.LeftArrow) { root.nav(0, -1); return accept; }
+                if (event.text == Key.RightArrow) { root.nav(0, 1); return accept; }
+                if (event.text == Key.UpArrow) { root.nav(-1, 0); return accept; }
+                if (event.text == Key.DownArrow) { root.nav(1, 0); return accept; }
+                if (event.text == Key.Tab) { root.nav(0, 1); return accept; }
+                if (event.text == Key.Backtab) { root.nav(0, -1); return accept; }
+                if (event.text == Key.Return) { root.editing-id = root.sel-key; return accept; }
+                if (event.text == Key.Delete || event.text == Key.Backspace) {
+                    root.cell-cleared();
+                    return accept;
+                }
+                if (event.modifiers.control && event.text == "k") {
+                    root.palette-requested();
+                    return accept;
+                }
+                return reject;
+            }
+        }
+
+        footer-rule := Rectangle {
+            x: 0;
+            y: parent.height - root.footer-h;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+            visible: !root.confirming-delete;
+        }
+
+        if !root.confirming-delete: Text {
+            x: Layout.pad;
+            y: footer-rule.y;
+            width: merge-btn.x - Layout.icon-gap - self.x;
+            height: root.footer-h;
+            vertical-alignment: center;
+            text: root.sel-stamp;
+            color: Palette.dim;
+            font-family: Typography.interface-face;
+            font-size: Typography.label-size;
+            letter-spacing: Typography.label-tracking;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        merge-btn := Button {
+            x: row-btn.x - Layout.icon-gap - self.width;
+            y: footer-rule.y + (root.footer-h - Layout.button-h) / 2;
+            label: root.merge-label;
+            enabled: root.merge-enabled;
+            visible: !root.confirming-delete;
+            clicked => { root.merge-requested(); }
+        }
+
+        row-btn := Button {
+            x: col-btn.x - Layout.icon-gap - self.width;
+            y: merge-btn.y;
+            label: "+ROW";
+            visible: !root.confirming-delete;
+            clicked => { root.row-added(); }
+        }
+
+        col-btn := Button {
+            x: parent.width - Layout.pad - self.width;
+            y: merge-btn.y;
+            label: "+COL";
+            visible: !root.confirming-delete;
+            clicked => { root.col-added(); }
+        }
+
+        pin-btn := IconButton {
+            x: parent.width - Layout.pad - Layout.cluster-w;
+            y: Layout.header-y;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            activated => {
+                root.pinned = !root.pinned;
+                root.pin-toggled(root.pinned);
+            }
+            IconPin {
+                stroke-color: root.pinned ? Palette.text : pin-btn.glyph-color;
+            }
+        }
+
+        trash-btn := IconButton {
+            x: close-btn.x - Layout.icon-size - Layout.icon-gap;
+            y: Layout.header-y;
+            width: Layout.icon-size + Layout.icon-gap;
+            revealed: root.controls-visible;
+            activated => { root.confirming-delete = true; }
+            IconTrash { stroke-color: trash-btn.glyph-color; }
+        }
+
+        close-btn := IconButton {
+            x: parent.width - Layout.pad - Layout.icon-size;
+            y: Layout.header-y;
+            width: Layout.icon-size;
+            revealed: root.controls-visible;
+            activated => { root.close-requested(); }
+            IconX { stroke-color: close-btn.glyph-color; }
+        }
+
+        drag-area := TouchArea {
+            x: 0;
+            y: 0;
+            width: pin-btn.x - Layout.icon-gap;
+            height: Layout.header-band;
+            moved => {
+                if (!root.dragging) {
+                    root.dragging = true;
+                    root.drag-started();
+                }
+                root.window-moved(
+                    self.mouse-x - self.pressed-x,
+                    self.mouse-y - self.pressed-y
+                );
+            }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up && root.dragging) {
+                    root.dragging = false;
+                    root.drag-ended();
+                }
+            }
+            double-clicked => { root.editing-title = true; }
+        }
+
+        Rectangle {
+            x: Layout.pad;
+            y: Layout.header-y;
+            width: Layout.strip-w;
+            height: Layout.header-h;
+            GlyphStrip {
+                x: 0;
+                y: (Layout.header-h - Layout.strip-h) / 2;
+                width: Layout.strip-w;
+                height: Layout.strip-h;
+                state: root.strip-state;
+                peer-count: root.peer-count;
+            }
+        }
+
+        if !root.editing-title: Text {
+            x: Layout.title-x;
+            y: Layout.header-y;
+            width: pin-btn.x - Layout.gap-m - self.x;
+            height: Layout.header-h;
+            text: root.note-title;
+            color: Palette.text;
+            font-family: Typography.interface-face;
+            font-size: Typography.title-size;
+            letter-spacing: Typography.title-tracking;
+            vertical-alignment: center;
+            horizontal-alignment: left;
+            overflow: elide;
+            wrap: no-wrap;
+        }
+
+        if root.editing-title: Rectangle {
+            x: Layout.title-x - Layout.edit-inset;
+            y: Layout.header-y;
+            width: pin-btn.x - Layout.gap-m - self.x;
+            height: Layout.header-h;
+            background: Palette.elev-recessed;
+            border-radius: Layout.radius-control;
+            border-width: 1px;
+            border-color: Palette.edge;
+
+            title-input := TextInput {
+                x: Layout.edit-inset;
+                y: 0;
+                width: parent.width - 2 * Layout.edit-inset;
+                height: parent.height;
+                text: root.note-title;
+                single-line: true;
+                vertical-alignment: center;
+                color: Palette.text;
+                selection-background-color: Palette.edge;
+                selection-foreground-color: Palette.text;
+                text-cursor-width: Layout.caret-w;
+                font-family: Typography.interface-face;
+                font-size: Typography.title-size;
+                letter-spacing: Typography.title-tracking;
+                init => { self.focus(); self.select-all(); }
+                edited => { root.title-edited(self.text); }
+                accepted => {
+                    root.editing-title = false;
+                    keys.focus();
+                }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.editing-title = false;
+                        keys.focus();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+        }
+
+        Rectangle {
+            x: 0;
+            y: Layout.header-band;
+            width: parent.width;
+            height: 1px;
+            background: Palette.edge;
+        }
+
+        if root.confirming-delete: Rectangle {
+            x: 0;
+            y: parent.height - Layout.pad - root.confirm-h;
+            width: parent.width;
+            height: root.confirm-h;
+            background: Palette.plate;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.edge;
+            }
+
+            Text {
+                x: Layout.pad;
+                y: Layout.pad;
+                text: "DELETE — CANNOT BE UNDONE";
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                wrap: no-wrap;
+            }
+
+            HorizontalLayout {
+                x: Layout.pad;
+                y: Layout.pad + Typography.label-line + Layout.gap-m;
+                height: Layout.button-h;
+                spacing: Layout.icon-gap;
+                alignment: start;
+
+                Button {
+                    label: "DELETE SHEET";
+                    variant: ButtonVariant.destructive;
+                    clicked => { root.delete-confirmed(); }
+                }
+                Button {
+                    label: "CANCEL";
+                    variant: ButtonVariant.default;
+                    clicked => {
+                        root.confirming-delete = false;
+                        keys.focus();
+                    }
+                }
+            }
+
+            FocusScope {
+                width: 0px;
+                height: 0px;
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.confirming-delete = false;
+                        keys.focus();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+        }
+    }
+
+    init => { keys.focus(); }
+}
