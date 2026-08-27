@@ -3578,3 +3578,44 @@ said to diagnose before changing anything. So:
 
 - 📸 Photographed at rest: ticks visible between `A|B`, `B|C` and between every row number.
   **Hover and drag need a hand**, so the box stays open.
+
+### 2026-08-27 — end of run: Stage W3 is built, and the queue is the only work left
+
+**Seven commits, `W3-09` through `W3-15`, and the tree is clean.** Every issue the user raised
+in the 2026-08-27 walk-through now has code against it, in the order they asked for:
+Note → Todo → Calendar → **Kanban** → **Spreadsheet**. 267 tests pass, clippy clean.
+
+**This run stopped on the backlog, not on a limit and not on a question.** There is no unticked
+task left in Stage W3 that can be built without a hand on the mouse.
+
+**Two things the user said mid-run, both acted on in the same run:**
+1. The `HOUR`/`MINUTE` grids *"looking same like date pickiung thing"* — they picked a typed
+   field and asked for AM/PM in, 24-hour stored. That became `W3-15`, jumped the queue ahead of
+   `W3-11`, and is done.
+2. *"whereevr th cothings are used absoluetly needs to be configured and proeprly fit as an in
+   widget overlay"* — recorded as a **standing bar** in the GO block above, with the arithmetic
+   for checking it. It is why the Kanban grew to 640×460 and why `PRIORITY` sits beside
+   `DUE DATE` rather than below it.
+
+**Three Slint facts this run paid for, none of them in CLAUDE.md §13:**
+- **`parent.width` inside an element's own property binding is the *parent's* width, not the
+  element's.** Use `self.width`. This threw the Kanban priority dots into another column.
+- **`changed <property>` compiles on 1.17**, on built-ins (`has-focus`) and on custom ones. It
+  is what makes both "commit on focus loss" and "which resize tick is lit" possible.
+- **Slint cannot iterate a model inside a binding**, so an aggregate over a repeater has to be
+  built by having each element write into a shared property from a `changed` handler.
+
+**One tooling fact worth more than it sounds:** `scripts/shot.ps1` runs the **prebuilt**
+`target/debug/canvas-app.exe` and does not build. After a `cargo clippy` pass the binary is
+stale, and the frame you get is the *previous* build looking like a failed edit. Run
+`cargo build -p canvas-app` first, every time. `--gallery` also needs
+`-Title "Canvas — component gallery"`.
+
+**The screenshot caught four bugs the compiler did not**: the Kanban dots in the wrong column,
+titles running past the card border, titles eliding to three words once the dots reserved space,
+and the spreadsheet's opaque gutter covers reading as lighter blocks against a 0.96-alpha panel.
+**Take the shot. It is cheap and it is the only thing that disagrees with you.**
+
+**Next session: do not build anything.** Walk the VERIFICATION QUEUE in `TASKS.md`, top to
+bottom. Ten blocks, none clicked. Open a numbered `W4-` task per real bug and work it the same
+way, in the user's widget order.
