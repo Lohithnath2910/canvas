@@ -50,44 +50,55 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 ### The next task
 
-**Stage W2 is feature-complete. `SW-13` and `SW-14` closed on 2026-08-27, so every widget
-type except the parked Whiteboard is built and reachable. There is nothing unticked left in
-the backlog that can be done without the user** — the next unit of work is the queue.
+**Stage W3 is open. The user walked every widget on 2026-08-27 and reported 19 issues across
+five of them.** Stage W2 is feature-complete and its documents are right — **nothing in W3 is
+a CRDT bug.** It is all surface, and it is the whole of the work.
+
+**The build order is the user's, and it is not negotiable:**
+**Note → Todo → Calendar → Kanban → Spreadsheet.** They asked for each widget to be *finished*
+before the next one starts. Do not jump to a later widget because a task looks easy.
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **The VERIFICATION QUEUE walk-through** | **This is the whole remaining critical path.** The user asked for the queue to be cleared once Stage W2 was done. Stage W2 is now done. Everything in it compiles, passes clippy and passes 220 tests, and none of the *interaction* has been clicked. The Spreadsheet block is at the top and its first line — typing more than one character into a cell — is `SW-22`'s bug and the one most likely to have come back |
-| 2 | **SW-15** — Stage W sign-off audit | After the queue. Walk all six types against `handoff/screenshots/widget-types.png` |
-| 3 | **Open question 12** — is the release build smooth? | One measurement only the user can take. Ask for it; never change the renderer without their word |
-| 4 | **SW-12** — the Whiteboard | Parked at the user's request. Open question 4 (it has no artboard) is the first thing to settle when it comes back |
+| 1 | **W3-01** — the note scrollbar | *"the ugly scrollbar is out of the style … it needs to show only when the cursor is inside the widget"*. ⚠ Moves a `DO NOT REGRESS` line, with the user's word. ⚠ **Never** make the 8px gutter conditional on overflow — reflow oscillation. Reserve the gutter, animate the thumb's opacity only |
+| 2 | **W3-02 → W3-04** — Todo | A clickable `+` that refuses empty · priority as 1–3 dots · drag to reorder, which **needs a fractional index on todo items** because §10.3 forbids reordering a nested array |
+| 3 | **W3-05 → W3-08** — Calendar | The big one. Days become **rows**, time becomes the x-axis, a NOW rule, and the event editor becomes a **compact card overlay** instead of a scrolling page |
+| 4 | **W3-09 → W3-11** — Kanban | Spacing · the same card overlay reused · `UNASSIGNED` dropped when empty, priority dots instead |
+| 5 | **W3-12 → W3-14** — Spreadsheet | Click-away to leave a cell · scroll **both** ways · resize that can actually be found |
+
+**Three answers were taken before any of it was built.** They are the shape of six tasks:
+- **The Calendar becomes day ROWS with time left→right** — not a month grid, not one scrolled
+  day. An event is a **bar** whose length is its duration, which retires §10.4's compromise
+  that a chip carries the time and not the name.
+- **Priority reads as a count of 1–3 dots** — the glyph strip's own vocabulary. Red is spoken
+  for (rule 2) and cannot be used. **None set draws nothing at all.**
+- **Widget by widget, the user's order.**
+
+**Two things W3 shares and must only build once:**
+1. **`CardOverlay`** — built in **W3-07** for the Calendar, **reused** in **W3-10** for the
+   Kanban. Do not build a second one. If `Sheet` has no caller left afterwards, delete it.
+2. **The priority dots** — built in **W3-03** for the Todo, reused in **W3-11** for the Kanban.
 
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
-**The RAM half is measured and it passes** — 22.0 MB idle, 31.9 MB with all four types open,
-against §2's 20–40 idle and < 50 total; per-widget marginal cost is ~2.5 MB. **The Spreadsheet
-was measured on 2026-08-27 and changes nothing:** on a release build against a fresh database,
-home alone is **21.9 MB**, home + Spreadsheet **25.1 MB**, home + Kanban **25.2 MB** — so the
-Spreadsheet costs **~3.2 MB**, the same as the Kanban and well inside §2's 5–15 MB per widget.
-⚠ **Give the window ~7s to settle before reading `WorkingSet64`** — a reading at 6s on a
-first-ever launch came back 33.2 MB and is an artefact of the database being created, not a
-regression. **The smoothness half still needs a release build in front of the
-user**; open question 12.
+RAM passes and is measured (below). Smoothness still needs a release build in front of them;
+open question 12.
 
-Closed in Stage W2: `SW-13` (`SheetDoc` — ticked on 20 tests, no surface to watch; note the
-two rules in its entry: an empty cell is deleted rather than stored, and deleting a row drops
-every merge it intersects), `SW-14` (the Spreadsheet — **photographed rendering correctly**,
-interaction 🟡; **Rust owns the grid layout and Slint only paints it**, which is what lets one
-`TouchArea` resolve a cell after a column has been dragged wider), `SW-22` (typing survives
-past one character — the lock is `rows_locked_by_editor`; read its entry before writing any
-other repeater), `SW-23` (`--open-kind`), `SW-18` (the `Sheet` — read its **two caller
-contracts** before building any editor on it), `SW-24` (the `document` type is gone), `SW-25`
-(the alignment pass, every surface photographed), `SW-21a` (the card drag no longer fights the
-pointer), `SW-19` (pickers — arithmetic ✅ by 13 tests, faces 🟡), `SW-20` (Calendar — live chip
-and info bar ✅ photographed, editor sheet 🟡), `SW-21` (card editor 🟡, and the inline card
-title editor is deliberately gone).
+**The verification queue is now SECOND to Stage W3.** It has not gone away, but the user has
+walked the app themselves twice now and found real defects both times — which is what the
+queue existed to catch. Fix what they reported first; hand them the queue after.
 
-**`SW-12` (Whiteboard) is parked at the user's request** — *"for now ignore whiteboard"*.
+**`SW-12` (Whiteboard) stays parked at the user's request** — *"for now ignore whiteboard"*.
 `WhiteboardDoc` stays built, tested and deliberately absent from `BUILT`.
+
+**Closed in Stage W2**, all of it still standing: `SW-13` (`SheetDoc`), `SW-14` (the
+Spreadsheet — renders, photographed), `SW-22` (typing survives past one character — the lock
+is `rows_locked_by_editor`; **read its entry before writing any repeater with an editor**),
+`SW-23` (`--open-kind`), `SW-18` (`Sheet` — **two caller contracts**, and W3-07 replaces it),
+`SW-24` (the `document` type is gone), `SW-25` (the alignment pass), `SW-21a` (the card drag),
+`SW-19` (the pickers — arithmetic ✅ by 13 tests, **faces rejected by the user in W3-08**),
+`SW-20` (Calendar — **its layout is replaced by W3-05**), `SW-21` (card editor — **its sheet is
+replaced by W3-10**).
 
 ### Five things that will bite, all already paid for once
 

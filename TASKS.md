@@ -3,10 +3,10 @@
 **Purpose:** a resumable, ordered list of small units of work. A new session reads
 [progress.md](progress.md) first for the state of the project, then starts here at the
 first unticked box.
+
 **Last updated:** 2026-08-27
-**Last updated:** 2026-08-27
-**Current task:** **The VERIFICATION QUEUE walk-through — and it is the only thing left.** `SW-14` closed on 2026-08-27, which means **Stage W2 is feature-complete**: all six widget types except the deliberately-parked Whiteboard are built and reachable. Nothing unticked in the backlog can be done without the user. Five blocks of Stage W2 are 🟡 in the queue, the Spreadsheet among them.
-**Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
+**Current task:** `W3-01` — the note body scrollbar: restyle it and auto-hide it. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet, each widget finished before the next starts. The verification queue is now second to this — the user has walked the app themselves and found real defects, which is what the queue existed to catch.
+**Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
 **Done:** 32 ticked. 220 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel), `SW-14` (the Spreadsheet — it renders, photographed; typing, merge and column resize are unwatched) — see the verification queue
 
@@ -2154,6 +2154,196 @@ folded into the two tasks below; the questions are closed.
   new numbered task rather than a generous tick.
 
 ---
+
+## Stage W3 — the second walk-through, 2026-08-27
+
+The user walked every widget and reported **19 issues across five of them**. This is the
+second time they have done this (the first produced Stage W2), and the pattern is the same:
+the *documents* are right and the *surfaces* are not. Nothing here is a CRDT bug.
+
+**Three answers were taken before any of it was built**, and they decide the shape of six
+tasks between them:
+
+| Question | Answer |
+|---|---|
+| What does "horizontal" mean for the Calendar? | **Day rows, time left→right.** Seven stacked rows, one per day, time as the x-axis, a vertical NOW rule. Not a month grid, not a single scrolled day. |
+| How does priority read, given red is spoken for? | **A count of 1–3 dots.** The same dot vocabulary as the glyph strip and §7.2's list bullet. No words, no colour, no width cost. |
+| What order? | **Widget by widget, in the order they listed them:** Note → Todo → Calendar → Kanban → Spreadsheet. Each widget finished before the next starts. |
+
+**The order above is the build order.** Do not jump to a later widget because a task looks
+easy — the user asked for each one to be *done* before the next begins.
+
+### W3a — Note
+
+- [ ] **W3-01 · The body scrollbar: restyle it, and auto-hide it** — `S`
+  Needs: nothing. **The user:** *"the ugly scrollbar is out of the style of the rest widgets
+  or app, and also it needs to show only when the cursor is inside the widget or trying to
+  scroll so that it can be used when needed not always"*.
+  ⚠ **This touches a `DO NOT REGRESS` line** — *"Body scrollbar: thumb tracks the wheel and
+  drags"*. The user has now explicitly asked for the change, so the floor moves; the tracking
+  and dragging behaviour must **still work** afterwards.
+  ⚠ **The trap is already written down and it will bite:** *never* make the 8px gutter
+  conditional on overflow — it causes reflow oscillation. **Reserve the gutter always and
+  animate only the thumb's opacity.**
+  *DoD:* the thumb is invisible at rest · it fades in when the pointer is anywhere over the
+  note, and while scrolling · it still tracks the wheel and still drags · no reflow when it
+  appears.
+
+### W3b — Todo
+
+- [ ] **W3-02 · The `+` is a real control, and an empty item can never be added** — `S`
+  Needs: nothing. **The user:** *"to type the todo thing and only press enter, we cant press
+  the + button over there with mouse, and again i dont want to just add emoty todos"*.
+  The `IconPlus` in the compose row is decorative — it has no `TouchArea`. Give it one (an
+  `IconButton`, which already exists), committing whatever is in the field. Both paths —
+  Enter and the `+` — must refuse an empty or whitespace-only string.
+  *DoD:* clicking `+` adds the typed item · `+` with an empty field does nothing at all ·
+  Enter still works · a string of spaces is refused by both.
+
+- [ ] **W3-03 · Priority on todo items — 1–3 dots** — `M`
+  Needs: W3-02. **The user:** *"would love to have the priority thing going on please"*.
+  Answered above: **a count of 1–3 lit dots**, right-aligned on the row, in the same 3×3
+  `dot-lit`/`dot-unlit` vocabulary as the glyph strip. Three lit is high, one is low, **none
+  set draws nothing at all** — an unprioritised list must look exactly as it does today.
+  **CRDT:** one new `priority` int on the existing item map, default `0`. Additive to
+  `TodoListDoc` — no reshape, and an old snapshot that lacks the field reads as `0`.
+  *DoD:* priority survives a restart · a list with no priorities set is visually unchanged ·
+  a doc written before this task still opens.
+
+- [ ] **W3-04 · Drag to reorder todo items** — `M`
+  Needs: W3-03. **The user:** *"i want to be able to drag and re arrange the todos"*.
+  ⚠ **This is a CRDT shape change and the answer is already decided by the spec, so it is not
+  a guess:** §10.3 says **never reorder a nested array** — it is a known duplication/loss
+  failure mode under concurrent moves. Todo items currently live in a `yrs::Array`, which
+  cannot be reordered safely. Add a **fractional-index `pos` string** to each item and sort by
+  it, exactly as `KanbanDoc` does; `key_between` already exists in `canvas-doc/src/
+  fractional.rs`. Items written before this task get keys assigned in their current array
+  order on first load, so an existing list does not scramble.
+  ⚠ **The drag itself is `SW-21a`'s bug and `S1-51`'s bug for the third time:** the row's
+  `TouchArea` must **not move with the row**. Leave the row where the model puts it, draw a
+  separate floating row at list level, and measure against the stationary area.
+  *DoD:* drag a row to a new position and it stays there after a restart · two docs moving
+  different rows converge · an existing list opens in its original order.
+
+### W3c — Calendar
+
+- [ ] **W3-05 · Relayout: days become rows, time becomes the x-axis** — `L`
+  Needs: nothing. **The user:** *"the main calendar itself is not looking great … i think the
+  vertical days are horrible, horizontal would be much more elegant to look and comfortably
+  do things with"*, and *"keep the design aesthetics same as this, but the overall design ux
+  and all take examples from other famous calendars"*.
+  **Answered: seven stacked day rows, time running left→right.** An event is a **bar** whose
+  length is its duration — which finally makes duration readable, and **retires §10.4's
+  compromise that a chip carries the time and not the name**: a bar spanning two hours has
+  room for `09:30 STAND-UP`. Day label in the left gutter, interface-face-11 `dim`; today's
+  label steps to `text`. Hour ticks along the top in interface-face-11 `dim`.
+  Add `cal-row-h`, `cal-gutter-w`, `cal-hour-w` to `theme/layout.slint`; invent no numbers.
+  ⚠ **One `TouchArea` per day row, resolved in Rust** — never one per chip. This is §13.3 and
+  it has already been hit on the Calendar once.
+  *DoD:* a week renders as seven rows · an event's bar length matches its duration · the name
+  is readable on a bar of ordinary length · clicking empty space in a row starts an event at
+  roughly that time.
+
+- [ ] **W3-06 · The NOW indicator** — `S`
+  Needs: W3-05. **The user:** *"there is no proper indicator of what time is there currently
+  to see where am i at the events of today"*.
+  A **1px `text` vertical rule** at the current time, crossing today's row. It moves on the
+  existing poll timer — no new timer. Off-week, it is not drawn at all.
+  *DoD:* the rule sits at the right x for the current time · it moves without a relaunch · it
+  is absent when the week shown is not this week.
+
+- [ ] **W3-07 · The event editor becomes a compact card overlay** — `L`
+  Needs: W3-05. **The user:** *"the event creation etc is messed up as in the screenshots, its
+  bad, not fitting … too smallly fitted inside the widget, make the widget slightly bigger and
+  the event pages etc smaller and it should feel like a card overlay and not a big scrolling
+  page bad for UX"*.
+  **This replaces `Sheet` for editors.** Build **one** `CardOverlay` component in `theme/`
+  and use it here and in **W3-10** — a centred, compact, **non-scrolling** card over a dimmed
+  plate, sized to its contents, not a full-width band that fills the widget. `Sheet` stays for
+  anything that genuinely is a long form; if nothing is, delete it in W3-10.
+  Also: **the Calendar's default size goes up** (the user asked for the widget to be slightly
+  bigger) — set it in `default_size` and `Layout`, both, or they disagree.
+  ⚠ **`SW-18`'s two caller contracts still apply**: an opaque overlay does **not** stop the
+  surface underneath taking clicks. Every control it covers needs `enabled: !overlay-open`.
+  *DoD:* the editor is a card, not a page · it never scrolls · it is legible without resizing
+  the widget · nothing under it is clickable while it is open.
+
+- [ ] **W3-08 · The date picker and the time dial actually work** — `L`
+  Needs: W3-07. **The user:** *"not the time dail, date choosing etc are not functioning
+  properly at all and also none of them are good and i cant even properly select them"* —
+  and the screenshots back it up: the dial is clipped by the overlay and the minute ring is
+  unreadable and unhittable.
+  Rebuild both to fit **inside a card**, not a scrolling page. The **arithmetic behind them is
+  already correct and tested** (13 tests, `SW-19`) — this is a surface task; do not touch
+  `calendar_time.rs` without a failing test first.
+  ⚠ **The minute ring needs one `TouchArea` and an angle computed in Rust**, not 12 hit
+  targets. The clipping in the screenshot is the dial being laid out against its own resolved
+  size — trap 0b, already paid for once.
+  *DoD:* every hour and every minute step is selectable with one click · nothing is clipped ·
+  the picked value lands in the field · Esc cancels without writing.
+
+### W3d — Kanban
+
+- [ ] **W3-09 · Board spacing: padding, margins, the column outline** — `S`
+  Needs: nothing. **The user:** *"see the outline padding margin etc, its bad take the space
+  and make it much better"*. The screenshot shows the column outline hard against the cards
+  and the board crowding the plate edge.
+  *DoD:* the outline has real breathing room from the cards inside it · columns do not touch
+  the plate edge · measured against `handoff/screenshots/widget-types.png`, not by feel.
+
+- [ ] **W3-10 · The card editor becomes a card overlay** — `M`
+  Needs: W3-07, W3-09. **The user:** *"same issues as calendar, very bad card details etc, i
+  want it much more accessible and cleaner and not a very congested, big scrollable page for
+  details"*.
+  **Reuse the `CardOverlay` built in W3-07.** Do not build a second one. If `Sheet` has no
+  remaining caller after this, delete it and say so.
+  *DoD:* the card editor is the same component as the event editor · it does not scroll · the
+  board underneath is inert while it is open.
+
+- [ ] **W3-11 · Drop `UNASSIGNED`; priority dots on cards** — `S`
+  Needs: W3-10, W3-03. **The user:** *"i dont want unassigned etc if that is empty for now,
+  let it be as it is, maybe we can have a priority thing right??"*.
+  An empty assignee and no due date means the meta line is **not drawn at all** — not the word
+  `UNASSIGNED`, not an empty row holding space. `card_meta` in `app.rs` returns that string
+  today; it should return empty and the row should collapse.
+  Priority dots as W3-03, same component, same 1–3 vocabulary.
+  *DoD:* a fresh card shows a title and nothing else · the card gets shorter when there is no
+  meta, rather than leaving a gap · priority survives a restart.
+
+### W3e — Spreadsheet
+
+- [ ] **W3-12 · Clicking elsewhere leaves the cell** — `S`
+  Needs: nothing. **The user:** *"once i click on a cell cant exiting by clicking elsewhere
+  have to type and enter only"*.
+  A press on the grid while a cell is being edited must **commit and move the selection**, not
+  be swallowed. The grid `TouchArea` is currently `enabled: !confirming-delete && editing-id
+  == ""` — that second clause is exactly the bug. Enable it during an edit and commit on
+  press. Losing window focus should commit too.
+  *DoD:* type in a cell, click a different cell — the first commits and the second selects ·
+  click outside the grid — the edit commits · nothing is lost.
+
+- [ ] **W3-13 · Scroll both ways, like a real sheet** — `M`
+  Needs: W3-12. **The user:** *"very bad overall, cant scroll around like a normal excel"*.
+  I shipped `SW-14` with **vertical scrolling only** and wrote it up as a deliberate limit
+  with the note *"say if that grates"*. **It grates.** Add horizontal scrolling: a second
+  `ScrollBar` along the bottom, shift-wheel and trackpad x-delta, and the column head band
+  must scroll **with** the columns while the row gutter stays put.
+  *DoD:* a sheet wider than its window scrolls sideways · the head band stays aligned to its
+  columns while it does · the gutter does not drift · both scrollbars auto-hide like W3-01.
+
+- [ ] **W3-14 · Row and column resize that works and can be found** — `M`
+  Needs: W3-13. **The user:** *"the rows and cols are not expandable by dragging their
+  corressponding columns etc right??"* — phrased as a question, which means **they tried it
+  and nothing happened.**
+  It *is* built (`SW-14`: drag the boundary in the head band, a 1px guide follows, the width
+  commits on release). So either the 4px grip is too small to find, the cursor never changes
+  so nothing invites the drag, or it is broken outright. **Find out which before changing
+  anything** — the guide line is the tell: if it appears, the hit test works and the problem
+  is discoverability; if it does not, the press is not landing.
+  Widen the grip, show a boundary hairline in the band that lights on hover, and make the
+  resize cursor appear only near a boundary rather than across the whole band.
+  *DoD:* the user can find and drag a column boundary without being told it exists · the same
+  for a row · a width survives a restart.
 
 ## Stages 2, 3 — after Stage W
 
