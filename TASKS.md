@@ -1614,9 +1614,11 @@ because the app is currently hardcoded to a single type.
   losing no points** (20 points survive, none duplicated).
 
 
-- [ ] **SW-12 · Whiteboard widget window**, **SW-13 · `SheetDoc`**, **SW-14 · Spreadsheet
+- [x] **SW-12 · Whiteboard widget window**, **SW-13 · `SheetDoc`**, **SW-14 · Spreadsheet
   widget window** — all three **moved to Stage W2 below**, rewritten on 2026-08-26 with the
-  user's answers to open questions 4, 5, 6 and 7. Do not build from this section.
+  user's answers to open questions 4, 5, 6 and 7. Do not build from this section. This line is
+  ticked because the *move* happened, not the work: `SW-13` is done and ticked in Stage W2,
+  `SW-14` is built and 🟡 there, and `SW-12` is parked at the user's request.
 
 ## Stage W2 — the rework the user asked for on 2026-08-26
 
