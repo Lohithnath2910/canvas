@@ -79,13 +79,14 @@ is a CRDT bug.** It is surface work, and it is the whole of the work.
 
 **The build order is the user's, and it is not negotiable:**
 **Note → Todo → Calendar → Kanban → Spreadsheet.** Each widget is *finished* before the next
-one starts. Do not jump ahead because a task looks easy. **Four are done. The Kanban is
-finished — start at `W3-12`, the Spreadsheet, which is all that is left of W3.**
+one starts. Do not jump ahead because a task looks easy. **Four are done. The Kanban is finished and the Spreadsheet is half done — start at
+`W3-13`, sideways scrolling.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found. **This is all that is left of W3** |
-| 2 | **The VERIFICATION QUEUE** | After W3. Six fresh blocks — Todo, Calendar, Spreadsheet, the Kanban spacing, the Kanban card editor, the Kanban card face, the typed time field — none clicked |
+| 1 | **W3-13** — the sheet scrolls sideways | `SW-14` shipped vertical-only and wrote it up as *"say if that grates"*. It grates. A second `ScrollBar` along the bottom, shift-wheel and trackpad x-delta, and **the column head band must scroll with the columns while the row gutter stays put** |
+| 2 | **W3-14** — resize that can be found | It *is* built. Find out **which** of the three failure modes it is before changing anything — **the 1px guide is the tell**: if it appears, the hit test works and this is discoverability; if it does not, the press is not landing |
+| 3 | **The VERIFICATION QUEUE** | After W3. Eight fresh blocks — Todo, Calendar, Spreadsheet, the three Kanban ones, the typed time field, and leaving a spreadsheet cell — none clicked |
 
 **Answers already taken. Do not re-ask these:**
 - **The Calendar is day ROWS with time left→right** — built. An event is a bar whose length is
@@ -124,6 +125,7 @@ open question 12.
 `W3-10` (`CardOverlay` on the Kanban, `Sheet` deleted, board to 640×460, 🟡),
 `W3-15` (the typed `HH:MM AM/PM` field, `TimePicker` deleted, 6 new tests, 🟡),
 `W3-11` (no more `UNASSIGNED`, priority dots, two card heights, `insert_kanban`, 🟡),
+`W3-12` (a press anywhere else leaves a spreadsheet cell, 🟡),
  `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
 (priority dots), `W3-04` (todo drag-reorder on a fractional index, 🟡), `W3-05` (Calendar day
 rows), `W3-05b` (the readability pass the user demanded mid-run), `W3-06` (NOW rule), `W3-07`
@@ -3453,3 +3455,43 @@ can have a priority thing right??"*
 - 📸 Photographed: a bare short card, `MIRA ■■□`, `30 AUG` with no dots,
   `JONAS · 30 AUG ■■■`, and a card carrying only `■□□`. **Clicking the dots and dragging a
   mixed-height column have not been done by hand**, so the box stays open.
+
+### 2026-08-27 — W3-12: a spreadsheet cell can be left by clicking somewhere else
+
+The user: *"once i click on a cell cant exiting by clicking elsewhere have to type and enter
+only"*.
+
+- 🟡 **The `editing-id == ""` gate is gone from `grid-area`, `gutter-area` and the head band**,
+  and all three commit before they act. The header's `drag-area` commits on press too, which
+  is the "click outside the grid" half.
+
+- 🟡 **That gate existed for a reason, and it had to be handled rather than deleted.** With
+  `grid-area` live it sits **over** the cell editor and would steal the clicks that position
+  the caret — its `TouchArea` is declared after the editor, and §13.3 says not to trust z-order
+  to sort that out. So `grid-area` carries an `on-editor` property that compares the pointer
+  against the editing cell's own rect. **`TouchArea` reports `mouse-x`/`mouse-y` relative to
+  its parent, not to itself** — that is why every handler in this file subtracts `gutter-w`,
+  and it is what makes the comparison work. A press inside that rect is ignored completely: no
+  commit, no reselect, focus untouched. `moved` is gated the same way, so a drag mid-edit
+  cannot start a range selection out of the cell you are typing in.
+
+- ⚠ **Deliberate cost:** clicking *inside* the cell being edited no longer moves the caret,
+  because `grid-area` swallows it. Typing, arrow keys and the select-all on open are
+  unaffected. Doing better needs the editor and the grid to be genuinely disjoint regions,
+  which one grid rect cannot be. It is in the verification queue as a named tradeoff so the
+  user can overrule it.
+
+- ✅ **`changed has-focus` compiles on Slint 1.17** — worth knowing, it is not in §13. On
+  `cell-input` it fires `edit-committed()` whenever the input loses focus for any reason,
+  **including the window losing focus**, which is the last line of the task. Every commit path
+  is guarded on `editing-id != ""`, so Escape, Enter, Tab and a click elsewhere cannot
+  double-commit.
+
+- **Nothing was ever at risk of being lost.** `on_cell_edited` writes to the document on every
+  keystroke, so this task is about a cell leaving edit mode, not about saving.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo test --workspace` 267 pass,
+  `cargo fmt --all`.
+
+- 📸 **Nothing to photograph.** Every line of this is a press. The verification queue block has
+  six of them.

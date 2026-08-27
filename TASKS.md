@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-12` — the Spreadsheet: clicking elsewhere must leave the cell. **The Kanban is finished** — `W3-09`, `W3-10`, `W3-11` and the out-of-band `W3-15` all landed 🟡 on 2026-08-27: an 8px column pad, the editor became the Calendar's `CardOverlay` (`Sheet` deleted, board grown to 640×460), `UNASSIGNED` is gone and cards carry priority on a second row they only grow when they need it, and the time picker became a typed `HH:MM AM/PM` field after the user rejected `W3-08`'s grids on sight (`TimePicker` deleted). 267 tests pass. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet — **the Spreadsheet is all that is left.**
+**Current task:** `W3-13` — the Spreadsheet scrolls **both** ways. `W3-12` landed 🟡 on 2026-08-27: a press on the grid, the gutter, the column head band or the widget header now commits the edit first, and `changed has-focus` on the cell input covers the window losing focus. **The Kanban is finished** — `W3-09`, `W3-10`, `W3-11` and the out-of-band `W3-15` all landed 🟡 the same day. 267 tests pass. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet — **only the Spreadsheet is left, and only `W3-13` and `W3-14` of it.**
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
 **Done:** 40 ticked. 267 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is **done**: `W3-09`, `W3-10`, `W3-11` and the out-of-band `W3-15` all landed 🟡. **The Spreadsheet is all that is left.** The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not), `W3-11` (the Kanban card face — clicking the dots, and dragging a mixed-height column) — see the verification queue, which now has three fresh blocks
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not), `W3-11` (the Kanban card face — clicking the dots, and dragging a mixed-height column), `W3-12` (leaving a spreadsheet cell, which is six presses and no pixels) — see the verification queue, which now has three fresh blocks
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -122,6 +122,21 @@ feature. Say so in the end-of-run report every time until it happens.
 correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
 `MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
 cannot reach.
+
+**LEAVING A SPREADSHEET CELL — `W3-12`, 2026-08-27.** Every line here is a press, so none of it
+could be photographed. `cargo run -p canvas-app -- --open-kind sheet`.
+- [ ] Double-click `A1`, type something, then **click `C4`**. `A1` keeps what you typed and `C4`
+      becomes the selection. **This is the reported bug** — before today only Enter got you out
+- [ ] Type in a cell, then click a **row number** in the left gutter, and again on a **column
+      letter** in the top band. Both commit the edit
+- [ ] Type in a cell, then click the widget's **header bar**. It commits
+- [ ] Type in a cell, then **click another window** so Canvas loses focus. Come back: the cell
+      is no longer in edit mode and the text is there
+- [ ] While editing, **press and drag** across the grid — it must **not** start a range
+      selection out of the cell you are typing in
+- [ ] ⚠ **Known cost:** clicking *inside* the cell you are editing no longer moves the caret.
+      Typing, arrow keys and the select-all when it opens all still work. If this turns out to
+      matter more than it sounds, say so and it becomes its own task
 
 **THE TYPED TIME FIELD — `W3-15`, 2026-08-27.** The parse has 6 tests including a round trip over
 all 1440 minutes; the *field* has never been typed into. `--gallery` photographed it reading
@@ -2662,6 +2677,28 @@ easy — the user asked for each one to be *done* before the next begins.
   press. Losing window focus should commit too.
   *DoD:* type in a cell, click a different cell — the first commits and the second selects ·
   click outside the grid — the edit commits · nothing is lost.
+  🟡 **built 2026-08-27, box stays open** — the `editing-id == ""` clause is off `grid-area`,
+  `gutter-area` and the head band, and all three **commit before they act**. The header's
+  `drag-area` commits on press too, which covers "click outside the grid".
+  The reason that clause was there is real and had to be handled rather than deleted: with
+  `grid-area` live, it sits **over** the cell editor and would steal the clicks that place the
+  caret (§13.3 — its `TouchArea` is declared after the editor). So `grid-area` carries an
+  `on-editor` property comparing `mouse-x`/`mouse-y` against the editing cell's own rect —
+  `TouchArea` reports the pointer **relative to its parent**, which is why the existing handlers
+  subtract `gutter-w` — and a press inside that rect is ignored entirely: no commit, no
+  reselect, focus untouched. `moved` is gated the same way so a drag mid-edit cannot start a
+  range selection.
+  ⚠ **Known cost, deliberate:** a click *inside* the cell being edited no longer moves the
+  caret, because `grid-area` swallows it. Typing, arrows and the select-all on open are
+  unaffected. Fixing it properly needs the editor and the grid to be genuinely disjoint, which
+  a single grid rect cannot be.
+  **Focus loss commits as well.** `changed has-focus` on `cell-input` — **this syntax does
+  compile on Slint 1.17**, which is worth knowing — fires `edit-committed()` when the input
+  loses focus for any reason, including the window losing it. Every path is guarded on
+  `editing-id != ""`, so Escape, Enter, Tab and a click elsewhere cannot double-commit.
+  Nothing was ever at risk of being *lost*: `on_cell_edited` writes to the document on every
+  keystroke, so this is about the cell leaving edit mode, not about saving.
+  **None of this is photographable** — every line of it is a press. See the VERIFICATION QUEUE.
 
 - [ ] **W3-13 · Scroll both ways, like a real sheet** — `M`
   Needs: W3-12. **The user:** *"very bad overall, cant scroll around like a normal excel"*.

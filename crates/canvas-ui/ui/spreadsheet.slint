@@ -181,6 +181,9 @@ export component SpreadsheetWindow inherits Window {
                 mouse-cursor: col-resize;
                 pointer-event(event) => {
                     if (event.kind == PointerEventKind.down) {
+                        if (root.editing-id != "") {
+                            root.edit-committed();
+                        }
                         root.head-pressed((self.mouse-x - root.gutter-w) / 1px);
                     }
                     if (event.kind == PointerEventKind.up) {
@@ -305,6 +308,11 @@ export component SpreadsheetWindow inherits Window {
                         font-family: Typography.body-face;
                         font-size: Typography.body-size;
                         init => { self.focus(); self.select-all(); }
+                        changed has-focus => {
+                            if (!self.has-focus && root.editing-id != "") {
+                                root.edit-committed();
+                            }
+                        }
                         edited => { root.cell-edited(self.text); }
                         accepted => {
                             root.edit-committed();
@@ -329,13 +337,23 @@ export component SpreadsheetWindow inherits Window {
                 }
 
                 grid-area := TouchArea {
+                    property <bool> on-editor:
+                        root.editing-id != ""
+                        && self.mouse-x >= root.gutter-w + root.sel-x * 1px
+                        && self.mouse-x < root.gutter-w + (root.sel-x + root.sel-w) * 1px
+                        && self.mouse-y >= root.view-y + root.sel-y * 1px
+                        && self.mouse-y < root.view-y + (root.sel-y + root.sel-h) * 1px;
+
                     x: root.gutter-w;
                     y: 0;
                     width: board.cols-w;
                     height: parent.height;
-                    enabled: !root.confirming-delete && root.editing-id == "";
+                    enabled: !root.confirming-delete;
                     pointer-event(event) => {
-                        if (event.kind == PointerEventKind.down) {
+                        if (event.kind == PointerEventKind.down && !self.on-editor) {
+                            if (root.editing-id != "") {
+                                root.edit-committed();
+                            }
                             keys.focus();
                             root.cell-pressed(
                                 (self.mouse-x - root.gutter-w) / 1px,
@@ -343,11 +361,17 @@ export component SpreadsheetWindow inherits Window {
                         }
                     }
                     moved => {
-                        root.cell-dragged(
-                            (self.mouse-x - root.gutter-w) / 1px,
-                            (self.mouse-y - root.view-y) / 1px);
+                        if (root.editing-id == "") {
+                            root.cell-dragged(
+                                (self.mouse-x - root.gutter-w) / 1px,
+                                (self.mouse-y - root.view-y) / 1px);
+                        }
                     }
-                    double-clicked => { root.editing-id = root.sel-key; }
+                    double-clicked => {
+                        if (!self.on-editor) {
+                            root.editing-id = root.sel-key;
+                        }
+                    }
                     scroll-event(event) => {
                         root.view-y = max(
                             min(0px, board.grid-view-h - root.grid-h * 1px),
@@ -361,10 +385,13 @@ export component SpreadsheetWindow inherits Window {
                     y: 0;
                     width: root.gutter-w - 1px;
                     height: parent.height;
-                    enabled: !root.confirming-delete && root.editing-id == "";
+                    enabled: !root.confirming-delete;
                     mouse-cursor: row-resize;
                     pointer-event(event) => {
                         if (event.kind == PointerEventKind.down) {
+                            if (root.editing-id != "") {
+                                root.edit-committed();
+                            }
                             root.gutter-pressed((self.mouse-y - root.view-y) / 1px);
                         }
                         if (event.kind == PointerEventKind.up) {
@@ -524,6 +551,9 @@ export component SpreadsheetWindow inherits Window {
                 );
             }
             pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && root.editing-id != "") {
+                    root.edit-committed();
+                }
                 if (event.kind == PointerEventKind.up && root.dragging) {
                     root.dragging = false;
                     root.drag-ended();
