@@ -5,9 +5,9 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-05` — the Calendar relayout: days become rows, time becomes the x-axis. **The Todo is done** — `W3-02` and `W3-03` ticked, `W3-01` and `W3-04` 🟡 for a pointer. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
+**Current task:** `W3-07` — the event editor becomes a compact `CardOverlay`, and the Calendar gets slightly bigger. `W3-05` and `W3-06` are ticked and photographed: the Calendar is now day rows with time on the x-axis, event names are back, and the NOW rule is live. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
-**Done:** 34 ticked. 228 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 37 ticked. 246 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel), `SW-14` (the Spreadsheet — it renders, photographed; typing, merge and column resize are unwatched) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -2324,7 +2324,7 @@ easy — the user asked for each one to be *done* before the next begins.
 
 ### W3c — Calendar
 
-- [ ] **W3-05 · Relayout: days become rows, time becomes the x-axis** — `L`
+- [x] **W3-05 · Relayout: days become rows, time becomes the x-axis** — `L`
   Needs: nothing. **The user:** *"the main calendar itself is not looking great … i think the
   vertical days are horrible, horizontal would be much more elegant to look and comfortably
   do things with"*, and *"keep the design aesthetics same as this, but the overall design ux
@@ -2340,14 +2340,48 @@ easy — the user asked for each one to be *done* before the next begins.
   *DoD:* a week renders as seven rows · an event's bar length matches its duration · the name
   is readable on a bar of ordinary length · clicking empty space in a row starts an event at
   roughly that time.
+  ✅ **Done and photographed 2026-08-27.** Seven day rows, `MON`…`SUN` right-aligned in a 40px
+  gutter, hour ticks along the top with a 1px `edge` rule dropping from each, and events drawn
+  as **bars whose length is their duration**. `THU` was today in the frame and its rule and
+  label were the lit ones.
+  **It retires §10.4's compromise.** A chip used to carry the time and not the name because a
+  ~52px column fits five characters. The frame reads `09:30 STAND-UP`, `11:00 STRIP SPEC
+  REVIEW`, `13:00 FONT BINARIES` — the names are back.
+  **The label is allowed to spill past its bar.** A 30-minute event is ~20px wide and would
+  otherwise elide to nothing. Each chip is a transparent box running from its start to the
+  lane edge; the bar is drawn inside it at its true width, and the label sits on top of the
+  box. Later chips draw after earlier ones, so a following event's opaque bar **covers** the
+  previous label exactly where it would have collided. That is the whole collision strategy
+  and it costs one nesting level.
+  **The visible hour window is fitted to the data, not fixed at 24h.** `timeline_window`
+  starts from the working day (08:00–18:00), grows to contain every event *and* the current
+  time, snaps out to whole hours, and enforces a 6-hour minimum. At widget size a fixed 24h
+  would be ~20px an hour and unreadable; this way the week always fits with no horizontal
+  scrolling to build. `tick_step` opens the labels up to 2/3/4/6/12-hour spacing when hours
+  get cramped.
+  **One `TouchArea` per day row, resolved by `mouse-x`** — never one per chip. §13.3, and the
+  Calendar had already been caught by it once.
+  **10 tests** on the arithmetic: the empty week, growing for an event, snapping to the hour,
+  always containing now, the 6-hour minimum, not running past midnight, fraction mapping,
+  clamping a span that starts before the window, and the tick step.
+  Two defects were found by photographing and fixed in the same pass: labels elided to nothing
+  (the spill fix above) and the final hour tick colliding with its neighbour at the lane edge
+  (the tick loop now stops before the window end).
+  ⚠ **`chip_bucket` and `day_fraction` are deleted.** Duration is bar length now, so the
+  four-height bucket table and the vertical day fraction had no callers. Their tests went too.
 
-- [ ] **W3-06 · The NOW indicator** — `S`
+- [x] **W3-06 · The NOW indicator** — `S`
   Needs: W3-05. **The user:** *"there is no proper indicator of what time is there currently
   to see where am i at the events of today"*.
   A **1px `text` vertical rule** at the current time, crossing today's row. It moves on the
   existing poll timer — no new timer. Off-week, it is not drawn at all.
   *DoD:* the rule sits at the right x for the current time · it moves without a relaunch · it
   is absent when the week shown is not this week.
+  ✅ **Done and photographed 2026-08-27** — the frame was taken at 13:00 by the system clock
+  and the rule sits between the `13` and `14` ticks. A 1px `text` vertical rule at
+  `minute_fraction(now)`, drawn over the rows. It rides the **existing** pin-poll timer rather
+  than adding one, and `now-at` is `-1` when the week on screen is not this week, which the
+  `if` in the Slint reads as "do not draw".
 
 - [ ] **W3-07 · The event editor becomes a compact card overlay** — `L`
   Needs: W3-05. **The user:** *"the event creation etc is messed up as in the screenshots, its

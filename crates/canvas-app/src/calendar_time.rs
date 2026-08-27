@@ -19,10 +19,6 @@ pub fn minute_of_day(ts_ms: i64, offset_ms: i64) -> i64 {
     (ts_ms + offset_ms).rem_euclid(DAY_MS) / MINUTE_MS
 }
 
-pub fn day_fraction(ts_ms: i64, offset_ms: i64) -> f32 {
-    minute_of_day(ts_ms, offset_ms) as f32 / 1440.0
-}
-
 pub fn day_stamp(ts_ms: i64, offset_ms: i64) -> String {
     const MONTHS: [&str; 12] = [
         "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
@@ -49,14 +45,68 @@ pub fn hhmm(ts_ms: i64, offset_ms: i64) -> String {
     format!("{:02}:{:02}", minutes / 60, minutes % 60)
 }
 
-pub fn chip_bucket(duration_ms: i64) -> (f32, i32) {
-    let minutes = duration_ms.max(0) / MINUTE_MS;
-    match minutes {
-        ..=30 => (24.0, 1),
-        31..=60 => (32.0, 2),
-        61..=120 => (40.0, 3),
-        _ => (56.0, 4),
+pub const MINUTES_PER_DAY: i64 = 1440;
+pub const MIN_WINDOW_MINUTES: i64 = 360;
+pub const DEFAULT_WINDOW_START: i64 = 8 * 60;
+pub const DEFAULT_WINDOW_END: i64 = 18 * 60;
+
+pub fn timeline_window(spans: &[(i64, i64)], now: Option<i64>) -> (i64, i64) {
+    let mut start = DEFAULT_WINDOW_START;
+    let mut end = DEFAULT_WINDOW_END;
+
+    for (from, to) in spans {
+        start = start.min(*from);
+        end = end.max(*to);
     }
+    if let Some(now) = now {
+        start = start.min(now);
+        end = end.max(now);
+    }
+
+    start = (start.clamp(0, MINUTES_PER_DAY) / 60) * 60;
+    end = end.clamp(0, MINUTES_PER_DAY);
+    if end % 60 != 0 {
+        end = (end / 60 + 1) * 60;
+    }
+    end = end.min(MINUTES_PER_DAY);
+
+    if end - start < MIN_WINDOW_MINUTES {
+        end = (start + MIN_WINDOW_MINUTES).min(MINUTES_PER_DAY);
+        start = (end - MIN_WINDOW_MINUTES).max(0);
+    }
+    (start, end)
+}
+
+pub fn tick_step(window_minutes: i64, width_px: f32) -> i64 {
+    const LABEL_PX: f32 = 34.0;
+    let hours = (window_minutes / 60).max(1);
+    let per_hour = if hours > 0 {
+        width_px / hours as f32
+    } else {
+        width_px
+    };
+    for step in [1i64, 2, 3, 4, 6, 12] {
+        if per_hour * step as f32 >= LABEL_PX {
+            return step;
+        }
+    }
+    12
+}
+
+pub fn span_fraction(from: i64, to: i64, window: (i64, i64)) -> (f32, f32) {
+    let (ws, we) = window;
+    let width = (we - ws).max(1) as f32;
+    let from = from.clamp(ws, we);
+    let to = to.clamp(from, we);
+    let start = (from - ws) as f32 / width;
+    let span = (to - from) as f32 / width;
+    (start, span)
+}
+
+pub fn minute_fraction(minute: i64, window: (i64, i64)) -> f32 {
+    let (ws, we) = window;
+    let width = (we - ws).max(1) as f32;
+    (minute - ws) as f32 / width
 }
 
 #[cfg(windows)]
@@ -259,35 +309,6 @@ mod tests {
     }
 
     #[test]
-    fn day_fraction_runs_from_zero_to_just_under_one() {
-        assert_eq!(day_fraction(utc(20_000, 0, 0), 0), 0.0);
-        assert!((day_fraction(utc(20_000, 12, 0), 0) - 0.5).abs() < f32::EPSILON);
-        assert!(day_fraction(utc(20_000, 23, 59), 0) < 1.0);
-    }
-
-    #[test]
-    fn chip_buckets_step_through_the_four_heights() {
-        assert_eq!(chip_bucket(0), (24.0, 1));
-        assert_eq!(chip_bucket(30 * MINUTE_MS), (24.0, 1));
-        assert_eq!(chip_bucket(45 * MINUTE_MS), (32.0, 2));
-        assert_eq!(chip_bucket(60 * MINUTE_MS), (32.0, 2));
-        assert_eq!(chip_bucket(90 * MINUTE_MS), (40.0, 3));
-        assert_eq!(chip_bucket(120 * MINUTE_MS), (40.0, 3));
-        assert_eq!(chip_bucket(8 * 3_600_000), (56.0, 4));
-    }
-
-    #[test]
-    fn a_longer_event_never_gets_a_shorter_chip() {
-        let mut previous = (0.0, 0);
-        for minutes in 0..600 {
-            let current = chip_bucket(minutes * MINUTE_MS);
-            assert!(current.0 >= previous.0);
-            assert!(current.1 >= previous.1);
-            previous = current;
-        }
-    }
-
-    #[test]
     fn civil_from_days_agrees_with_known_dates() {
         assert_eq!(civil_from_days(0), (1970, 1, 1));
         assert_eq!(civil_from_days(-1), (1969, 12, 31));
@@ -447,5 +468,79 @@ mod tests {
         assert_eq!(weekday_initial(0), "S");
         assert_eq!(weekday_initial(6), "S");
         assert_eq!(weekday_initial(7), "");
+    }
+
+    #[test]
+    fn an_empty_week_shows_the_working_day() {
+        assert_eq!(timeline_window(&[], None), (8 * 60, 18 * 60));
+    }
+
+    #[test]
+    fn the_window_grows_to_hold_every_event() {
+        let spans = [(9 * 60, 10 * 60), (19 * 60 + 15, 20 * 60 + 45)];
+        assert_eq!(timeline_window(&spans, None), (8 * 60, 21 * 60));
+    }
+
+    #[test]
+    fn an_early_event_pulls_the_window_back_to_a_whole_hour() {
+        let spans = [(6 * 60 + 25, 7 * 60)];
+        assert_eq!(timeline_window(&spans, None), (6 * 60, 18 * 60));
+    }
+
+    #[test]
+    fn now_is_always_inside_the_window() {
+        let spans = [(9 * 60, 10 * 60)];
+        let (start, end) = timeline_window(&spans, Some(23 * 60 + 30));
+        assert!(start <= 23 * 60 + 30 && 23 * 60 + 30 <= end);
+        assert_eq!(end, MINUTES_PER_DAY);
+    }
+
+    #[test]
+    fn a_tiny_window_is_widened_to_the_minimum() {
+        let (start, end) = timeline_window(&[(10 * 60, 10 * 60 + 30)], Some(10 * 60));
+        assert!(end - start >= MIN_WINDOW_MINUTES);
+    }
+
+    #[test]
+    fn a_late_night_event_does_not_push_the_window_past_midnight() {
+        let (start, end) = timeline_window(&[(23 * 60, MINUTES_PER_DAY)], None);
+        assert_eq!(end, MINUTES_PER_DAY);
+        assert!(start >= 0);
+        assert!(end - start >= MIN_WINDOW_MINUTES);
+    }
+
+    #[test]
+    fn a_span_maps_onto_the_window_as_fractions() {
+        let window = (8 * 60, 18 * 60);
+        let (start, span) = span_fraction(9 * 60, 10 * 60, window);
+        assert!((start - 0.1).abs() < 0.001, "start was {start}");
+        assert!((span - 0.1).abs() < 0.001, "span was {span}");
+    }
+
+    #[test]
+    fn a_span_outside_the_window_is_clamped_rather_than_drawn_off_the_end() {
+        let window = (8 * 60, 18 * 60);
+        let (start, span) = span_fraction(2 * 60, 23 * 60, window);
+        assert_eq!(start, 0.0);
+        assert!((span - 1.0).abs() < 0.001);
+
+        let (late, tail) = span_fraction(20 * 60, 21 * 60, window);
+        assert!((late - 1.0).abs() < 0.001);
+        assert_eq!(tail, 0.0);
+    }
+
+    #[test]
+    fn the_tick_step_opens_up_when_hours_are_cramped() {
+        assert_eq!(tick_step(10 * 60, 600.0), 1);
+        assert!(tick_step(24 * 60, 300.0) > 1);
+        assert!(tick_step(24 * 60, 120.0) >= 4);
+    }
+
+    #[test]
+    fn a_minute_maps_to_its_place_in_the_window() {
+        let window = (8 * 60, 20 * 60);
+        assert_eq!(minute_fraction(8 * 60, window), 0.0);
+        assert_eq!(minute_fraction(20 * 60, window), 1.0);
+        assert!((minute_fraction(14 * 60, window) - 0.5).abs() < 0.001);
     }
 }

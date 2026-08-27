@@ -12,10 +12,10 @@ use crate::widget::{LiveWidget, WidgetDoc, WidgetWindow};
 use crate::widget_types;
 use canvas_storage::{Store, WindowPlacement, KIND_STICKY_NOTE};
 use canvas_ui::{
-    platform_system_sans, CalendarChip, CalendarWindow, CanvasTray, DayCell, HomeWindow,
-    KanbanCardData, KanbanColumnData, KanbanWindow, Motion, NoteRow, PaletteRow, PaletteWindow,
-    SheetCellData, SheetColData, SheetRowData, SpreadsheetWindow, StickyNoteWindow, TodoItemData,
-    TodoWindow, Typography, WidgetTypeData,
+    platform_system_sans, CalendarChip, CalendarTick, CalendarWindow, CanvasTray, DayCell,
+    HomeWindow, KanbanCardData, KanbanColumnData, KanbanWindow, Motion, NoteRow, PaletteRow,
+    PaletteWindow, SheetCellData, SheetColData, SheetRowData, SpreadsheetWindow, StickyNoteWindow,
+    TodoItemData, TodoWindow, Typography, WidgetTypeData,
 };
 
 pub const ACTION_SETTINGS: &str = "settings";
@@ -1802,22 +1802,52 @@ fn refresh_calendar(app: &SharedApp, id: &str) {
 
     let week = doc.events_between(week_start, week_end);
 
-    let chips: Vec<CalendarChip> = week
+    let spans: Vec<(i64, i64)> = week
         .iter()
         .map(|event| {
-            let (height, tone) = ct::chip_bucket(event.duration());
+            let from = ct::minute_of_day(event.start.max(week_start), offset);
+            let to = ct::minute_of_day(event.end, offset);
+            let to = if to <= from { ct::MINUTES_PER_DAY } else { to };
+            (from, to)
+        })
+        .collect();
+    let now_minute = ct::minute_of_day(now, offset);
+    let in_this_week = (week_start..week_end).contains(&now);
+    let lane = ct::timeline_window(&spans, in_this_week.then_some(now_minute));
+
+    let chips: Vec<CalendarChip> = week
+        .iter()
+        .zip(spans.iter())
+        .map(|(event, span)| {
+            let (start, width) = ct::span_fraction(span.0, span.1, lane);
             let shown_from = event.start.max(week_start);
             CalendarChip {
                 id: event.id.clone().into(),
-                label: ct::hhmm(event.start, offset).into(),
+                label: format!("{} {}", ct::hhmm(event.start, offset), event.title).into(),
                 day: ct::day_index(shown_from, week_start, offset),
-                top: ct::day_fraction(shown_from, offset),
-                height,
-                tone,
+                start,
+                span: width,
                 live: event.start <= now && now < event.end,
             }
         })
         .collect();
+
+    let lane_px = (widget.placement.width as f32 - 2.0 * 16.0 - 40.0).max(80.0);
+    let step = ct::tick_step(lane.1 - lane.0, lane_px);
+    let mut ticks: Vec<CalendarTick> = Vec::new();
+    let mut minute = lane.0;
+    while minute < lane.1 {
+        ticks.push(CalendarTick {
+            label: format!("{:02}", minute / 60).into(),
+            at: ct::minute_fraction(minute, lane),
+        });
+        minute += step * 60;
+    }
+    let now_at = if in_this_week {
+        ct::minute_fraction(now_minute, lane)
+    } else {
+        -1.0
+    };
 
     let bar = info_bar(&week, now, offset);
 
@@ -1826,6 +1856,8 @@ fn refresh_calendar(app: &SharedApp, id: &str) {
 
     let model: slint::VecModel<CalendarChip> = slint::VecModel::from(chips);
     window.set_chips(slint::ModelRc::new(model));
+    window.set_ticks(slint::ModelRc::new(slint::VecModel::from(ticks)));
+    window.set_now_at(now_at);
     window.set_today(today);
     window.set_info_label(bar.label.into());
     window.set_info_name(bar.name.into());

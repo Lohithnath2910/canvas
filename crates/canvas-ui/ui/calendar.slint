@@ -13,15 +13,21 @@ export struct CalendarChip {
     id: string,
     label: string,
     day: int,
-    top: float,
-    height: length,
-    tone: int,
+    start: float,
+    span: float,
     live: bool,
+}
+
+export struct CalendarTick {
+    label: string,
+    at: float,
 }
 
 export component CalendarWindow inherits Window {
     in-out property <string> note-title: "UNTITLED";
     in property <[CalendarChip]> chips: [];
+    in property <[CalendarTick]> ticks: [];
+    in property <float> now-at: -1.0;
     in property <[string]> day-labels: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
     in property <int> today: -1;
     in property <WidgetState> strip-state: WidgetState.idle;
@@ -95,9 +101,9 @@ export component CalendarWindow inherits Window {
 
     property <length> confirm-h: Layout.confirm-band;
     property <length> grid-w: plate.width - 2 * Layout.pad;
-    property <length> column-w:
-        (root.grid-w - 6 * Layout.calendar-col-gap) / 7;
-    property <length> time-top: Layout.calendar-label-h + 1px;
+    property <length> lane-x: Layout.cal-gutter-w;
+    property <length> lane-w: root.grid-w - Layout.cal-gutter-w;
+    property <length> row-h: (grid.height - Layout.cal-head-h) / 7;
     property <length> info-band: Layout.header-h + Layout.pad;
 
     plate := Panel {
@@ -134,23 +140,37 @@ export component CalendarWindow inherits Window {
                 - (root.confirming-delete ? root.confirm-h : 0px);
             clip: true;
 
-            for col in 7: TouchArea {
-                x: col * (root.column-w + Layout.calendar-col-gap);
-                y: root.time-top;
-                width: root.column-w;
-                height: parent.height - root.time-top;
-                enabled: !root.sheet-open && !root.confirming-delete;
-                mouse-cursor: pointer;
-                clicked => {
-                    root.day-clicked(col, self.mouse-y / self.height);
-                }
+            for tick in root.ticks: Text {
+                x: clamp(
+                    root.lane-x + tick.at * root.lane-w - self.width / 2,
+                    root.lane-x - self.width / 2,
+                    root.lane-x + root.lane-w - self.width);
+                y: 0;
+                width: 34px;
+                height: Layout.cal-head-h;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                text: tick.label;
+                color: Palette.dim;
+                font-family: Typography.interface-face;
+                font-size: Typography.label-size;
+                letter-spacing: Typography.label-tracking;
+                wrap: no-wrap;
+            }
+
+            for tick in root.ticks: Rectangle {
+                x: root.lane-x + tick.at * root.lane-w;
+                y: Layout.cal-head-h;
+                width: 1px;
+                height: parent.height - Layout.cal-head-h;
+                background: Palette.edge;
             }
 
             for day in 7: Rectangle {
-                x: day * (root.column-w + Layout.calendar-col-gap);
-                y: 0;
-                width: root.column-w;
-                height: parent.height;
+                x: 0;
+                y: Layout.cal-head-h + day * root.row-h;
+                width: parent.width;
+                height: root.row-h;
 
                 Rectangle {
                     x: 0;
@@ -162,11 +182,11 @@ export component CalendarWindow inherits Window {
 
                 Text {
                     x: 0;
-                    y: 1px;
-                    width: parent.width;
-                    height: Layout.calendar-label-h;
+                    y: 0;
+                    width: Layout.cal-gutter-w - Layout.icon-gap;
+                    height: parent.height;
                     vertical-alignment: center;
-                    horizontal-alignment: center;
+                    horizontal-alignment: right;
                     text: root.day-labels[day];
                     color: day == root.today ? Palette.text : Palette.dim;
                     font-family: Typography.interface-face;
@@ -177,33 +197,41 @@ export component CalendarWindow inherits Window {
                 }
             }
 
-            for chip in root.chips: Rectangle {
-                x: chip.day * (root.column-w + Layout.calendar-col-gap);
-                y: Layout.calendar-label-h + 1px + chip.top * max(0px,
-                    parent.height - Layout.calendar-label-h - 1px - chip.height);
-                width: root.column-w;
-                height: chip.height;
-                border-radius: Layout.radius-control;
-                background: Palette.plate-tone(chip.tone);
-                border-width: 1px;
-                border-color: chip.live ? Palette.text : Palette.edge;
+            for day in 7: TouchArea {
+                x: root.lane-x;
+                y: Layout.cal-head-h + day * root.row-h;
+                width: root.lane-w;
+                height: root.row-h;
+                enabled: !root.sheet-open && !root.confirming-delete;
+                mouse-cursor: pointer;
+                clicked => {
+                    root.day-clicked(day, self.mouse-x / root.lane-w);
+                }
+            }
 
-                if chip.live: Rectangle {
-                    x: Layout.dot-gap;
-                    y: (min(parent.height, Layout.calendar-label-h)
-                        - Layout.picker-hand-dot) / 2;
-                    width: Layout.picker-hand-dot;
-                    height: Layout.picker-hand-dot;
-                    background: Palette.signal;
+            for chip in root.chips: Rectangle {
+                x: root.lane-x + chip.start * root.lane-w;
+                y: Layout.cal-head-h + chip.day * root.row-h + Layout.gap-xs;
+                width: root.lane-w - chip.start * root.lane-w;
+                height: root.row-h - 2 * Layout.gap-xs - 1px;
+                background: transparent;
+
+                Rectangle {
+                    x: 0;
+                    y: 0;
+                    width: max(Layout.cal-bar-min, chip.span * root.lane-w);
+                    height: parent.height;
+                    border-radius: Layout.radius-control;
+                    background: Palette.elev-raised;
+                    border-width: 1px;
+                    border-color: chip.live ? Palette.text : Palette.edge;
                 }
 
                 Text {
-                    x: chip.live
-                        ? 2 * Layout.dot-gap + Layout.picker-hand-dot
-                        : Layout.icon-gap;
+                    x: Layout.icon-gap;
                     y: 0;
-                    width: parent.width - self.x - Layout.dot-gap;
-                    height: min(parent.height, Layout.calendar-label-h);
+                    width: parent.width - 2 * Layout.icon-gap;
+                    height: parent.height;
                     vertical-alignment: center;
                     text: chip.label;
                     color: Palette.text;
@@ -215,10 +243,20 @@ export component CalendarWindow inherits Window {
                 }
             }
 
+            if root.now-at >= 0.0: Rectangle {
+                x: root.lane-x + root.now-at * root.lane-w;
+                y: Layout.cal-head-h;
+                width: 1px;
+                height: parent.height - Layout.cal-head-h;
+                background: Palette.text;
+            }
+
             if root.chips.length == 0: Text {
-                x: 0;
-                y: Layout.calendar-label-h + Layout.pad;
-                width: parent.width;
+                x: root.lane-x + Layout.icon-gap;
+                y: Layout.cal-head-h + 3 * root.row-h;
+                width: root.lane-w;
+                height: root.row-h;
+                vertical-alignment: center;
                 text: "NOTHING HERE YET";
                 color: Palette.text;
                 opacity: Layout.placeholder-opacity;
