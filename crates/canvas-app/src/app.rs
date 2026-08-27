@@ -2470,14 +2470,20 @@ fn refresh_kanban(app: &SharedApp, id: &str) {
 
     let mut cards: Vec<KanbanCardData> = Vec::new();
     for (col, column) in columns.iter().enumerate() {
-        for (row, card) in doc.cards_in(&column.id).into_iter().enumerate() {
+        let mut y = KANBAN_COL_HEAD_H + KANBAN_CARD_GAP;
+        for card in doc.cards_in(&column.id) {
+            let meta = card_meta(&card.assignee, card.due);
+            let h = card_height(&meta, card.priority);
             cards.push(KanbanCardData {
                 id: card.id.into(),
                 col: col as i32,
-                row: row as i32,
+                y,
+                h,
                 title: card.title.into(),
-                meta: card_meta(&card.assignee, card.due).into(),
+                meta: meta.into(),
+                priority: card.priority,
             });
+            y += h + KANBAN_CARD_GAP;
         }
     }
 
@@ -2493,21 +2499,41 @@ fn refresh_kanban(app: &SharedApp, id: &str) {
     window.set_cards(slint::ModelRc::new(card_model));
 }
 
-fn card_meta(assignee: &str, due: i64) -> String {
-    let assignee = assignee.trim();
-    if assignee.is_empty() && due == 0 {
-        return "UNASSIGNED".to_string();
-    }
-    let who = if assignee.is_empty() {
-        "UNASSIGNED".to_string()
+const KANBAN_COL_HEAD_H: i32 = 32;
+const KANBAN_CARD_GAP: i32 = 8;
+const KANBAN_CARD_TALL: i32 = 70;
+const KANBAN_CARD_SHORT: i32 = 46;
+
+fn card_height(meta: &str, priority: i32) -> i32 {
+    if meta.is_empty() && priority <= 0 {
+        KANBAN_CARD_SHORT
     } else {
-        assignee.to_uppercase()
-    };
+        KANBAN_CARD_TALL
+    }
+}
+
+fn drop_index(heights: &[i32], drop_y: i32) -> usize {
+    let mut y = KANBAN_COL_HEAD_H + KANBAN_CARD_GAP;
+    for (i, h) in heights.iter().enumerate() {
+        if drop_y < y + h / 2 {
+            return i;
+        }
+        y += h + KANBAN_CARD_GAP;
+    }
+    heights.len()
+}
+
+fn card_meta(assignee: &str, due: i64) -> String {
+    let who = assignee.trim().to_uppercase();
     if due == 0 {
         return who;
     }
     let offset = crate::calendar_time::local_offset_ms();
-    format!("{} · {}", who, crate::calendar_time::day_stamp(due, offset))
+    let when = crate::calendar_time::day_stamp(due, offset);
+    if who.is_empty() {
+        return when;
+    }
+    format!("{who} · {when}")
 }
 
 fn kanban_edit(app: &SharedApp, id: &str, change: impl FnOnce(&KanbanDoc) -> Option<Vec<u8>>) {
@@ -2606,6 +2632,7 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
             window.set_card_assignee(card.assignee.clone().into());
             window.set_card_description(card.description.clone().into());
             window.set_card_due_label(due_label(card.due, offset).into());
+            window.set_card_priority(card.priority);
             *draft.borrow_mut() = CardDraft {
                 id: card.id.clone(),
                 due: card.due,
@@ -2762,15 +2789,50 @@ fn wire_kanban(app: &SharedApp, id: &str, window: &KanbanWindow) -> slint::Timer
         let weak = Rc::downgrade(app);
         let id = owned_id.clone();
         let handle = window.as_weak();
-        window.on_card_moved(move |card_id, col, row| {
+        window.on_card_moved(move |card_id, col, drop_y| {
             let Some(app) = weak.upgrade() else {
                 return;
             };
             end_kanban_card_edit(&handle);
             kanban_edit(&app, &id, |doc| {
                 let column = doc.columns().into_iter().nth(col.max(0) as usize)?;
-                doc.move_card(card_id.as_ref(), &column.id, row.max(0) as usize)
+                let heights: Vec<i32> = doc
+                    .cards_in(&column.id)
+                    .into_iter()
+                    .filter(|c| c.id.as_str() != card_id.as_str())
+                    .map(|c| card_height(&card_meta(&c.assignee, c.due), c.priority))
+                    .collect();
+                doc.move_card(card_id.as_ref(), &column.id, drop_index(&heights, drop_y))
             });
+        });
+    }
+
+    {
+        let weak = Rc::downgrade(app);
+        let id = owned_id.clone();
+        let handle = window.as_weak();
+        window.on_card_priority_cycled(move |card_id| {
+            let Some(app) = weak.upgrade() else {
+                return;
+            };
+            kanban_edit(&app, &id, |doc| doc.cycle_priority(card_id.as_ref()));
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            if window.get_sheet_open() {
+                let Ok(a) = app.try_borrow() else {
+                    return;
+                };
+                if let Some(widget) = a.widgets.get(&id) {
+                    if let WidgetDoc::Kanban(doc) = &widget.doc {
+                        if let Some(card) =
+                            doc.cards().into_iter().find(|c| c.id == card_id.as_str())
+                        {
+                            window.set_card_priority(card.priority);
+                        }
+                    }
+                }
+            }
         });
     }
 
@@ -4086,5 +4148,79 @@ mod tests {
         u.sel = (2, 2, 2, 2);
         u.uncover();
         assert_eq!(u.sel, (2, 2, 2, 2));
+    }
+}
+
+#[cfg(test)]
+mod kanban_card_tests {
+    use super::*;
+
+    #[test]
+    fn nothing_set_draws_no_meta_line_at_all() {
+        assert_eq!(card_meta("", 0), "");
+        assert_eq!(card_height(&card_meta("", 0), 0), KANBAN_CARD_SHORT);
+    }
+
+    #[test]
+    fn an_assignee_alone_is_not_paired_with_a_stray_separator() {
+        assert_eq!(card_meta("mira", 0), "MIRA");
+        assert_eq!(card_meta("  mira  ", 0), "MIRA");
+        assert_eq!(card_height(&card_meta("mira", 0), 0), KANBAN_CARD_TALL);
+    }
+
+    #[test]
+    fn a_due_date_alone_stands_without_the_word_unassigned() {
+        let meta = card_meta("", 1_756_000_000_000);
+        assert!(!meta.is_empty());
+        assert!(!meta.contains("UNASSIGNED"), "{meta}");
+        assert!(!meta.contains('·'), "{meta}");
+    }
+
+    #[test]
+    fn both_set_reads_as_assignee_then_date() {
+        let meta = card_meta("mira", 1_756_000_000_000);
+        assert!(meta.starts_with("MIRA · "), "{meta}");
+    }
+
+    #[test]
+    fn a_drop_above_every_card_lands_first() {
+        let heights = [KANBAN_CARD_TALL, KANBAN_CARD_TALL];
+        assert_eq!(drop_index(&heights, 0), 0);
+        assert_eq!(drop_index(&heights, KANBAN_COL_HEAD_H), 0);
+    }
+
+    #[test]
+    fn a_drop_below_every_card_lands_last() {
+        let heights = [KANBAN_CARD_SHORT, KANBAN_CARD_TALL, KANBAN_CARD_SHORT];
+        assert_eq!(drop_index(&heights, 10_000), heights.len());
+    }
+
+    #[test]
+    fn mixed_heights_still_land_on_the_card_the_pointer_is_over() {
+        let heights = [KANBAN_CARD_SHORT, KANBAN_CARD_TALL, KANBAN_CARD_SHORT];
+        let mut top = KANBAN_COL_HEAD_H + KANBAN_CARD_GAP;
+        for (i, h) in heights.iter().enumerate() {
+            assert_eq!(drop_index(&heights, top), i, "top of card {i}");
+            assert_eq!(drop_index(&heights, top + h - 1), i + 1, "foot of card {i}");
+            top += h + KANBAN_CARD_GAP;
+        }
+    }
+
+    #[test]
+    fn an_empty_column_takes_a_drop_at_index_zero() {
+        assert_eq!(drop_index(&[], 0), 0);
+        assert_eq!(drop_index(&[], 500), 0);
+    }
+}
+
+#[cfg(test)]
+mod kanban_priority_height_tests {
+    use super::*;
+
+    #[test]
+    fn a_priority_alone_is_enough_to_earn_the_second_row() {
+        assert_eq!(card_height("", 0), KANBAN_CARD_SHORT);
+        assert_eq!(card_height("", 1), KANBAN_CARD_TALL);
+        assert_eq!(card_height("", 3), KANBAN_CARD_TALL);
     }
 }

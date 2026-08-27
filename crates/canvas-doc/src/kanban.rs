@@ -5,6 +5,7 @@ use yrs::{
 };
 
 use crate::fractional::{first_key, key_between};
+use crate::todo::MAX_PRIORITY;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KanbanColumn {
@@ -20,6 +21,7 @@ pub struct KanbanCard {
     pub assignee: String,
     pub due: i64,
     pub description: String,
+    pub priority: i32,
     pub pos: String,
 }
 
@@ -118,6 +120,7 @@ impl KanbanDoc {
                 assignee: string_field(&txn, &map, "assignee"),
                 due: int_field(&txn, &map, "due"),
                 description: string_field(&txn, &map, "description"),
+                priority: int_field(&txn, &map, "priority") as i32,
                 pos: string_field(&txn, &map, "pos"),
             });
         }
@@ -163,6 +166,7 @@ impl KanbanDoc {
                 ("assignee", Any::String(String::new().into())),
                 ("due", Any::BigInt(0)),
                 ("description", Any::String(String::new().into())),
+                ("priority", Any::BigInt(0)),
                 ("pos", Any::String(pos.as_str().into())),
             ]),
         );
@@ -191,6 +195,35 @@ impl KanbanDoc {
         }
         card.insert(&mut txn, key.to_string(), Any::String(value.into()));
         Some(txn.encode_update_v1())
+    }
+
+    pub fn set_priority(&self, id: &str, level: i32) -> Option<Vec<u8>> {
+        let level = level.clamp(0, MAX_PRIORITY);
+        let mut txn = self.doc.transact_mut();
+        let Some(Out::YMap(card)) = self.cards_ref.get(&txn, id) else {
+            return None;
+        };
+        if int_field(&txn, &card, "priority") == level as i64 {
+            return None;
+        }
+        card.insert(&mut txn, "priority", Any::BigInt(level as i64));
+        Some(txn.encode_update_v1())
+    }
+
+    pub fn cycle_priority(&self, id: &str) -> Option<Vec<u8>> {
+        let current = {
+            let txn = self.doc.transact();
+            let Some(Out::YMap(card)) = self.cards_ref.get(&txn, id) else {
+                return None;
+            };
+            int_field(&txn, &card, "priority") as i32
+        };
+        let next = if !(0..MAX_PRIORITY).contains(&current) {
+            0
+        } else {
+            current + 1
+        };
+        self.set_priority(id, next)
     }
 
     pub fn set_due(&self, id: &str, due: i64) -> Option<Vec<u8>> {
@@ -743,5 +776,65 @@ mod card_description {
             assert_eq!(card.description, "a's detail");
             assert_eq!(card.assignee, "Mira");
         }
+    }
+}
+
+#[cfg(test)]
+mod priority_tests {
+    use super::*;
+
+    fn one_card() -> (KanbanDoc, String) {
+        let doc = KanbanDoc::seeded();
+        let (id, _) = doc.add_card("TODO", "Ship the strip spec");
+        (doc, id)
+    }
+
+    #[test]
+    fn a_new_card_has_no_priority() {
+        let (doc, _) = one_card();
+        assert_eq!(doc.cards()[0].priority, 0);
+    }
+
+    #[test]
+    fn priority_cycles_up_and_wraps_to_none() {
+        let (doc, id) = one_card();
+        for expected in [1, 2, 3, 0, 1] {
+            doc.cycle_priority(&id);
+            assert_eq!(doc.cards()[0].priority, expected);
+        }
+    }
+
+    #[test]
+    fn priority_is_clamped_to_the_scale() {
+        let (doc, id) = one_card();
+        doc.set_priority(&id, 99);
+        assert_eq!(doc.cards()[0].priority, MAX_PRIORITY);
+        doc.set_priority(&id, -5);
+        assert_eq!(doc.cards()[0].priority, 0);
+    }
+
+    #[test]
+    fn setting_the_same_priority_produces_no_update() {
+        let (doc, id) = one_card();
+        assert!(doc.set_priority(&id, 2).is_some());
+        assert!(doc.set_priority(&id, 2).is_none());
+    }
+
+    #[test]
+    fn priority_survives_a_snapshot_round_trip() {
+        let (doc, id) = one_card();
+        doc.set_priority(&id, 2);
+        let reloaded = KanbanDoc::load(&doc.snapshot());
+        assert_eq!(reloaded.cards()[0].priority, 2);
+    }
+
+    #[test]
+    fn a_card_written_before_priority_existed_reads_as_none() {
+        let doc = KanbanDoc::seeded();
+        let (id, _) = doc.add_card("TODO", "Older card");
+        let reloaded = KanbanDoc::load(&doc.snapshot());
+        assert_eq!(reloaded.cards()[0].priority, 0);
+        assert!(reloaded.cycle_priority(&id).is_some());
+        assert_eq!(reloaded.cards()[0].priority, 1);
     }
 }

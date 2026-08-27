@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-11` — drop `UNASSIGNED` from the Kanban card meta and add priority dots. `W3-09`, `W3-10` and `W3-15` all landed 🟡 on 2026-08-27: the Kanban column gained an 8px inner pad, its editor became the Calendar's `CardOverlay` (`Sheet` deleted, board grown to 640×460), and the time picker became a typed `HH:MM AM/PM` field after the user rejected `W3-08`'s grids on sight (`TimePicker` deleted, 6 new tests, 252 pass). **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
+**Current task:** `W3-12` — the Spreadsheet: clicking elsewhere must leave the cell. **The Kanban is finished** — `W3-09`, `W3-10`, `W3-11` and the out-of-band `W3-15` all landed 🟡 on 2026-08-27: an 8px column pad, the editor became the Calendar's `CardOverlay` (`Sheet` deleted, board grown to 640×460), `UNASSIGNED` is gone and cards carry priority on a second row they only grow when they need it, and the time picker became a typed `HH:MM AM/PM` field after the user rejected `W3-08`'s grids on sight (`TimePicker` deleted). 267 tests pass. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet — **the Spreadsheet is all that is left.**
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
-**Done:** 40 ticked. 252 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is in hand: `W3-09`, `W3-10` and the out-of-band `W3-15` all landed 🟡. `W3-11` and the Spreadsheet are what is left. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not) — see the verification queue, which now has three fresh blocks
+**Done:** 40 ticked. 267 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is **done**: `W3-09`, `W3-10`, `W3-11` and the out-of-band `W3-15` all landed 🟡. **The Spreadsheet is all that is left.** The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not), `W3-11` (the Kanban card face — clicking the dots, and dragging a mixed-height column) — see the verification queue, which now has three fresh blocks
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -138,6 +138,22 @@ all 1440 minutes; the *field* has never been typed into. `--gallery` photographe
       **OK writes nothing**. Fix the text and OK works again
 - [ ] `CANCEL` inside the picker returns to the field list without moving the event
 
+**THE KANBAN CARD FACE — `W3-11`, 2026-08-27.** Photographed with the **new `insert_kanban`
+example**, which is the fastest way to reach any of this:
+`cargo run -p canvas-app --example insert_kanban` (⚠ redirect `APPDATA` first, or it writes to
+your real database — `--remove` is type-wide and will take *every* board with it).
+- [ ] A card with no assignee, no due date and no priority shows **a title and nothing else**,
+      and is visibly **shorter** than its neighbours. The word `UNASSIGNED` must appear nowhere
+- [ ] `MIRA` alone, `30 AUG` alone — neither drags a stray `·` along with it
+- [ ] **Click the dots** on the right of a card's second row: 1 → 2 → 3 → none → 1. A card with
+      no second row has no dots — that is deliberate, use the editor
+- [ ] **Double-click a bare card** — `PRIORITY` sits beside `DUE DATE`, dots always lit enough
+      to click. Cycle it there and the card behind grows its second row
+- [ ] Close and reopen the widget — every priority is still set
+- [ ] ⚠ **Drag a card in a column with mixed heights** (one bare card, one with meta). It must
+      land in the slot the pointer is actually over. `drop_index` replaced the old uniform-step
+      row maths and this is the case that broke it before
+
 **THE KANBAN CARD EDITOR — `W3-10`, 2026-08-27.** `CardOverlay` itself was photographed through
 `--gallery` (centred card, scrim, three fields, nothing clipped). The Kanban call site is
 identical to the Calendar's, but reaching it needs a double-click.
@@ -252,12 +268,14 @@ then click `+` under **TODO** twice.
       `DUE DATE` and `DESCRIPTION`. **There is no longer an inline title editor on a card** —
       that is deliberate, this entry replaced it
 - [ ] Fill all four, press **SAVE** — the card's title changes and its meta line reads
-      `ASSIGNEE · DATE`, or `UNASSIGNED` if you left the assignee empty
+      `ASSIGNEE · DATE`. **Leave the assignee empty and it reads the date alone** — the word
+      `UNASSIGNED` was removed in `W3-11` and must never come back
 - [ ] Double-click it again — every field comes back, description included
 - [ ] Tap `DUE DATE` — the date grid appears with no clock. Pick a day, **OK**, then **SAVE** —
       the meta line shows the date
 - [ ] Reopen and press **CLEAR DUE DATE** — the due date goes and the meta drops back to just
-      the assignee. It must **not** delete the card
+      the assignee. It must **not** delete the card. Clear the assignee too and **the whole meta
+      row disappears and the card gets shorter**
 - [ ] `Esc` on the field list closes the sheet and writes nothing
 - [ ] While the sheet is open, click a card and the three `+` buttons underneath it — **nothing
       must happen.** SW-18's contract 2, and `IconButton` only just gained `enabled` for it
@@ -2569,6 +2587,30 @@ easy — the user asked for each one to be *done* before the next begins.
   Priority dots as W3-03, same component, same 1–3 vocabulary.
   *DoD:* a fresh card shows a title and nothing else · the card gets shorter when there is no
   meta, rather than leaving a gap · priority survives a restart.
+  🟡 **built 2026-08-27, box stays open** — three parts.
+  **`card_meta` no longer says `UNASSIGNED`.** Empty assignee and no due date returns `""`;
+  an assignee alone returns just the name; a due date alone returns just the date, with no
+  stray ` · `. Four tests hold each case.
+  **The card has two heights.** `KANBAN_CARD_SHORT` 46 (`pad + title + pad`) when there is
+  nothing on the second row, `KANBAN_CARD_TALL` 70 otherwise — **a priority alone is enough to
+  earn the row**, so setting one never leaves dots floating outside the card.
+  **Which means Rust now owns the card geometry.** `KanbanCardData` carries `y` and `h` in
+  pixels instead of `row`, because a uniform `card-step` cannot place mixed-height cards. The
+  Slint-side `card-y()` and `row-at()` are gone, and `card-moved` sends the dragged card's
+  **top y** rather than a row index; `drop_index()` in `app.rs` walks the destination column's
+  cumulative heights and returns the insert position. Four tests cover it, including a
+  mixed-height column and an empty one. The four pixel constants at the top of that block
+  **mirror `theme/layout.slint`** and must be changed together.
+  **Priority is `PriorityDots`, unchanged**, sitting at the right of the meta row. Clicking
+  cycles 0→1→2→3→0. `KanbanDoc` gained `priority` reusing `todo::MAX_PRIORITY`, with 6 tests
+  including a snapshot round trip and a card written before the key existed.
+  **A bare card has no meta row to hover, so the editor got a setter**: `PRIORITY` sits beside
+  `DUE DATE` in one `HorizontalLayout` row, dots always visible, and it stays in sync with the
+  card while the overlay is open. Beside rather than below on purpose — a fifth row would take
+  the card to 450 against the plate's 428 cap and clip it.
+  📸 Photographed with a new `insert_kanban` example: a bare card short with nothing on it,
+  `MIRA ■■□`, `30 AUG` with no dots, `JONAS · 30 AUG ■■■`, and a card carrying only `■□□`.
+  **Dragging and clicking the dots have not been done by hand**, so the box stays open.
 
 ### W3f — the time picker, rejected on sight 2026-08-27
 

@@ -79,14 +79,13 @@ is a CRDT bug.** It is surface work, and it is the whole of the work.
 
 **The build order is the user's, and it is not negotiable:**
 **Note → Todo → Calendar → Kanban → Spreadsheet.** Each widget is *finished* before the next
-one starts. Do not jump ahead because a task looks easy. **Three are done and the Kanban is
-open. Start at `W3-11`.**
+one starts. Do not jump ahead because a task looks easy. **Four are done. The Kanban is
+finished — start at `W3-12`, the Spreadsheet, which is all that is left of W3.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **W3-11** — drop `UNASSIGNED`, add priority | An empty assignee and no due date draws **nothing** — `card_meta` in `app.rs` returns that word today and should return empty, with the row collapsing. Priority reuses **`PriorityDots`** from W3-03, unchanged |
-| 2 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found |
-| 3 | **The VERIFICATION QUEUE** | After W3. It has five fresh blocks — Todo, Calendar, Spreadsheet, Kanban, the typed time field — none clicked |
+| 1 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found. **This is all that is left of W3** |
+| 2 | **The VERIFICATION QUEUE** | After W3. Six fresh blocks — Todo, Calendar, Spreadsheet, the Kanban spacing, the Kanban card editor, the Kanban card face, the typed time field — none clicked |
 
 **Answers already taken. Do not re-ask these:**
 - **The Calendar is day ROWS with time left→right** — built. An event is a bar whose length is
@@ -124,6 +123,7 @@ open question 12.
 **Closed in W3 so far:** `W3-09` (Kanban column pad, 🟡 — the drop outline needs a live drag),
 `W3-10` (`CardOverlay` on the Kanban, `Sheet` deleted, board to 640×460, 🟡),
 `W3-15` (the typed `HH:MM AM/PM` field, `TimePicker` deleted, 6 new tests, 🟡),
+`W3-11` (no more `UNASSIGNED`, priority dots, two card heights, `insert_kanban`, 🟡),
  `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
 (priority dots), `W3-04` (todo drag-reorder on a fractional index, 🟡), `W3-05` (Calendar day
 rows), `W3-05b` (the readability pass the user demanded mid-run), `W3-06` (NOW rule), `W3-07`
@@ -3395,3 +3395,61 @@ pickiung thing"*. Offered four shapes, they chose the typed field and added a re
 - 📸 Photographed through `--gallery`: `TIME`, `09:30 AM` in the field, a divider, then one
   date grid. **Typing has not been done by hand** — the arithmetic is covered by tests, the
   field is not — so the box stays open and the VERIFICATION QUEUE says what to type.
+
+### 2026-08-27 — W3-11: the word UNASSIGNED is gone, and cards carry priority
+
+The user: *"i dont want unassigned etc if that is empty for now, let it be as it is, maybe we
+can have a priority thing right??"*
+
+- ✅ **`card_meta` returns nothing when there is nothing.** Empty assignee and no due date is
+  `""`. An assignee alone is just the name; a due date alone is just the date, with no stray
+  ` · ` dragged along. Four tests, one per case.
+
+- 🟡 **The card has two heights, and that moved geometry into Rust.** `KANBAN_CARD_SHORT` is 46
+  (`pad + title + pad`), `KANBAN_CARD_TALL` 70. A uniform `card-step` cannot place mixed-height
+  cards, so `KanbanCardData` now carries `y` and `h` in pixels instead of `row`, computed
+  column by column in `refresh_kanban`. `card-y()` and `row-at()` are **deleted** from
+  `kanban.slint`.
+  `card-moved` sends the dragged card's **top y** instead of a row index, and `drop_index()`
+  walks the destination column's cumulative heights to find the insert position. Four tests:
+  above everything, below everything, an empty column, and a mixed-height column checked at
+  both the head and the foot of every card.
+  ⚠ The four pixel constants above `card_meta` **mirror `theme/layout.slint`** —
+  `kanban-col-head-h`, `kanban-card-gap`, `kanban-card-h`, and the short height. Change them
+  together or the drop index drifts from what is drawn.
+
+- ✅ **A priority alone earns the second row.** `card_height(meta, priority)` goes tall if
+  *either* is set, so lighting a dot on a bare card never leaves the dots hanging outside it.
+  One test.
+
+- ✅ **`KanbanDoc` gained `priority`**, reusing `todo::MAX_PRIORITY` rather than declaring a
+  second scale. 6 tests: a new card is 0, cycling wraps 1→2→3→0, out-of-range clamps, an
+  unchanged value produces no update, it survives a snapshot round trip, and **a card written
+  before the key existed reads as 0 and can still be cycled**.
+
+- 🟡 **`PriorityDots` reused unchanged**, at the right of the meta row. Clicking cycles.
+
+- 🟡 **The editor got a `PRIORITY` control beside `DUE DATE`**, in one `HorizontalLayout` row,
+  dots permanently visible. A bare card has no meta row to hover, so without this there is no
+  way to give one a priority at all. **Beside, not below**: a fifth row takes the card to 450
+  against the plate's 428 cap and clips it — the fit rule from the standing bar above.
+
+- ⚠ **Two bugs this task produced and fixed, both worth remembering.**
+  `parent.width` inside an element's *own* property binding resolves to that element's
+  **parent**, not itself — `property <length> dots-x: parent.width - ...` declared on the card
+  gave the *board's* width, which threw the dots into another column and let titles run past
+  the card border. `self.width` is the fix.
+  Then, with the dots on the title row, a 178px card left the title about 90px and every one
+  of them elided to three words. Moving the dots to the meta row gave the title back the full
+  width minus the trash icon. **Both were caught by a screenshot, not by the compiler.**
+
+- ✅ **`crates/canvas-app/examples/insert_kanban.rs`** — a seeder in the shape of
+  `insert_todo` / `insert_calendar`. Five cards covering every meta and priority combination.
+  Without it the board opens empty and none of this can be photographed at all.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo test --workspace` **267 pass**,
+  `cargo fmt --all`.
+
+- 📸 Photographed: a bare short card, `MIRA ■■□`, `30 AUG` with no dots,
+  `JONAS · 30 AUG ■■■`, and a card carrying only `■□□`. **Clicking the dots and dragging a
+  mixed-height column have not been done by hand**, so the box stays open.

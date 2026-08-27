@@ -5,6 +5,7 @@ import { Layout } from "theme/layout.slint";
 import { Panel } from "theme/surface.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPin, IconTrash, IconX, IconPlus } from "theme/icons.slint";
+import { PriorityDots } from "theme/glyphstrip.slint";
 import { IconButton, Button, ButtonVariant, TextField } from "theme/controls.slint";
 import { CardOverlay } from "theme/overlay.slint";
 import { DatePicker, DayCell, PickerField } from "theme/pickers.slint";
@@ -18,9 +19,11 @@ export struct KanbanColumnData {
 export struct KanbanCardData {
     id: string,
     col: int,
-    row: int,
+    y: int,
+    h: int,
     title: string,
     meta: string,
+    priority: int,
 }
 
 export component KanbanWindow inherits Window {
@@ -37,6 +40,7 @@ export component KanbanWindow inherits Window {
     in-out property <string> card-assignee: "";
     in-out property <string> card-description: "";
     in property <string> card-due-label: "";
+    in property <int> card-priority: 0;
 
     in-out property <int> pick-mode: 0;
     in-out property <int> pick-day: 0;
@@ -57,6 +61,7 @@ export component KanbanWindow inherits Window {
     callback drag-started();
     callback drag-ended();
     callback card-moved(string, int, int);
+    callback card-priority-cycled(string);
     callback card-added(int);
     callback card-removed(string);
     callback card-title-edited(string, string);
@@ -93,8 +98,9 @@ export component KanbanWindow inherits Window {
     property <length> held-y: 0px;
     property <string> held-title: "";
     property <string> held-meta: "";
+    property <length> held-h: Layout.kanban-card-h;
+    property <int> held-prio: 0;
     property <int> drop-col: -1;
-    property <int> drop-row: 0;
 
     property <bool> controls-visible:
         drag-area.has-hover
@@ -110,7 +116,6 @@ export component KanbanWindow inherits Window {
     property <length> column-w:
         (root.board-w - (root.col-count - 1) * Layout.kanban-col-gap) / root.col-count;
     property <length> col-step: root.column-w + Layout.kanban-col-gap;
-    property <length> card-step: Layout.kanban-card-h + Layout.kanban-card-gap;
 
     pure function column-x(col: int) -> length {
         return col * root.col-step;
@@ -120,16 +125,8 @@ export component KanbanWindow inherits Window {
         return col * root.col-step + Layout.kanban-col-pad;
     }
 
-    pure function card-y(row: int) -> length {
-        return Layout.kanban-col-head-h + Layout.kanban-card-gap + row * root.card-step;
-    }
-
     pure function col-at(x: length) -> int {
         return clamp(floor(x / root.col-step), 0, root.col-count - 1);
-    }
-
-    pure function row-at(y: length) -> int {
-        return max(0, floor((y - Layout.kanban-col-head-h) / root.card-step));
     }
 
     plate := Panel {
@@ -225,11 +222,14 @@ export component KanbanWindow inherits Window {
 
             for card in root.cards: card-box := Rectangle {
                 property <bool> held: root.held-card == card.id;
+                property <length> title-w:
+                    self.width - Layout.icon-size - 2 * Layout.kanban-card-pad
+                    - Layout.icon-gap;
 
                 x: root.card-x(card.col);
-                y: root.card-y(card.row);
+                y: card.y * 1px;
                 width: root.column-w - 2 * Layout.kanban-col-pad;
-                height: Layout.kanban-card-h;
+                height: card.h * 1px;
                 background: Palette.elev-raised;
                 border-width: 1px;
                 border-color: Palette.edge;
@@ -239,7 +239,7 @@ export component KanbanWindow inherits Window {
                 card-touch := TouchArea {
                     x: 0;
                     y: 0;
-                    width: parent.width - Layout.icon-size - Layout.kanban-card-pad - Layout.icon-gap;
+                    width: card-prio.x - Layout.icon-gap;
                     height: parent.height;
                     enabled: !root.sheet-open && !root.confirming-delete;
                     mouse-cursor: card-box.held ? grabbing : grab;
@@ -247,19 +247,23 @@ export component KanbanWindow inherits Window {
                     moved => {
                         root.held-card = card.id;
                         root.held-x = root.card-x(card.col);
-                        root.held-y = root.card-y(card.row);
+                        root.held-y = card.y * 1px;
+                        root.held-h = card.h * 1px;
                         root.held-title = card.title;
                         root.held-meta = card.meta;
+                        root.held-prio = card.priority;
                         root.held-dx = self.mouse-x - self.pressed-x;
                         root.held-dy = self.mouse-y - self.pressed-y;
                         root.drop-col = root.col-at(
                             root.column-x(card.col) + root.held-dx + root.column-w / 2);
-                        root.drop-row = root.row-at(root.card-y(card.row) + root.held-dy);
                     }
                     pointer-event(event) => {
                         if (event.kind == PointerEventKind.up && root.held-card == card.id) {
-                            if (root.drop-col != card.col || root.drop-row != card.row) {
-                                root.card-moved(card.id, root.drop-col, root.drop-row);
+                            if (root.held-dx != 0px || root.held-dy != 0px) {
+                                root.card-moved(
+                                    card.id,
+                                    root.drop-col,
+                                    round((card.y * 1px + root.held-dy) / 1px));
                             }
                             root.held-card = "";
                             root.held-dx = 0px;
@@ -272,7 +276,7 @@ export component KanbanWindow inherits Window {
                 Text {
                     x: Layout.kanban-card-pad;
                     y: Layout.kanban-card-pad;
-                    width: parent.width - 2 * Layout.kanban-card-pad;
+                    width: card-box.title-w;
                     height: Layout.checkbox-row-h;
                     vertical-alignment: center;
                     text: card.title;
@@ -283,10 +287,10 @@ export component KanbanWindow inherits Window {
                     wrap: no-wrap;
                 }
 
-                Text {
+                if card.meta != "": Text {
                     x: Layout.kanban-card-pad;
                     y: Layout.kanban-card-pad + Layout.checkbox-row-h + Layout.kanban-card-gap;
-                    width: parent.width - 2 * Layout.kanban-card-pad;
+                    width: card-box.title-w;
                     height: Typography.label-line;
                     vertical-alignment: center;
                     text: card.meta;
@@ -296,6 +300,14 @@ export component KanbanWindow inherits Window {
                     letter-spacing: Typography.label-tracking;
                     overflow: elide;
                     wrap: no-wrap;
+                }
+
+                card-prio := PriorityDots {
+                    x: parent.width - Layout.kanban-card-pad - self.width;
+                    y: parent.height - Layout.kanban-card-pad
+                        - Typography.label-line / 2 - self.height / 2;
+                    level: card.priority;
+                    cycled => { root.card-priority-cycled(card.id); }
                 }
 
                 card-del := IconButton {
@@ -312,7 +324,7 @@ export component KanbanWindow inherits Window {
                 x: root.held-x + root.held-dx;
                 y: root.held-y + root.held-dy;
                 width: root.column-w - 2 * Layout.kanban-col-pad;
-                height: Layout.kanban-card-h;
+                height: root.held-h;
                 background: Palette.elev-raised;
                 border-width: 1px;
                 border-color: Palette.edge;
@@ -336,7 +348,7 @@ export component KanbanWindow inherits Window {
                     wrap: no-wrap;
                 }
 
-                Text {
+                if root.held-meta != "": Text {
                     x: Layout.kanban-card-pad;
                     y: Layout.kanban-card-pad + Layout.checkbox-row-h + Layout.kanban-card-gap;
                     width: parent.width - 2 * Layout.kanban-card-pad;
@@ -349,6 +361,13 @@ export component KanbanWindow inherits Window {
                     letter-spacing: Typography.label-tracking;
                     overflow: elide;
                     wrap: no-wrap;
+                }
+
+                PriorityDots {
+                    x: parent.width - Layout.kanban-card-pad - self.width;
+                    y: parent.height - Layout.kanban-card-pad
+                        - Typography.label-line / 2 - self.height / 2;
+                    level: root.held-prio;
                 }
             }
         }
@@ -410,12 +429,43 @@ export component KanbanWindow inherits Window {
                 accepted(v) => { root.card-committed(); }
             }
 
-            if root.pick-mode == 0: PickerField {
-                label: "DUE DATE";
-                value: root.card-due-label;
-                picked => {
-                    root.pick-opened();
-                    root.pick-mode = 1;
+            if root.pick-mode == 0: HorizontalLayout {
+                spacing: Layout.icon-gap;
+
+                PickerField {
+                    label: "DUE DATE";
+                    value: root.card-due-label;
+                    picked => {
+                        root.pick-opened();
+                        root.pick-mode = 1;
+                    }
+                }
+
+                Rectangle {
+                    background: Colors.transparent;
+
+                    Text {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: Typography.label-line;
+                        vertical-alignment: center;
+                        text: "PRIORITY";
+                        color: Palette.dim;
+                        font-family: Typography.interface-face;
+                        font-size: Typography.label-size;
+                        letter-spacing: Typography.label-tracking;
+                        wrap: no-wrap;
+                    }
+
+                    PriorityDots {
+                        x: 0;
+                        y: Typography.label-line + Layout.field-gap
+                            + (Layout.field-h - self.height) / 2;
+                        level: root.card-priority;
+                        revealed: true;
+                        cycled => { root.card-priority-cycled(root.editing-id); }
+                    }
                 }
             }
 
