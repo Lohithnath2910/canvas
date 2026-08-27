@@ -3,11 +3,11 @@
 **Purpose:** a resumable, ordered list of small units of work. A new session reads
 [progress.md](progress.md) first for the state of the project, then starts here at the
 first unticked box.
-
 **Last updated:** 2026-08-27
-**Current task:** `SW-13` / `SW-14` — the Spreadsheet, which is **not built at all**. It is the last feature in Stage W2. Everything before it is done; four blocks of it are 🟡 and waiting on the user in the VERIFICATION QUEUE, and the user asked on 2026-08-27 to stop development for the day after `SW-21`.
+**Last updated:** 2026-08-27
+**Current task:** `SW-14` — the Spreadsheet **widget window**. `SW-13` closed on 2026-08-27: `SheetDoc` is built, ticked and covered by 20 tests, so the CRDT half of the Spreadsheet is done and only the surface is left. It is the last feature in Stage W2; four blocks of Stage W2 are 🟡 and waiting on the user in the VERIFICATION QUEUE.
 **Stage:** W2 — the rework the user asked for on 2026-08-26 after walking the app. Stage W is built; Stage W2 fixes two live bugs, adds the editing layer neither §10.3 nor §10.4 specifies, and unblocks the Spreadsheet. The Whiteboard is deferred.
-**Done:** 31 ticked. 188 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Done:** 32 ticked. 209 tests pass. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
 **Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01` (the type-dispatched runtime), `SW-03` (the four components, via `--gallery`), `SW-05`+`SW-02` (the Todo widget), `SW-16` (three header controls), `SW-08` (the Calendar widget, seeded and ready to look at), `SW-17` (the footer glyph strip — and the Shared Document and Calendar are creatable for the first time), `SW-10` (the Kanban board and its card drag), `SW-22` (typing into a card or row no longer dies after one character), `S1-28` (home empty state), `S1-29` (open/close animation), `S1-30` (off-screen clamping), `S1-31`–`S1-35` (the palette and its hotkey), `S1-51` (drag feel) — see the verification queue
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
@@ -1887,7 +1887,7 @@ would otherwise be re-introduced three more times.
 Open questions 5, 6 and 7 were answered by the user on 2026-08-26. All three answers are
 folded into the two tasks below; the questions are closed.
 
-- [ ] **SW-13 · `SheetDoc`** — `L`
+- [x] **SW-13 · `SheetDoc`** — `L`
   Needs: SW-04. **Answer to open question 6 — the one that decides the shape:**
   > *"yes can do anything possible"* — rows and columns can be inserted **mid-sheet**.
 
@@ -1909,6 +1909,22 @@ folded into the two tasks below; the questions are closed.
   *DoD:* insert a row in the middle of a filled sheet and every cell below keeps its value ·
   two docs inserting rows at the same index converge with no loss · a merge survives a
   reload · deleting a row does not orphan a merge anchored on it.
+  ✅ **Done 2026-08-27, and ticked on tests, not on eyes** — this is pure logic with no
+  surface, so its whole DoD is checkable in-process and all four parts are covered by the
+  20 tests in `crates/canvas-doc/src/sheet.rs`. `rows`/`cols` are `yrs::Array`s of `{id}`,
+  `cells` is a `yrs::Map` keyed `"<row_id>:<col_id>"` → `{value}`, `merges` is keyed by the
+  anchor cell key → `{rows, cols}`, and `col_w`/`row_h` are keyed by axis id. Because a
+  cell's key names the row and column *by identity*, inserting a row anywhere rewrites
+  nothing — the test fills 7×7, inserts at index 3, and re-reads all 49 originals.
+  **Two rules that are decisions, not accidents:**
+  - **Clearing a cell removes its entry** rather than storing `""`, so the map stays sparse
+    and a 7×7 sheet with three filled cells costs three cells.
+  - **Deleting a row or column drops every merge whose rectangle it intersects**, not just
+    the ones anchored on it. Half a merge is not a state worth representing, and the
+    alternative — shrinking the span — has to decide what happens to the anchor when the
+    anchor row is the one deleted. One rule, stated once.
+  `merge` refuses a range that runs off the sheet, overlaps an existing merge, or covers
+  fewer than two cells. `column_label` runs `A…Z, AA…` for the header band SW-14 draws.
 
 - [ ] **SW-14 · Spreadsheet widget window** — `L`
   Needs: SW-13, SW-18. **Answer to open question 7:**

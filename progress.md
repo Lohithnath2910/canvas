@@ -55,10 +55,9 @@ task IDs closed, what is 🟡 waiting on the user, and any question that blocked
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **SW-13** — `SheetDoc` | **Not started at all.** The user asked on 2026-08-26 whether the Spreadsheet existed and the answer was no. Its entry already carries the answer to open question 6, which decides the whole CRDT shape: rows and columns are `yrs::Array`s of `{id}` maps, cells are keyed by `(row_id, col_id)`, and **no fractional index is needed** — unlike the Kanban, rows never change parent |
-| 2 | **SW-14** — the Spreadsheet widget | **Read the ⚠ in its entry twice before writing the grid:** one `TouchArea` over the whole grid, never one per cell, and the inline cell editor must use `rows_locked_by_editor` the way `SW-22` did or typing will die after one character |
-| 3 | **The VERIFICATION QUEUE walk-through** | **This is now the critical path, not the backlog.** The user asked for the queue to be cleared and it has instead grown by four blocks in one run. Everything in it compiles, passes clippy at `-D warnings` and passes 188 tests, and none of it has been clicked |
-| 4 | **SW-15** — Stage W sign-off audit | After the queue |
+| 1 | **SW-14** — the Spreadsheet widget | **`SW-13` is done, so the document under it exists**: `SheetDoc` in `canvas-doc/src/sheet.rs`, 20 tests, `rows()`/`cols()`/`value()`/`set_value()`/`merge()`/`is_covered()`/`col_width()`. **Read the ⚠ in its entry twice before writing the grid:** one `TouchArea` over the whole grid, never one per cell, and the inline cell editor must use `rows_locked_by_editor` the way `SW-22` did or typing will die after one character |
+| 2 | **The VERIFICATION QUEUE walk-through** | **This is now the critical path, not the backlog.** The user asked for the queue to be cleared and it has instead grown by four blocks in one run. Everything in it compiles, passes clippy and passes 209 tests, and none of it has been clicked |
+| 3 | **SW-15** — Stage W sign-off audit | After the queue |
 
 **The standing bar, raised by the user on 2026-08-26:** *"i want whole app to be awesomely
 smooth all over while taking very less ram usage"*, and *"make sure the app is not glitching"*.
@@ -66,7 +65,7 @@ smooth all over while taking very less ram usage"*, and *"make sure the app is n
 against §2's 20–40 idle and < 50 total; per-widget marginal cost is ~2.5 MB. **The smoothness
 half still needs a release build in front of the user**; open question 12.
 
-Closed in Stage W2: `SW-22` (typing survives past one character — the lock is
+Closed in Stage W2: `SW-13` (`SheetDoc` — ticked on 20 tests, no surface to watch; note the two rules in its entry: an empty cell is deleted rather than stored, and deleting a row drops every merge it intersects), `SW-22` (typing survives past one character — the lock is
 `rows_locked_by_editor`; read its entry before writing any other repeater), `SW-23`
 (`--open-kind`), `SW-18` (the `Sheet` — read its **two caller contracts** before building any
 editor on it), `SW-24` (the `document` type is gone), `SW-25` (the alignment pass, every surface
@@ -178,7 +177,7 @@ may quietly break it. If you touch one of these files, re-check the matching lin
 | Body scrollbar: thumb tracks the wheel and drags | `ScrollBar` in `theme/controls.slint`, wired in `sticky-note.slint` | Making the 8px gutter conditional on overflow (reflow oscillation), or putting a `TouchArea` over the `TextInput` (§13.3) |
 | Text survives a restart; notes reopen where they were | `canvas-storage`, `App::flush_all`, the 500ms flush timer | Writing to disk on the keystroke path — updates buffer in `Note::pending_updates` (trap 7) |
 | Typing never stutters | the same buffering | Any I/O, network or disk, in an `edited =>` handler (Hard Constraint 2) |
-| 150 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
+| 209 tests pass, clippy clean | `cargo test --workspace`, `cargo clippy --workspace --all-targets` | Landing anything without running both |
 | Every user override in the table below | see **Decisions that OVERRIDE the spec** | Following CLAUDE.md literally where the table disagrees with it |
 
 ---
@@ -215,8 +214,8 @@ Canvas/
     canvas-app/      runtime: App owns the Store + live windows. app.rs is the core.
     canvas-ui/       Slint UI. ui/theme/* is the design system, ui/*.slint the windows.
     canvas-doc/      CRDT documents (yrs). StickyNoteDoc, UndoHistory, TodoListDoc,
-                     CalendarDoc, KanbanDoc, WhiteboardDoc + a hand-written fractional
-                     index. 106 tests. Only WhiteboardDoc has NO window yet.
+                     CalendarDoc, KanbanDoc, WhiteboardDoc, SheetDoc + a hand-written fractional
+                     index. 141 tests. WhiteboardDoc and SheetDoc have NO window yet.
     canvas-storage/  SQLite. 16 tests.
     canvas-sync/     empty stub. Nothing here yet.
   handoff/           pristine spec + fonts + design screenshots. Do not edit.
@@ -234,7 +233,7 @@ cargo run -p canvas-app -- --open-kind kanban    # put one widget of that kind o
                                                  # creating one if there is none (SW-23).
                                                  # Takes either word: kanban or board
 cargo run -p canvas-app -- --open <widget-id>    # the same for one specific widget
-cargo test --workspace               # 150 tests
+cargo test --workspace               # 209 tests
 cargo clippy --workspace --all-targets   # must be clean before ticking any task
 cargo run -p canvas-app --features gpu -- --gpu   # GPU is opt-in twice, never default
 ```
@@ -2868,3 +2867,47 @@ added to the VERIFICATION QUEUE in this run alone — the Kanban card drag, the 
 Calendar editor sheet, and the Kanban card sheet — on top of everything that was already there.
 Every one of them is code that compiles, passes clippy at `-D warnings`, passes 188 tests, and
 has never been clicked. **The queue is now the critical path, not the backlog.**
+
+---
+
+### 2026-08-27 — SW-13: `SheetDoc`, the document under the Spreadsheet
+
+- ✅ **`SheetDoc` is built, tested and ticked** — `crates/canvas-doc/src/sheet.rs`, 20 tests.
+  This is the first Stage W2 task in a while that could be honestly **ticked rather than 🟡**:
+  it has no surface at all, so its entire DoD is checkable in-process and there is nothing for
+  the user to click. All four DoD clauses have a test named after them.
+- ✅ **The shape, which is the whole point of the task.** Open question 6 was answered *"yes can
+  do anything possible"* — rows and columns insert mid-sheet — so a cell keyed by
+  `(row_index, col_index)` was never an option. Instead:
+  - `rows` and `cols` are **`yrs::Array`s of `{id}` maps**. `yrs::Array` is already a sequence
+    CRDT, and rows never change parent, so **no fractional index is needed here** — the one
+    real difference from the Kanban, where cards live in a `Map` precisely because they move
+    between columns.
+  - `cells` is a **`yrs::Map` keyed `"<row_id>:<col_id>"` → `{value}`**. The key names the row
+    and column *by identity*, so reshaping the sheet rewrites no keys. The test fills 7×7,
+    inserts a row at index 3, and re-reads all 49 original values.
+  - `merges` is keyed by the **anchor** cell key → `{rows, cols}`; `col_w`/`row_h` by axis id.
+- ✅ **Two rules that are decisions, not accidents,** and any future editor has to know them:
+  1. **Clearing a cell removes its entry** rather than storing `""`. The map stays sparse, so a
+     7×7 sheet with three filled cells costs three cells, not 49 — which is what keeps a
+     scrolled sheet inside the 5–15 MB per-widget budget when SW-14 grows it past 7×7.
+  2. **Deleting a row or column drops every merge whose rectangle it intersects**, not only the
+     ones anchored on it. Half a merge is not a state worth representing, and the alternative —
+     shrinking the span — has to invent an answer for what happens to the anchor when the anchor
+     row is the deleted one. One rule, stated once, tested twice.
+- ✅ **`merge` refuses what it should:** off the sheet, overlapping an existing merge, or a range
+  of fewer than two cells. `unmerge` frees the range again. `column_label` runs `A…Z, AA…` for
+  the header band SW-14 will draw.
+- ✅ **Convergence, tested four ways:** two docs inserting a row at the same index keep both
+  rows · two docs typing into different cells keep both values · two docs typing into the same
+  cell agree · one side deleting a row while the other types into it converges without panic.
+  Plus idempotence, `diff_since` minimality, and a garbage update rejected without loss.
+- `cargo clippy --workspace --all-targets` clean, `cargo fmt --all`, **209 tests pass** (was
+  188; canvas-doc alone is now 141).
+
+**Nothing here is 🟡 and nothing was added to the VERIFICATION QUEUE** — for once. The queue is
+unchanged and is still the critical path. The next task is **SW-14**, the Spreadsheet window,
+which is where all the risk in this feature actually lives: one `TouchArea` over the whole grid
+resolving the cell from `mouse-x`/`mouse-y`, never one per cell (§13.3 at scale), and an inline
+cell editor that must take the `rows_locked_by_editor` lock SW-22 established or typing will die
+after one character.

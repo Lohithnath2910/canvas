@@ -6,6 +6,8 @@ pub mod fractional;
 pub use fractional::key_between;
 pub mod calendar;
 pub use calendar::{CalendarDoc, CalendarEvent};
+pub mod sheet;
+pub use sheet::{SheetDoc, SheetMerge};
 pub mod todo;
 pub use todo::{TodoItem, TodoListDoc};
 
