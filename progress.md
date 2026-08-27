@@ -80,14 +80,13 @@ is a CRDT bug.** It is surface work, and it is the whole of the work.
 **The build order is the user's, and it is not negotiable:**
 **Note → Todo → Calendar → Kanban → Spreadsheet.** Each widget is *finished* before the next
 one starts. Do not jump ahead because a task looks easy. **Three are done and the Kanban is
-open. Start at `W3-15` — the user rejected the time picker mid-run and it is the newest word.**
+open. Start at `W3-11`.**
 
 | Next | Task | Why |
 |---|---|---|
-| 1 | **W3-15** — the typed time field | The user rejected the `HOUR`/`MINUTE` grids on sight: *"looking same like date pickiung thing"*. They chose a typed field and asked for **AM/PM in, 24-hour stored**. Newest word, so it goes first |
-| 2 | **W3-11** — drop `UNASSIGNED`, add priority | An empty assignee and no due date draws **nothing** — `card_meta` in `app.rs` returns that word today and should return empty, with the row collapsing. Priority reuses **`PriorityDots`** from W3-03, unchanged |
-| 3 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found |
-| 4 | **The VERIFICATION QUEUE** | After W3. It has four fresh blocks — Todo, Calendar, Spreadsheet, Kanban — none clicked |
+| 1 | **W3-11** — drop `UNASSIGNED`, add priority | An empty assignee and no due date draws **nothing** — `card_meta` in `app.rs` returns that word today and should return empty, with the row collapsing. Priority reuses **`PriorityDots`** from W3-03, unchanged |
+| 2 | **W3-12 → W3-14** — Spreadsheet | Click elsewhere to leave a cell (the grid `TouchArea` is gated `editing-id == ""`, which *is* the bug) · scroll **both** ways · resize that can actually be found |
+| 3 | **The VERIFICATION QUEUE** | After W3. It has five fresh blocks — Todo, Calendar, Spreadsheet, Kanban, the typed time field — none clicked |
 
 **Answers already taken. Do not re-ask these:**
 - **The Calendar is day ROWS with time left→right** — built. An event is a bar whose length is
@@ -124,6 +123,7 @@ open question 12.
 
 **Closed in W3 so far:** `W3-09` (Kanban column pad, 🟡 — the drop outline needs a live drag),
 `W3-10` (`CardOverlay` on the Kanban, `Sheet` deleted, board to 640×460, 🟡),
+`W3-15` (the typed `HH:MM AM/PM` field, `TimePicker` deleted, 6 new tests, 🟡),
  `W3-01` (scrollbar auto-hides, 🟡), `W3-02` (clickable `+`), `W3-03`
 (priority dots), `W3-04` (todo drag-reorder on a fractional index, 🟡), `W3-05` (Calendar day
 rows), `W3-05b` (the readability pass the user demanded mid-run), `W3-06` (NOW rule), `W3-07`
@@ -3352,3 +3352,46 @@ inserted. **Always redirect `APPDATA` first** — the recipe is in START HERE.
 - ⚠ **`--gallery` does not answer to `-Title "Canvas"`.** Its window is titled
   `Canvas — component gallery`, and `shot.ps1` matches the title exactly, so it throws
   *"no visible window titled Canvas"*. Pass `-Title "Canvas — component gallery"`.
+
+### 2026-08-27 — W3-15: the time picker stops being a second calendar
+
+The user saw a `--gallery` frame mid-run and said: *"uh the time is thats not how its meant to
+be right?? its wrong maybe have a simpler and better variant than looking same like date
+pickiung thing"*. Offered four shapes, they chose the typed field and added a requirement:
+*"option 1 but add am or pm please and then later translate it to 24 hrs"*.
+
+- ✅ **`parse_clock` and `format_clock_12` in `canvas-app/src/calendar_time.rs`, 6 new tests.**
+  `format_clock_12` renders a minute-of-day as `09:30 PM`. `parse_clock` goes the other way and
+  is deliberately lenient: `9:30 pm`, `  9:30PM  `, `09:30 Pm`, `0930PM`, `21:30` and `2130` all
+  land on the same 1290. Without a meridiem it reads 24-hour, so `00:00` and `23:59` work.
+  It **refuses rather than clamps** — `13:00 PM`, `0:30 AM`, `24:00`, `9:60`, `930`, `9.30`,
+  `nine` and the empty string all return `None`.
+  The test that matters is `every_minute_of_the_day_survives_a_round_trip`: format then parse,
+  all 1440 minutes, exact equality. **The document still stores 24-hour** — only the field face
+  is 12-hour, which is what the user asked for.
+
+- ✅ **No new UI component.** The field is a plain `TextField` with `label: "TIME"` and its
+  existing `error` property, which is border-only with no red text (§6.6). Nothing was invented:
+  no message row, no new token, no new colour.
+
+- ✅ **`TimePicker` is deleted**, and its private `GridCell` with it — nothing else used either.
+  Its two callers both moved: the Calendar's picker card, and the gallery demo, which is now the
+  same typed field and still drives the round-trip readout, so the demo proves
+  parse → minute-of-day → epoch → back rather than showing a component that no longer exists.
+
+- 🟡 **The picker card keeps its shape and got shorter.** Still `[date grid | right column]` at
+  `picker-card-w`, but the right column is one field, **vertically centred** against the grid
+  rather than pinned to its top — a lone 64px field at the top of a 305px column reads like an
+  accident. Card height went `403` where the two-grid version wanted `475`; the Calendar plate
+  caps at `428`, so the old shape would have clipped had it been stacked. It fits with room now.
+
+- ✅ **A bad time refuses to commit.** `on_pick_committed` returns early while
+  `pick-time-error` is set, so `OK` on garbage writes nothing and the border stays `signal`.
+  Fixing the text clears the flag and `OK` works again.
+
+- ✅ `cargo clippy --workspace --all-targets` clean, `cargo test --workspace` **252 pass**
+  (246 + 6), `cargo fmt --all`.
+
+- 📸 Photographed through `--gallery`: `TIME`, `09:30 AM` in the field, a divider, then one
+  date grid. **Typing has not been done by hand** — the arithmetic is covered by tests, the
+  field is not — so the box stays open and the VERIFICATION QUEUE says what to type.

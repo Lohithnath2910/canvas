@@ -204,6 +204,65 @@ pub fn date_stamp(ts_ms: i64, offset_ms: i64) -> String {
     )
 }
 
+pub fn format_clock_12(minute_of_day: i64) -> String {
+    let m = minute_of_day.rem_euclid(MINUTES_PER_DAY);
+    let hour24 = m / 60;
+    let hour12 = match hour24 % 12 {
+        0 => 12,
+        h => h,
+    };
+    let meridiem = if hour24 < 12 { "AM" } else { "PM" };
+    format!("{hour12:02}:{:02} {meridiem}", m % 60)
+}
+
+pub fn parse_clock(text: &str) -> Option<i64> {
+    let upper = text.trim().to_ascii_uppercase();
+    let (digits, meridiem) = if let Some(rest) = upper.strip_suffix("AM") {
+        (rest, Some(false))
+    } else if let Some(rest) = upper.strip_suffix("PM") {
+        (rest, Some(true))
+    } else {
+        (upper.as_str(), None)
+    };
+
+    let digits: String = digits.chars().filter(|c| !c.is_whitespace()).collect();
+    let (hour, minute) = match digits.split_once(':') {
+        Some((h, m)) => (h.parse::<i64>().ok()?, m.parse::<i64>().ok()?),
+        None => {
+            if digits.len() != 4 || !digits.chars().all(|c| c.is_ascii_digit()) {
+                return None;
+            }
+            (digits[..2].parse().ok()?, digits[2..].parse().ok()?)
+        }
+    };
+
+    if !(0..=59).contains(&minute) {
+        return None;
+    }
+
+    let hour24 = match meridiem {
+        Some(pm) => {
+            if !(1..=12).contains(&hour) {
+                return None;
+            }
+            match (hour, pm) {
+                (12, false) => 0,
+                (12, true) => 12,
+                (h, false) => h,
+                (h, true) => h + 12,
+            }
+        }
+        None => {
+            if !(0..=23).contains(&hour) {
+                return None;
+            }
+            hour
+        }
+    };
+
+    Some(hour24 * 60 + minute)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -542,5 +601,64 @@ mod tests {
         assert_eq!(minute_fraction(8 * 60, window), 0.0);
         assert_eq!(minute_fraction(20 * 60, window), 1.0);
         assert!((minute_fraction(14 * 60, window) - 0.5).abs() < 0.001);
+    }
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use super::*;
+
+    #[test]
+    fn twelve_hour_text_reads_back_as_typed() {
+        assert_eq!(format_clock_12(0), "12:00 AM");
+        assert_eq!(format_clock_12(9 * 60 + 30), "09:30 AM");
+        assert_eq!(format_clock_12(12 * 60), "12:00 PM");
+        assert_eq!(format_clock_12(13 * 60 + 5), "01:05 PM");
+        assert_eq!(format_clock_12(23 * 60 + 59), "11:59 PM");
+    }
+
+    #[test]
+    fn meridiem_maps_onto_twenty_four_hours() {
+        assert_eq!(parse_clock("12:00 AM"), Some(0));
+        assert_eq!(parse_clock("9:30 AM"), Some(9 * 60 + 30));
+        assert_eq!(parse_clock("12:00 PM"), Some(12 * 60));
+        assert_eq!(parse_clock("9:30 PM"), Some(21 * 60 + 30));
+        assert_eq!(parse_clock("11:59 PM"), Some(23 * 60 + 59));
+    }
+
+    #[test]
+    fn parsing_is_lenient_about_case_spacing_and_separators() {
+        let want = Some(21 * 60 + 30);
+        assert_eq!(parse_clock("9:30 pm"), want);
+        assert_eq!(parse_clock("  9:30PM  "), want);
+        assert_eq!(parse_clock("09:30 Pm"), want);
+        assert_eq!(parse_clock("0930PM"), want);
+        assert_eq!(parse_clock("21:30"), want);
+        assert_eq!(parse_clock("2130"), want);
+    }
+
+    #[test]
+    fn twenty_four_hour_input_needs_no_meridiem() {
+        assert_eq!(parse_clock("00:00"), Some(0));
+        assert_eq!(parse_clock("23:59"), Some(23 * 60 + 59));
+        assert_eq!(parse_clock("7:05"), Some(7 * 60 + 5));
+    }
+
+    #[test]
+    fn garbage_and_out_of_range_refuse_rather_than_clamp() {
+        for bad in [
+            "", "  ", "nine", "9:60", "24:00", "13:00 PM", "0:30 AM", "-1:00", "9:", ":30", "930",
+            "09301", "9.30", "9:3o",
+        ] {
+            assert_eq!(parse_clock(bad), None, "{bad:?} should not parse");
+        }
+    }
+
+    #[test]
+    fn every_minute_of_the_day_survives_a_round_trip() {
+        for minute in 0..MINUTES_PER_DAY {
+            let text = format_clock_12(minute);
+            assert_eq!(parse_clock(&text), Some(minute), "{text}");
+        }
     }
 }

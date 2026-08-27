@@ -1720,6 +1720,22 @@ pub fn gallery() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let handle = window.as_weak();
+        window.on_time_typed(move |text| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            match ct::parse_clock(text.as_str()) {
+                Some(minute) => {
+                    window.set_pick_minute(minute as i32);
+                    window.set_pick_time_error(false);
+                }
+                None => window.set_pick_time_error(true),
+            }
+        });
+    }
+
+    {
+        let handle = window.as_weak();
         window.on_pick_committed(move || {
             let Some(window) = handle.upgrade() else {
                 return;
@@ -1991,7 +2007,10 @@ fn open_picker(window: &CalendarWindow, draft: &Draft, which: i32, offset: i64) 
     drop(d);
 
     window.set_pick_day(local_day as i32);
-    window.set_pick_minute(ct::minute_of_day(ts, offset) as i32);
+    let minute = ct::minute_of_day(ts, offset);
+    window.set_pick_minute(minute as i32);
+    window.set_pick_time(ct::format_clock_12(minute).into());
+    window.set_pick_time_error(false);
     window.set_pick_heads(slint::ModelRc::new(slint::VecModel::from(weekday_heads(
         FIRST_WEEKDAY,
     ))));
@@ -2118,12 +2137,31 @@ fn wire_calendar(app: &SharedApp, id: &str, window: &CalendarWindow) -> slint::T
 
     {
         let handle = window.as_weak();
+        window.on_time_typed(move |text| {
+            let Some(window) = handle.upgrade() else {
+                return;
+            };
+            match crate::calendar_time::parse_clock(text.as_str()) {
+                Some(minute) => {
+                    window.set_pick_minute(minute as i32);
+                    window.set_pick_time_error(false);
+                }
+                None => window.set_pick_time_error(true),
+            }
+        });
+    }
+
+    {
+        let handle = window.as_weak();
         let draft = draft.clone();
         window.on_pick_committed(move |which| {
             use crate::calendar_time as ct;
             let Some(window) = handle.upgrade() else {
                 return;
             };
+            if window.get_pick_time_error() {
+                return;
+            }
             let offset = ct::local_offset_ms();
             let (y, m, d) = ct::civil_from_days(window.get_pick_day() as i64);
             let picked = ct::compose_local_ms(y, m, d, window.get_pick_minute() as i64, offset);

@@ -5,10 +5,10 @@
 first unticked box.
 
 **Last updated:** 2026-08-27
-**Current task:** `W3-15` — the time picker becomes a typed `HH:MM AM/PM` field. The user rejected `W3-08`'s `HOUR`/`MINUTE` grids on sight mid-run on 2026-08-27 (*"looking same like date pickiung thing"*) and chose a typed field with **AM/PM in, 24-hour stored** — newest word, so it jumps the queue ahead of `W3-11`. `W3-09` and `W3-10` landed 🟡 the same day: the Kanban column gained an 8px inner pad, and its editor is now the Calendar's `CardOverlay` with `Sheet` deleted and the board grown to 640×460 so the card stops clipping. **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
+**Current task:** `W3-11` — drop `UNASSIGNED` from the Kanban card meta and add priority dots. `W3-09`, `W3-10` and `W3-15` all landed 🟡 on 2026-08-27: the Kanban column gained an 8px inner pad, its editor became the Calendar's `CardOverlay` (`Sheet` deleted, board grown to 640×460), and the time picker became a typed `HH:MM AM/PM` field after the user rejected `W3-08`'s grids on sight (`TimePicker` deleted, 6 new tests, 252 pass). **Stage W3** opened on 2026-08-27 when the user walked every widget and reported **19 issues across five of them**. The build order is **theirs**: Note → Todo → Calendar → Kanban → Spreadsheet.
 **Stage:** W3 — the second walk-through. The user walked every widget on 2026-08-27 and reported 19 issues across five of them. Stage W2 is feature-complete and its documents are right; W3 is entirely about surfaces. Three answers were taken before building: the Calendar becomes day ROWS with time on the x-axis, priority reads as a count of 1–3 dots, and the order is widget by widget as the user listed them.
-**Done:** 40 ticked. 246 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is in hand: `W3-09` landed 🟡. Spreadsheet is what is left after it. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
-**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click) — see the verification queue, which now has three fresh blocks
+**Done:** 40 ticked. 252 tests pass. **Stage W3 is past half** — Note, Todo and Calendar rebuilt on 2026-08-27, and the Kanban is in hand: `W3-09`, `W3-10` and the out-of-band `W3-15` all landed 🟡. `W3-11` and the Spreadsheet are what is left. The run of 2026-08-26 stopped on the **usage limit**, not the backlog — the user said so directly. Stage W2 added 6 tasks on 2026-08-26 (SW-18 to SW-23); SW-12, SW-13 and SW-14 were rewritten into it. `SW-24` was added mid-run on 2026-08-26 when the user asked for the `document` type to be ripped out.
+**Left 🟡 for the user to look at:** `S1-43` (undo/redo), `S1-44` (reduced motion), `S1-47` (home scrollbar), `SW-01`, `SW-03` (via `--gallery`), `SW-05`+`SW-02` (Todo), `SW-16`, `SW-08`, `SW-17`, `SW-10` (Kanban + card drag), `SW-22`, `S1-28`–`S1-35` (home empty state, animation, clamping, palette), `S1-51` (drag feel), `SW-14` (Spreadsheet), `W3-01` (scrollbar auto-hide — hover and timing, not photographable), `W3-04` (todo drag-reorder), `W3-08` (the month grid, which a forced-open frame cannot fill), `W3-09` (the Kanban drop outline, which only exists mid-drag), `W3-10` (the Kanban card editor, which needs a double-click), `W3-15` (the typed time field, whose parse is tested but whose typing is not) — see the verification queue, which now has three fresh blocks
 
 **Told "go" and nothing else?** Do not ask what to work on and do not stop after one task.
 Read the 🟢 GO block at the top of [progress.md](progress.md), then work **The loop**
@@ -122,6 +122,21 @@ feature. Say so in the end-of-run report every time until it happens.
 correctly (7×7 grid, `A`…`G` heads, `1`…`7` gutter, `A1` outlined, footer reading `A1` with
 `MERGE` disabled). Every line below is an *interaction*, which is the half a photograph
 cannot reach.
+
+**THE TYPED TIME FIELD — `W3-15`, 2026-08-27.** The parse has 6 tests including a round trip over
+all 1440 minutes; the *field* has never been typed into. `--gallery` photographed it reading
+`09:30 AM` with one date grid under it.
+- [ ] `cargo run -p canvas-app --example insert_calendar -- --now`, then
+      `cargo run -p canvas-app -- --open-kind calendar`. Click an event, tap `START`
+- [ ] The card shows the **date grid on the left and a single `TIME` field on the right**,
+      vertically centred against the grid. **There must be no second grid** — that is the whole
+      complaint this task answers
+- [ ] Clear it and type `9:30 pm`, press **OK** — the event moves to **21:30**, and `END` keeps
+      its old duration. Reopen `START`: the field reads back `09:30 PM`
+- [ ] Type `2130`, then `21:30`, then `09:30PM` — all three are the same time
+- [ ] Type `13:00 PM`, or `banana` — the border turns `signal` red with **no message row**, and
+      **OK writes nothing**. Fix the text and OK works again
+- [ ] `CANCEL` inside the picker returns to the field list without moving the event
 
 **THE KANBAN CARD EDITOR — `W3-10`, 2026-08-27.** `CardOverlay` itself was photographed through
 `--gallery` (centred card, scrim, three fields, nothing clipped). The Kanban call site is
@@ -2577,6 +2592,22 @@ easy — the user asked for each one to be *done* before the next begins.
   *DoD:* typing `9:30 pm` and pressing OK lands 21:30 in the event · the field reads back
   `09:30 PM` · garbage turns the border `signal` and refuses to commit · the card no longer
   shows two grids stacked on each other.
+  🟡 **built 2026-08-27, box stays open** — `parse_clock` / `format_clock_12` in
+  `canvas-app/src/calendar_time.rs`, **6 new tests including a round trip over all 1440 minutes
+  of the day**. Parsing takes `9:30 pm`, `09:30PM`, `0930PM`, `21:30` and `2130`; it refuses
+  `13:00 PM`, `0:30 AM`, `24:00`, `9:60` and `930` rather than clamping them.
+  The UI is just a `TextField` — no new component. `TimePicker` and its private `GridCell` are
+  **deleted from `theme/pickers.slint`**; the gallery demo became the same typed field, so the
+  round-trip readout still proves parse → minute-of-day → epoch → back.
+  The picker card keeps its date-grid-plus-right-column shape, with the field **vertically
+  centred** against the grid rather than floating at its top. Card height drops to
+  `305 + 32 + 66 = 403` against the Calendar plate's 428 cap, so it fits with room —
+  `picker-card-w` and `picker-time-w` are both unchanged.
+  `pick-committed` **returns without writing** while `pick-time-error` is set, which is the
+  refusal half of the DoD.
+  Photographed through `--gallery`: `TIME` label, `09:30 AM` in the field, one date grid under
+  it. **Typing has not been done by hand** — the parse is covered by tests, the *field* is not.
+  See the VERIFICATION QUEUE.
 
 ### W3e — Spreadsheet
 

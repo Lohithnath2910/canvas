@@ -5,7 +5,7 @@ import { Panel } from "theme/surface.slint";
 import { Checkbox, Tag, Divider, TextField, ScrollBar, Button, ButtonVariant } from "theme/controls.slint";
 import { CardOverlay } from "theme/overlay.slint";
 import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
-import { TimePicker, DatePicker, DayCell } from "theme/pickers.slint";
+import { DatePicker, DayCell } from "theme/pickers.slint";
 
 component SectionLabel inherits Text {
     height: Typography.label-line;
@@ -34,6 +34,8 @@ export component GalleryWindow inherits Window {
     in-out property <string> field-error: "not a number";
 
     in-out property <int> pick-minute: 9 * 60 + 30;
+    in-out property <string> pick-time: "09:30 AM";
+    in property <bool> pick-time-error: false;
     in-out property <int> pick-day: 0;
     in property <string> pick-stamp: "";
     in property <string> pick-month: "";
@@ -41,6 +43,7 @@ export component GalleryWindow inherits Window {
     in property <[DayCell]> pick-days: [];
     callback pick-month-stepped(int);
     callback pick-committed();
+    callback time-typed(string);
     in property <string> pick-result: "";
 
     in-out property <bool> sheet-open: true;
@@ -322,16 +325,20 @@ export component GalleryWindow inherits Window {
         x: demo.x + demo.width + Layout.pad;
         y: Layout.pad;
         width: Layout.picker-face + 2 * Layout.pad;
-        height: 4 * Layout.pad + 1px + 2 * (Layout.header-band + Layout.pad
-            + Layout.picker-face + Layout.pad + Layout.button-h)
+        height: 4 * Layout.pad + 1px + time-pick.height + date-pick.height
             + Layout.icon-gap + Typography.label-line;
         corner-radius: Layout.radius-plate;
 
-        time-pick := TimePicker {
+        time-pick := TextField {
             x: Layout.pad;
             y: Layout.pad;
-            minute-of-day <=> root.pick-minute;
-            accepted => { root.pick-committed(); }
+            width: Layout.picker-face;
+            label: "TIME";
+            placeholder: "09:30 AM";
+            text <=> root.pick-time;
+            error: root.pick-time-error;
+            edited(v) => { root.time-typed(v); }
+            accepted(v) => { root.time-typed(v); root.pick-committed(); }
         }
 
         Rectangle {

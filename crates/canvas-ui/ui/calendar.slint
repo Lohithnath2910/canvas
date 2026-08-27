@@ -7,7 +7,7 @@ import { GlyphStrip, WidgetState } from "theme/glyphstrip.slint";
 import { IconPin, IconTrash, IconX } from "theme/icons.slint";
 import { IconButton, Button, ButtonVariant, TextField } from "theme/controls.slint";
 import { CardOverlay } from "theme/overlay.slint";
-import { TimePicker, DatePicker, DayCell, PickerField } from "theme/pickers.slint";
+import { DatePicker, DayCell, PickerField } from "theme/pickers.slint";
 
 export struct CalendarChip {
     id: string,
@@ -52,6 +52,8 @@ export component CalendarWindow inherits Window {
 
     in-out property <int> pick-mode: 0;
     in-out property <int> pick-minute: 0;
+    in-out property <string> pick-time: "";
+    in property <bool> pick-time-error: false;
     in-out property <int> pick-day: 0;
     in property <string> pick-stamp: "";
     in property <string> pick-month: "";
@@ -63,6 +65,7 @@ export component CalendarWindow inherits Window {
     callback pick-opened(int);
     callback pick-committed(int);
     callback pick-month-stepped(int);
+    callback time-typed(string);
     callback event-saved();
     callback event-cancelled();
     callback event-deleted();
@@ -444,10 +447,18 @@ export component CalendarWindow inherits Window {
                     month-stepped(delta) => { root.pick-month-stepped(delta); }
                 }
 
-                TimePicker {
+                VerticalLayout {
                     width: Layout.picker-time-w;
-                    minute-of-day <=> root.pick-minute;
-                    chrome: false;
+                    alignment: center;
+
+                    TextField {
+                        label: "TIME";
+                        placeholder: "09:30 AM";
+                        text <=> root.pick-time;
+                        error: root.pick-time-error;
+                        edited(v) => { root.time-typed(v); }
+                        accepted(v) => { root.time-typed(v); }
+                    }
                 }
             }
         }
