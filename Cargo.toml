@@ -25,7 +25,7 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 tokio = { version = "1", default-features = false, features = ["rt", "sync", "time", "macros"] }
 uuid = { version = "1", features = ["v4"] }
 mimalloc = { version = "0.1", default-features = false }
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Graphics_Gdi", "Win32_System_Time"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Graphics_Gdi", "Win32_System_Time", "Win32_System_Threading"] }
 raw-window-handle = "0.6.2"
 
 canvas-ui = { path = "crates/canvas-ui" }
@@ -36,6 +36,11 @@ canvas-sync = { path = "crates/canvas-sync" }
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+
+[profile.dev]
+debug = false
+incremental = false
+strip = "debuginfo"
 
 [profile.release]
 opt-level = "z"

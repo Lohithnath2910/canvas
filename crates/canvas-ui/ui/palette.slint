@@ -260,6 +260,11 @@ export component PaletteWindow inherits Window {
         }
     }
 
+    public function take-focus() {
+        query-input.focus();
+        query-input.select-all();
+    }
+
     init => {
         query-input.focus();
     }

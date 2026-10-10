@@ -2,9 +2,12 @@
 mod imp {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use windows_sys::Win32::Foundation::{HWND, POINT};
+    use windows_sys::Win32::System::Threading::AttachThreadInput;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetFocus;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetCursorPos, GetForegroundWindow, SetForegroundWindow, SetWindowPos, HWND_BOTTOM,
-        HWND_NOTOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        BringWindowToTop, GetCursorPos, GetForegroundWindow, GetWindowThreadProcessId,
+        SetForegroundWindow, SetWindowPos, HWND_BOTTOM, HWND_NOTOPMOST, SWP_NOACTIVATE,
+        SWP_NOMOVE, SWP_NOSIZE,
     };
 
     fn hwnd_of(window: &slint::Window) -> Option<HWND> {
@@ -51,7 +54,23 @@ mod imp {
             return;
         };
         unsafe {
+            let foreground = GetForegroundWindow();
+            if foreground == hwnd {
+                return;
+            }
+            let ours = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
+            let theirs = if foreground.is_null() {
+                0
+            } else {
+                GetWindowThreadProcessId(foreground, std::ptr::null_mut())
+            };
+            let borrowed = theirs != 0 && theirs != ours && AttachThreadInput(ours, theirs, 1) != 0;
             SetForegroundWindow(hwnd);
+            BringWindowToTop(hwnd);
+            SetFocus(hwnd);
+            if borrowed {
+                AttachThreadInput(ours, theirs, 0);
+            }
         }
     }
 

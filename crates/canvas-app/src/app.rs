@@ -1566,6 +1566,7 @@ impl App {
         }
 
         crate::desktop_layer::take_foreground(palette.window());
+        palette.invoke_take_focus();
     }
 
     pub fn refresh_palette(app: &SharedApp, query: &str) {
