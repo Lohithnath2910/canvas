@@ -21,3 +21,15 @@ desktop.ini
 .idea/
 
 .claude/
+
+# AI-assistant working files
+progress.md
+TASKS.md
+CLAUDE.md
+.claude/
+handoff/
+
+# Local scratch
+*.png
+!crates/**/*.png
+canvas_local.db
